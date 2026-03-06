@@ -1161,9 +1161,15 @@ class CRTRenderer {
     this.quantCanvas = document.createElement("canvas");
     this.hasImage = false;
     this.osdPixelFontPresets = {
-      hdzeroDefault: { stroke: 1, spacing: 1, heightCells: 7, widthCells: 5 },
-      hdzeroConthrax: { stroke: 1.15, spacing: 1, heightCells: 7, widthCells: 5 },
-      hdzeroVision: { stroke: 1, spacing: 2, heightCells: 7, widthCells: 5 },
+      vhs: { stroke: 1.2, spacing: 1.25, heightCells: 7, widthCells: 5, glow: 0.38, bleed: 0.95, dropout: 0.08, jitter: 0.35 },
+      camcorder: { stroke: 1.05, spacing: 1.1, heightCells: 7, widthCells: 5, glow: 0.3, bleed: 0.7, dropout: 0.05, jitter: 0.24 },
+      cctv: { stroke: 1.0, spacing: 1.05, heightCells: 7, widthCells: 5, glow: 0.24, bleed: 0.55, dropout: 0.04, jitter: 0.18 },
+      broadcast: { stroke: 1.0, spacing: 1.1, heightCells: 7, widthCells: 5, glow: 0.2, bleed: 0.45, dropout: 0.02, jitter: 0.12 },
+      hdzeroDefault: { stroke: 1, spacing: 1, heightCells: 7, widthCells: 5, glow: 0.16, bleed: 0.4, dropout: 0.02, jitter: 0.08 },
+      hdzeroConthrax: { stroke: 1.15, spacing: 1, heightCells: 7, widthCells: 5, glow: 0.2, bleed: 0.5, dropout: 0.03, jitter: 0.09 },
+      hdzeroVision: { stroke: 1, spacing: 2, heightCells: 7, widthCells: 5, glow: 0.16, bleed: 0.4, dropout: 0.03, jitter: 0.08 },
+      led: { stroke: 1.08, spacing: 1.2, heightCells: 7, widthCells: 5, glow: 0.22, bleed: 0.42, dropout: 0.01, jitter: 0.04 },
+      lcd: { stroke: 1.0, spacing: 1.15, heightCells: 7, widthCells: 5, glow: 0.14, bleed: 0.3, dropout: 0.01, jitter: 0.03 },
     };
   }
 
@@ -1227,7 +1233,7 @@ class CRTRenderer {
     return glyphs[up] || glyphs["?"];
   }
 
-  drawPixelOSDText(ctx, text, x, y, size, color, preset) {
+  drawPixelOSDText(ctx, text, x, y, size, color, preset, time = 0) {
     const presetCfg = this.osdPixelFontPresets[preset];
     if (!presetCfg) return false;
 
@@ -1236,24 +1242,40 @@ class CRTRenderer {
     const stroke = Math.max(1, cellH * presetCfg.stroke);
     const charW = presetCfg.widthCells * cellW;
     const charStep = charW + Math.max(1, presetCfg.spacing * cellW * 0.45);
+    const jitterX = (seededNoise(time, String(text).length, 201) - 0.5) * presetCfg.jitter * cellW;
+    const jitterY = (seededNoise(String(text).length, time, 203) - 0.5) * presetCfg.jitter * cellH;
 
-    let dx = Math.round(x);
-    const top = Math.round(y - size);
-    ctx.fillStyle = color;
+    const drawPass = (alpha, passX = 0, passY = 0, passBleed = 0, dropoutBias = 1) => {
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.fillStyle = color;
 
-    for (const raw of String(text)) {
-      const glyph = this.getOSDPixelGlyph(raw);
-      for (let gy = 0; gy < glyph.length; gy++) {
-        const row = glyph[gy];
-        for (let gx = 0; gx < row.length; gx++) {
-          if (row[gx] !== "1") continue;
-          const px = dx + gx * cellW;
-          const py = top + gy * cellH;
-          ctx.fillRect(Math.round(px), Math.round(py), Math.max(1, Math.round(stroke)), Math.max(1, Math.round(stroke)));
+      let dx = Math.round(x + jitterX + passX);
+      const top = Math.round(y - size + jitterY + passY);
+      for (const raw of String(text)) {
+        const glyph = this.getOSDPixelGlyph(raw);
+        for (let gy = 0; gy < glyph.length; gy++) {
+          const row = glyph[gy];
+          for (let gx = 0; gx < row.length; gx++) {
+            if (row[gx] !== "1") continue;
+            const dropoutGate = presetCfg.dropout * dropoutBias;
+            if (dropoutGate > 0 && seededNoise(gx + dx * 0.21, gy + top * 0.17, time * 3.1 + 211) < dropoutGate) continue;
+            const px = dx + gx * cellW;
+            const py = top + gy * cellH;
+            const w = Math.max(1, Math.round(stroke + passBleed));
+            const h = Math.max(1, Math.round(stroke));
+            ctx.fillRect(Math.round(px), Math.round(py), w, h);
+          }
         }
+        dx += charStep;
       }
-      dx += charStep;
+      ctx.restore();
+    };
+
+    if (presetCfg.glow > 0.01) {
+      drawPass(presetCfg.glow, cellW * 0.25, 0, presetCfg.bleed, 0.2);
     }
+    drawPass(1, 0, 0, 0, 1);
 
     return true;
   }
@@ -1822,7 +1844,7 @@ class CRTRenderer {
       const measureOsdWidth = (text) => (hasPixelFont ? String(text).length * pixelGlyphWidth : outCtx.measureText(String(text)).width);
       const drawOsdLine = (text, x, y, color = osdPrimaryColor) => {
         if (hasPixelFont) {
-          const drawn = this.drawPixelOSDText(outCtx, String(text), x, y, baseSize, color, osdFontPreset);
+          const drawn = this.drawPixelOSDText(outCtx, String(text), x, y, baseSize, color, osdFontPreset, temporalSeconds);
           if (drawn) return;
         }
         outCtx.fillStyle = color;
@@ -1833,10 +1855,10 @@ class CRTRenderer {
       outCtx.font = `${baseSize}px ${fontFamily}`;
       outCtx.textBaseline = "bottom";
       outCtx.globalAlpha = osdAlpha;
-      outCtx.shadowColor = "rgb(0 0 0 / 0.6)";
-      outCtx.shadowBlur = Math.max(0.5, baseSize * 0.06);
-      outCtx.shadowOffsetX = Math.max(1, Math.floor(baseSize * 0.08));
-      outCtx.shadowOffsetY = Math.max(1, Math.floor(baseSize * 0.08));
+      outCtx.shadowColor = hasPixelFont ? "rgb(0 0 0 / 0.35)" : "rgb(0 0 0 / 0.6)";
+      outCtx.shadowBlur = hasPixelFont ? Math.max(0.35, baseSize * 0.03) : Math.max(0.5, baseSize * 0.06);
+      outCtx.shadowOffsetX = hasPixelFont ? 0 : Math.max(1, Math.floor(baseSize * 0.08));
+      outCtx.shadowOffsetY = hasPixelFont ? 0 : Math.max(1, Math.floor(baseSize * 0.08));
 
       if (osdStyle === 0) {
         drawOsdLine(stampClassic, padX, padY, osdPrimaryColor);
