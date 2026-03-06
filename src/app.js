@@ -337,7 +337,8 @@ const FALLBACK_PRESETS = {
     advancedTapeCrease: 0.03,
     advancedTimestampOSD: 0.76,
     advancedOSDStyle: 3,
-    advancedCctvMonochrome: 0.72,
+    advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedQuantization: 0.42,
     advancedGenerationLoss: 0.2,
     advancedMacroBlocking: 0.3,
@@ -529,7 +530,8 @@ const FALLBACK_PRESETS = {
     advancedTapeCrease: 0,
     advancedTimestampOSD: 0.42,
     advancedOSDStyle: 3,
-    advancedCctvMonochrome: 0.36,
+    advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedQuantization: 0.24,
     advancedGenerationLoss: 0.08,
     advancedMacroBlocking: 0.18,
@@ -548,7 +550,8 @@ const FALLBACK_PRESETS = {
     advancedWhiteBalanceDrift: 0,
     advancedFocusBreathing: 0,
     advancedQuantization: 0,
-    advancedCctvMonochrome: 0.92,
+    advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
     advancedFilmGrain: 0.68,
@@ -649,6 +652,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.08,
     advancedQuantization: 0,
     advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
     advancedFilmGrain: 0.82,
@@ -1082,6 +1086,7 @@ class CRTRenderer {
       broadcast: '"Arial Narrow", "Arial", sans-serif',
     };
     const cctvMonochrome = Math.max(0, Math.min(1, Number(params.advancedCctvMonochrome) || 0));
+    const saturation = Math.max(0, Math.min(2, Number(params.advancedSaturation) || 1));
     const quantization = Math.max(0, Math.min(1, Number(params.advancedQuantization) || 0));
     const generationLoss = Math.max(0, Math.min(1, Number(params.advancedGenerationLoss) || 0));
     const macroBlocking = Math.max(0, Math.min(1, Number(params.advancedMacroBlocking) || 0));
@@ -1302,18 +1307,21 @@ class CRTRenderer {
     }
 
     if (cctvMonochrome > 0) {
+      const fullMonochromeLock = cctvMonochrome >= 0.999;
       outCtx.save();
-      outCtx.globalAlpha = Math.min(0.9, 0.2 + cctvMonochrome * 0.7);
-      outCtx.filter = `grayscale(1) contrast(${(1 + cctvMonochrome * 0.22).toFixed(3)}) brightness(${(0.95 + cctvMonochrome * 0.08).toFixed(3)})`;
+      outCtx.globalAlpha = fullMonochromeLock ? 1 : Math.min(0.9, 0.2 + cctvMonochrome * 0.7);
+      outCtx.filter = `grayscale(1) saturate(0) contrast(${(1 + cctvMonochrome * 0.22).toFixed(3)}) brightness(${(0.95 + cctvMonochrome * 0.08).toFixed(3)})`;
       outCtx.drawImage(outCtx.canvas, 0, 0);
       outCtx.restore();
 
-      outCtx.save();
-      outCtx.globalCompositeOperation = "multiply";
-      outCtx.globalAlpha = cctvMonochrome * 0.25;
-      outCtx.fillStyle = "rgb(145 182 148)";
-      outCtx.fillRect(0, 0, width, height);
-      outCtx.restore();
+      if (!fullMonochromeLock) {
+        outCtx.save();
+        outCtx.globalCompositeOperation = "multiply";
+        outCtx.globalAlpha = cctvMonochrome * 0.25;
+        outCtx.fillStyle = "rgb(145 182 148)";
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.restore();
+      }
     }
 
     const bloom = params.bloom;
@@ -1522,6 +1530,14 @@ class CRTRenderer {
         outCtx.fillText("CAM 4", Math.floor(width * 0.82), Math.floor(height * 0.09));
       }
 
+      outCtx.restore();
+    }
+
+    if (Math.abs(saturation - 1) > 0.001) {
+      outCtx.save();
+      outCtx.globalAlpha = 1;
+      outCtx.filter = `saturate(${saturation.toFixed(3)})`;
+      outCtx.drawImage(outCtx.canvas, 0, 0);
       outCtx.restore();
     }
   }
@@ -1877,6 +1893,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     "advancedTimestampOSD",
     "advancedOSDStyle",
     "advancedCctvMonochrome",
+    "advancedSaturation",
     "advancedQuantization",
     "advancedGenerationLoss",
     "advancedMacroBlocking",
@@ -1908,7 +1925,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     "scanlineStrength", "phosphorMask", "bloom", "flicker", "noise",
     "advancedLineJitter", "advancedTimebaseWobble", "advancedChromaDelay", "advancedCrossColor",
     "advancedDropouts", "advancedTapeCrease", "advancedRfInterference", "advancedInterlacing",
-    "advancedQuantization", "advancedMacroBlocking", "advancedFrameStutter", "advancedGenerationLoss",
+    "advancedSaturation", "advancedQuantization", "advancedMacroBlocking", "advancedFrameStutter", "advancedGenerationLoss",
     "advancedGhosting", "advancedFilmDust", "advancedFilmScratches", "advancedFilmGrain",
     "advancedFilmHalation", "advancedWhiteBalanceDrift", "advancedTimestampOSD",
   ];
@@ -1947,7 +1964,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     },
     digital: {
       toggleId: "digitalEffectsEnabled",
-      controlIds: ["noise", "advancedFrameStutter", "advancedRfInterference", "advancedCctvMonochrome", "advancedQuantization", "advancedGenerationLoss", "advancedMacroBlocking"],
+      controlIds: ["noise", "advancedFrameStutter", "advancedRfInterference", "advancedCctvMonochrome", "advancedSaturation", "advancedQuantization", "advancedGenerationLoss", "advancedMacroBlocking"],
     },
     film: {
       toggleId: "filmEffectsEnabled",
@@ -1999,6 +2016,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     advancedTapeCrease: "Tape crease events",
     advancedTimestampOSD: "Timestamp intensity",
     advancedCctvMonochrome: "CCTV monochrome",
+    advancedSaturation: "Saturation",
     advancedQuantization: "Quantization/crush",
     advancedGenerationLoss: "Generation loss",
     advancedMacroBlocking: "Macroblocking",
