@@ -1755,7 +1755,9 @@ class CRTRenderer {
     const mask = params.phosphorMask;
     const maskType = typeof params.maskType === "string" ? params.maskType : "phosphor";
     const pixelSize = Math.max(1, Number(params.pixelSize) || 1);
-    const maskScale = Math.max(1, Number(params.maskScale) || 1);
+    const maskScale = Math.max(0.25, Number(params.maskScale) || 1);
+    const maskScaleDeviation = Math.min(1, Math.abs(maskScale - 1) / 2);
+    const maskScaleBoost = 1 + maskScaleDeviation * 0.35;
     const pixelInfluence = 1 + (pixelSize - 1) * 0.22;
     const pixelStepX = width > 1 ? 1 / (width - 1) : 0;
     const pixelStepY = height > 1 ? 1 / (height - 1) : 0;
@@ -1906,8 +1908,9 @@ class CRTRenderer {
         const blend = Math.min(0.45, bleed);
 
         const maskX = Math.floor(x / maskScale);
-        const boost = 1 + mask * 0.52;
-        const dim = 1 - mask * 0.32;
+        const maskStrength = Math.min(1, mask * maskScaleBoost);
+        const boost = 1 + maskStrength * 0.52;
+        const dim = 1 - maskStrength * 0.32;
         let rMask = 1;
         let gMask = 1;
         let bMask = 1;
@@ -1919,8 +1922,8 @@ class CRTRenderer {
           bMask = triad === 2 ? boost : dim;
         } else if (maskType === "aperture") {
           const stripe = maskX % 3;
-          const stripeBoost = 1 + mask * 0.34;
-          const stripeDim = 1 - mask * 0.2;
+          const stripeBoost = 1 + maskStrength * 0.34;
+          const stripeDim = 1 - maskStrength * 0.2;
           rMask = stripe === 0 ? stripeBoost : stripeDim;
           gMask = stripe === 1 ? stripeBoost : stripeDim;
           bMask = stripe === 2 ? stripeBoost : stripeDim;
@@ -1928,7 +1931,7 @@ class CRTRenderer {
           const slotX = maskX % 6;
           const slotY = maskY % 4;
           const slotOpen = slotX < 2 || (slotY & 1 ? slotX >= 2 && slotX < 4 : slotX >= 4);
-          const slotGain = slotOpen ? (1 + mask * 0.28) : (1 - mask * 0.24);
+          const slotGain = slotOpen ? (1 + maskStrength * 0.28) : (1 - maskStrength * 0.24);
           rMask = slotGain;
           gMask = slotGain;
           bMask = slotGain;
@@ -1936,7 +1939,7 @@ class CRTRenderer {
           const dotX = (maskX % 6) - 2.5;
           const dotY = (maskY % 6) - 2.5;
           const dotDist = Math.sqrt(dotX * dotX + dotY * dotY);
-          const dotGain = 1 + mask * (0.34 - Math.min(0.34, dotDist * 0.08));
+          const dotGain = 1 + maskStrength * (0.34 - Math.min(0.34, dotDist * 0.08));
           rMask = dotGain;
           gMask = dotGain;
           bMask = dotGain;
@@ -2876,9 +2879,13 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   const presetPinnedIds = new Set();
   const PARAM_POLICY_STORAGE_KEY = "lme:param-policy:v1";
   const EFFECT_PANEL_CONFIGS = {
+    masks: {
+      toggleId: "masksEnabled",
+      controlIds: ["phosphorMask", "maskScale"],
+    },
     crt: {
       toggleId: "crtEffectsEnabled",
-      controlIds: ["scanlineStrength", "phosphorMask", "barrelDistortion", "chromaticAberration", "bloom", "flicker", "maskScale"],
+      controlIds: ["scanlineStrength", "barrelDistortion", "chromaticAberration", "bloom", "flicker"],
     },
     digital: {
       toggleId: "digitalEffectsEnabled",
