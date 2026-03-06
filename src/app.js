@@ -1600,6 +1600,80 @@ class CRTRenderer {
     return true;
   }
 
+
+  drawSevenSegmentOSDText(ctx, text, x, y, size, color, { align = "left", glowColor = color, glowStrength = 1 } = {}) {
+    const chars = String(text || "").toUpperCase();
+    const digitW = Math.max(6, Math.floor(size * 0.66));
+    const digitH = Math.max(10, Math.floor(size));
+    const thickness = Math.max(2, Math.floor(size * 0.15));
+    const gap = Math.max(3, Math.floor(size * 0.16));
+    const segmentLen = Math.max(2, digitW - thickness * 2);
+    const charStep = digitW + gap;
+    const textWidth = chars.length * charStep - gap;
+
+    const segmentDefs = {
+      A: [thickness, 0, segmentLen, thickness],
+      B: [digitW - thickness, thickness, thickness, Math.floor(digitH * 0.5) - thickness],
+      C: [digitW - thickness, Math.floor(digitH * 0.5), thickness, Math.floor(digitH * 0.5) - thickness],
+      D: [thickness, digitH - thickness, segmentLen, thickness],
+      E: [0, Math.floor(digitH * 0.5), thickness, Math.floor(digitH * 0.5) - thickness],
+      F: [0, thickness, thickness, Math.floor(digitH * 0.5) - thickness],
+      G: [thickness, Math.floor(digitH * 0.5) - Math.floor(thickness * 0.5), segmentLen, thickness],
+    };
+
+    const charSegments = {
+      "0": ["A", "B", "C", "D", "E", "F"],
+      "1": ["B", "C"],
+      "2": ["A", "B", "G", "E", "D"],
+      "3": ["A", "B", "G", "C", "D"],
+      "4": ["F", "G", "B", "C"],
+      "5": ["A", "F", "G", "C", "D"],
+      "6": ["A", "F", "G", "C", "D", "E"],
+      "7": ["A", "B", "C"],
+      "8": ["A", "B", "C", "D", "E", "F", "G"],
+      "9": ["A", "B", "C", "D", "F", "G"],
+      "-": ["G"],
+      " ": [],
+    };
+
+    const baseX = align === "center"
+      ? Math.round(x - textWidth * 0.5)
+      : align === "right"
+        ? Math.round(x - textWidth)
+        : Math.round(x);
+    const top = Math.round(y - digitH);
+
+    const drawPass = (fill, alpha = 1, blur = 0) => {
+      ctx.save();
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = blur;
+      chars.split("").forEach((char, i) => {
+        const cx = baseX + i * charStep;
+        const segs = charSegments[char] || [];
+        segs.forEach((segKey) => {
+          const [sx, sy, sw, sh] = segmentDefs[segKey];
+          ctx.fillRect(cx + sx, top + sy, sw, sh);
+        });
+        if (char === ":") {
+          const dot = Math.max(2, Math.floor(thickness * 0.9));
+          ctx.fillRect(cx + Math.floor(digitW * 0.42), top + Math.floor(digitH * 0.3), dot, dot);
+          ctx.fillRect(cx + Math.floor(digitW * 0.42), top + Math.floor(digitH * 0.66), dot, dot);
+        } else if (char === ".") {
+          const dot = Math.max(2, Math.floor(thickness * 0.9));
+          ctx.fillRect(cx + Math.floor(digitW * 0.42), top + digitH - dot, dot, dot);
+        }
+      });
+      ctx.restore();
+    };
+
+    drawPass(glowColor, Math.min(1, 0.42 * glowStrength), size * (0.38 + 0.2 * glowStrength));
+    drawPass(glowColor, Math.min(1, 0.3 * glowStrength), size * (0.18 + 0.08 * glowStrength));
+    drawPass(color, 1, 0);
+    return textWidth;
+  }
+
   setImage(img, sourceScale = 1) {
     const inputWidth = img.naturalWidth || img.videoWidth || img.width;
     const inputHeight = img.naturalHeight || img.videoHeight || img.height;
@@ -2282,12 +2356,27 @@ class CRTRenderer {
         const qualityLabel = "FINE 5M";
         drawOsdLine(qualityLabel, rightX - measureOsdWidth(qualityLabel), topY, "rgb(239 247 255)");
       } else if (osdStyle === 5) {
-        const fpsLabel = recBlink ? "24FPS" : "23.98";
-        const stockLabel = seededNoise(temporalSeconds, 9, 173) > 0.5 ? "500T" : "250D";
-        drawOsdLine(`${mm}.${dd}.${yy}`, padX, padY, osdPrimaryColor);
-        drawOsdLine(`ROLL A${Math.max(1, Math.floor(seededNoise(temporalFrame, 1.2, 175) * 9))}`, padX, topY, osdPrimaryColor);
-        const rightLabel = `${stockLabel} ${fpsLabel}`;
-        drawOsdLine(rightLabel, rightX - measureOsdWidth(rightLabel), topY, osdPrimaryColor);
+        const filmDate = `${Number(dd)} ${Number(mm)} ${Number(yy)}`;
+        const filmTime = `${hh}:${min}:${sec}`;
+        const filmLabel = `${filmDate} ${filmTime}`;
+        const filmSize = Math.max(20, Math.floor(height * 0.048));
+        const filmX = padX;
+        const filmY = padY;
+        const burnHue = "rgb(255 90 18)";
+        const burnCore = "rgb(255 184 92)";
+
+        outCtx.save();
+        outCtx.globalAlpha = Math.min(1, osdAlpha * 1.25);
+        this.drawSevenSegmentOSDText(outCtx, filmLabel, filmX, filmY, filmSize, burnCore, {
+          glowColor: burnHue,
+          glowStrength: 1.45,
+        });
+        outCtx.globalAlpha = Math.min(1, osdAlpha * 0.55);
+        this.drawSevenSegmentOSDText(outCtx, filmLabel, filmX + 1, filmY + 1, filmSize, burnHue, {
+          glowColor: "rgb(255 48 10)",
+          glowStrength: 0.8,
+        });
+        outCtx.restore();
       } else if (osdStyle === 6) {
         const tcSep = recBlink ? ":" : ";";
         const policeTimecode = `${hh}${tcSep}${min}${tcSep}${sec}${tcSep}${String(Math.floor((temporalSeconds % 1) * 30)).padStart(2, "0")}`;
