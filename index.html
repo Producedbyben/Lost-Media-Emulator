@@ -327,12 +327,20 @@
                 <label>Accent colour <input id="osdAccentColor" type="color" value="#ff3a3a" /></label>
               </div>
               <section class="osd-corner-panel">
-                <header class="osd-corner-title">Corner labels</header>
+                <header class="osd-corner-title">Custom labels</header>
+                <div class="osd-corner-token-help">Use <code>{date}</code>, <code>{time}</code>, or <code>{datetime}</code>. Quick insert:</div>
+                <div class="osd-corner-token-actions">
+                  <button type="button" class="secondary-btn osd-token-btn" data-osd-token="{date}">Date</button>
+                  <button type="button" class="secondary-btn osd-token-btn" data-osd-token="{time}">Time</button>
+                  <button type="button" class="secondary-btn osd-token-btn" data-osd-token="{datetime}">Date+Time</button>
+                </div>
                 <div class="osd-corner-grid">
-                  <label class="osd-corner-item"><span><input id="osdCornerTopLeftEnabled" type="checkbox" checked /> Top-left</span><input id="osdCornerTopLeftText" type="text" value="CAM2" maxlength="24" /></label>
-                  <label class="osd-corner-item"><span><input id="osdCornerTopRightEnabled" type="checkbox" checked /> Top-right</span><input id="osdCornerTopRightText" type="text" value="CTFID CHANNEL3" maxlength="24" /></label>
-                  <label class="osd-corner-item"><span><input id="osdCornerBottomLeftEnabled" type="checkbox" /> Bottom-left</span><input id="osdCornerBottomLeftText" type="text" value="" maxlength="24" placeholder="Optional" /></label>
-                  <label class="osd-corner-item"><span><input id="osdCornerBottomRightEnabled" type="checkbox" /> Bottom-right</span><input id="osdCornerBottomRightText" type="text" value="" maxlength="24" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerTopLeftEnabled" type="checkbox" checked /> Top-left</span><input id="osdCornerTopLeftText" type="text" value="CAM2" maxlength="80" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerTopCenterEnabled" type="checkbox" /> Top-center</span><input id="osdCornerTopCenterText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerTopRightEnabled" type="checkbox" checked /> Top-right</span><input id="osdCornerTopRightText" type="text" value="CTFID CHANNEL3" maxlength="80" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomLeftEnabled" type="checkbox" /> Bottom-left</span><input id="osdCornerBottomLeftText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomCenterEnabled" type="checkbox" /> Bottom-center</span><input id="osdCornerBottomCenterText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomRightEnabled" type="checkbox" /> Bottom-right</span><input id="osdCornerBottomRightText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
                 </div>
               </section>
               <label>Era font

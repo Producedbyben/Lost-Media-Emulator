@@ -1718,6 +1718,10 @@ class CRTRenderer {
         enabled: renderOptions.osdCornerTopRightEnabled !== false,
         text: String(renderOptions.osdCornerTopRightText || "").trim() || "CTFID CHANNEL3",
       },
+      topCenter: {
+        enabled: renderOptions.osdCornerTopCenterEnabled === true,
+        text: String(renderOptions.osdCornerTopCenterText || "").trim(),
+      },
       bottomLeft: {
         enabled: renderOptions.osdCornerBottomLeftEnabled === true,
         text: String(renderOptions.osdCornerBottomLeftText || "").trim(),
@@ -1725,6 +1729,10 @@ class CRTRenderer {
       bottomRight: {
         enabled: renderOptions.osdCornerBottomRightEnabled === true,
         text: String(renderOptions.osdCornerBottomRightText || "").trim(),
+      },
+      bottomCenter: {
+        enabled: renderOptions.osdCornerBottomCenterEnabled === true,
+        text: String(renderOptions.osdCornerBottomCenterText || "").trim(),
       },
     };
     const osdFontByPreset = {
@@ -2288,21 +2296,30 @@ class CRTRenderer {
         const unitLabel = `UNIT ${100 + Math.floor(seededNoise(temporalFrame, 2.2, 177) * 900)}`;
         drawOsdLine(unitLabel, rightX - measureOsdWidth(unitLabel), topY, "#f8f8f8");
       } else if (osdStyle === 7 || osdStyle === 9) {
+        const tokenMap = {
+          "{date}": stampClassic.split(" ")[0],
+          "{time}": `${hh}:${min}:${sec}`,
+          "{datetime}": stampClassic,
+        };
+        const expandLabelTokens = (value) => String(value || "").replace(/\{date\}|\{time\}|\{datetime\}/gi, (token) => tokenMap[token.toLowerCase()] || token);
         const drawCorner = (corner, fallbackText, x, y, align = "left") => {
           const cfg = osdCornerConfig[corner];
           if (!cfg?.enabled) return;
-          const label = cfg.text || fallbackText;
+          const label = expandLabelTokens(cfg.text || fallbackText);
           if (!label) return;
           const lines = String(label).split(/\n|\|/).filter(Boolean);
           const lineHeight = Math.max(12, Math.floor(baseSize * 1.12));
           lines.forEach((line, index) => {
-            const drawX = align === "right" ? x - measureOsdWidth(line) : x;
+            const lineWidth = measureOsdWidth(line);
+            const drawX = align === "right" ? x - lineWidth : align === "center" ? x - Math.floor(lineWidth * 0.5) : x;
             drawOsdLine(line, drawX, y + index * lineHeight, "#f5f5f5");
           });
         };
         drawCorner("topLeft", `CAM${1 + Math.floor(seededNoise(temporalSeconds, 2, 179) * 4)}`, padX, topY, "left");
+        drawCorner("topCenter", "", Math.floor(width * 0.5), topY, "center");
         drawCorner("topRight", "CTFID\nCHANNEL3", rightX, topY, "right");
         drawCorner("bottomLeft", "", padX, padY, "left");
+        drawCorner("bottomCenter", "", Math.floor(width * 0.5), padY, "center");
         drawCorner("bottomRight", "", rightX, padY, "right");
 
         if (osdStyle === 7) {
@@ -2655,12 +2672,16 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   const osdPrimaryColorInput = document.getElementById("osdPrimaryColor");
   const osdAccentColorInput = document.getElementById("osdAccentColor");
   const osdCornerTopLeftEnabledInput = document.getElementById("osdCornerTopLeftEnabled");
+  const osdCornerTopCenterEnabledInput = document.getElementById("osdCornerTopCenterEnabled");
   const osdCornerTopRightEnabledInput = document.getElementById("osdCornerTopRightEnabled");
   const osdCornerBottomLeftEnabledInput = document.getElementById("osdCornerBottomLeftEnabled");
+  const osdCornerBottomCenterEnabledInput = document.getElementById("osdCornerBottomCenterEnabled");
   const osdCornerBottomRightEnabledInput = document.getElementById("osdCornerBottomRightEnabled");
   const osdCornerTopLeftTextInput = document.getElementById("osdCornerTopLeftText");
+  const osdCornerTopCenterTextInput = document.getElementById("osdCornerTopCenterText");
   const osdCornerTopRightTextInput = document.getElementById("osdCornerTopRightText");
   const osdCornerBottomLeftTextInput = document.getElementById("osdCornerBottomLeftText");
+  const osdCornerBottomCenterTextInput = document.getElementById("osdCornerBottomCenterText");
   const osdCornerBottomRightTextInput = document.getElementById("osdCornerBottomRightText");
   const osdStyleInput = document.getElementById("advancedOSDStyle");
   const compareHoldBtn = document.getElementById("compareHoldBtn");
@@ -3760,12 +3781,16 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       osdCountWithExport: osdCountWithExportInput?.checked !== false,
       osdElapsedSeconds: elapsedSeconds,
       osdCornerTopLeftEnabled: osdCornerTopLeftEnabledInput?.checked !== false,
+      osdCornerTopCenterEnabled: osdCornerTopCenterEnabledInput?.checked === true,
       osdCornerTopRightEnabled: osdCornerTopRightEnabledInput?.checked !== false,
       osdCornerBottomLeftEnabled: osdCornerBottomLeftEnabledInput?.checked === true,
+      osdCornerBottomCenterEnabled: osdCornerBottomCenterEnabledInput?.checked === true,
       osdCornerBottomRightEnabled: osdCornerBottomRightEnabledInput?.checked === true,
       osdCornerTopLeftText: osdCornerTopLeftTextInput?.value || "",
+      osdCornerTopCenterText: osdCornerTopCenterTextInput?.value || "",
       osdCornerTopRightText: osdCornerTopRightTextInput?.value || "",
       osdCornerBottomLeftText: osdCornerBottomLeftTextInput?.value || "",
+      osdCornerBottomCenterText: osdCornerBottomCenterTextInput?.value || "",
       osdCornerBottomRightText: osdCornerBottomRightTextInput?.value || "",
     };
   }
@@ -4342,7 +4367,34 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     applyPresetFilters();
   });
 
-  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport", "osdCornerTopLeftEnabled", "osdCornerTopRightEnabled", "osdCornerBottomLeftEnabled", "osdCornerBottomRightEnabled", "osdCornerTopLeftText", "osdCornerTopRightText", "osdCornerBottomLeftText", "osdCornerBottomRightText"]) {
+  const osdCustomTextInputs = [
+    osdCornerTopLeftTextInput,
+    osdCornerTopCenterTextInput,
+    osdCornerTopRightTextInput,
+    osdCornerBottomLeftTextInput,
+    osdCornerBottomCenterTextInput,
+    osdCornerBottomRightTextInput,
+  ].filter(Boolean);
+
+  document.querySelectorAll(".osd-token-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const token = btn.getAttribute("data-osd-token") || "";
+      const target = osdCustomTextInputs.find((input) => input === document.activeElement) || osdCustomTextInputs[0];
+      if (!target || !token) return;
+      const start = Number.isFinite(target.selectionStart) ? target.selectionStart : target.value.length;
+      const end = Number.isFinite(target.selectionEnd) ? target.selectionEnd : target.value.length;
+      const prefix = target.value.slice(0, start);
+      const suffix = target.value.slice(end);
+      target.value = `${prefix}${token}${suffix}`;
+      const caret = start + token.length;
+      target.focus();
+      target.setSelectionRange(caret, caret);
+      markPreviewDirty();
+      progressEl.value = 0;
+    });
+  });
+
+  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport", "osdCornerTopLeftEnabled", "osdCornerTopCenterEnabled", "osdCornerTopRightEnabled", "osdCornerBottomLeftEnabled", "osdCornerBottomCenterEnabled", "osdCornerBottomRightEnabled", "osdCornerTopLeftText", "osdCornerTopCenterText", "osdCornerTopRightText", "osdCornerBottomLeftText", "osdCornerBottomCenterText", "osdCornerBottomRightText"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       markPreviewDirty();
       progressEl.value = 0;
