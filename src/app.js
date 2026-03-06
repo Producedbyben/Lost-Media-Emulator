@@ -1140,7 +1140,7 @@ const FALLBACK_PRESETS = {
     advancedFilmScratches: 0.05,
     advancedFilmGateWeave: 0.11,
     advancedFilmHalation: 0.48,
-    maskType: "film16mm",
+    maskType: "instantDyeCloud",
   },
   "Disposable Camera 35mm Flash": {
     scanlineStrength: 0,
@@ -1249,7 +1249,7 @@ const FALLBACK_PRESETS = {
     advancedQuantization: 0.3,
     advancedGenerationLoss: 0.14,
     advancedMacroBlocking: 0.24,
-    maskType: "none",
+    maskType: "irBloomSpeckle",
   },
   "Police Bodycam 2016": {
     scanlineStrength: 0,
@@ -1281,7 +1281,7 @@ const FALLBACK_PRESETS = {
     advancedQuantization: 0.36,
     advancedGenerationLoss: 0.09,
     advancedMacroBlocking: 0.32,
-    maskType: "none",
+    maskType: "cmosRollingColumn",
   },
   "Covert Spycam Button Lens": {
     scanlineStrength: 0,
@@ -1313,7 +1313,7 @@ const FALLBACK_PRESETS = {
     advancedQuantization: 0.46,
     advancedGenerationLoss: 0.13,
     advancedMacroBlocking: 0.41,
-    maskType: "none",
+    maskType: "lowBitrateBlockGrid",
   },
   "Ring Doorbell Daytime": {
     scanlineStrength: 0,
@@ -1345,7 +1345,7 @@ const FALLBACK_PRESETS = {
     advancedQuantization: 0.37,
     advancedGenerationLoss: 0.08,
     advancedMacroBlocking: 0.33,
-    maskType: "none",
+    maskType: "fisheyeMicrolens",
   },
   "Ring Doorbell Night IR": {
     scanlineStrength: 0,
@@ -1378,7 +1378,7 @@ const FALLBACK_PRESETS = {
     advancedQuantization: 0.44,
     advancedGenerationLoss: 0.12,
     advancedMacroBlocking: 0.36,
-    maskType: "none",
+    maskType: "irBloomSpeckle",
   },
   "GoPro Hero3 Action Cam": {
     scanlineStrength: 0,
@@ -1411,7 +1411,7 @@ const FALLBACK_PRESETS = {
     advancedQuantization: 0.27,
     advancedGenerationLoss: 0.06,
     advancedMacroBlocking: 0.21,
-    maskType: "none",
+    maskType: "fisheyeMicrolens",
   },
   "Disposable Security IR Flood": {
     scanlineStrength: 0,
@@ -1875,6 +1875,50 @@ class CRTRenderer {
           rMask = gateDarken * weaveTexture;
           gMask = gateDarken * weaveTexture;
           bMask = gateDarken * weaveTexture;
+        } else if (maskType === "instantDyeCloud") {
+          const radial = Math.hypot((x / Math.max(1, width)) - 0.5, (y / Math.max(1, height)) - 0.5);
+          const cloud = seededNoise(x * 0.09, y * 0.09, temporalFrame * 0.22);
+          const density = 1 + mask * ((cloud - 0.5) * 0.22 - radial * 0.18);
+          rMask = density * (1 + mask * 0.04);
+          gMask = density;
+          bMask = density * (1 - mask * 0.03);
+        } else if (maskType === "irBloomSpeckle") {
+          const radial = Math.hypot((x / Math.max(1, width)) - 0.5, (y / Math.max(1, height)) - 0.5);
+          const hotspot = 1 + mask * Math.max(0, 0.2 - radial) * 1.2;
+          const speckle = 1 + mask * (seededNoise(x * 0.31, y * 0.31, temporalFrame * 0.12) - 0.5) * 0.32;
+          const irGain = hotspot * speckle;
+          rMask = irGain;
+          gMask = irGain;
+          bMask = irGain;
+        } else if (maskType === "cmosRollingColumn") {
+          const col = (x % 8) / 8;
+          const row = (y % 12) / 12;
+          const colFpn = 1 + mask * ((col - 0.5) * 0.14 + (seededNoise(x * 0.07, 0.14, 0.03) - 0.5) * 0.2);
+          const rowFpn = 1 + mask * ((row - 0.5) * 0.08);
+          const cmosGain = colFpn * rowFpn;
+          rMask = cmosGain * (1 + mask * 0.01);
+          gMask = cmosGain;
+          bMask = cmosGain * (1 - mask * 0.01);
+        } else if (maskType === "lowBitrateBlockGrid") {
+          const blockSize = 12;
+          const localX = x % blockSize;
+          const localY = y % blockSize;
+          const edge = localX <= 1 || localY <= 1 || localX >= blockSize - 1 || localY >= blockSize - 1;
+          const blockNoise = seededNoise(Math.floor(x / blockSize) * 0.63, Math.floor(y / blockSize) * 0.63, temporalFrame * 0.05);
+          const blockGain = 1 + mask * ((blockNoise - 0.5) * 0.12 - (edge ? 0.14 : 0));
+          rMask = blockGain;
+          gMask = blockGain;
+          bMask = blockGain;
+        } else if (maskType === "fisheyeMicrolens") {
+          const nx = (x / Math.max(1, width)) * 2 - 1;
+          const ny = (y / Math.max(1, height)) * 2 - 1;
+          const radius = Math.min(1.6, Math.sqrt(nx * nx + ny * ny));
+          const vignette = 1 - mask * Math.max(0, radius - 0.55) * 0.28;
+          const micro = 1 + mask * (seededNoise(x * 0.18, y * 0.18, 0.21) - 0.5) * Math.max(0, radius - 0.35) * 0.2;
+          const fisheyeGain = vignette * micro;
+          rMask = fisheyeGain * (1 + mask * 0.015);
+          gMask = fisheyeGain;
+          bMask = fisheyeGain * (1 - mask * 0.015);
         }
 
         const dither = (BAYER_4X4[maskY & 3][maskX & 3] / 15 - 0.5) * (1.4 + params.noise * 2.2);

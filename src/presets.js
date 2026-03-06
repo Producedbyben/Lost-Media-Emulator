@@ -1140,7 +1140,7 @@ export const PRESETS = {
     advancedFilmScratches: 0.05,
     advancedFilmGateWeave: 0.11,
     advancedFilmHalation: 0.48,
-    maskType: "film16mm",
+    maskType: "instantDyeCloud",
   },
   "Disposable Camera 35mm Flash": {
     scanlineStrength: 0,
@@ -1249,7 +1249,7 @@ export const PRESETS = {
     advancedQuantization: 0.3,
     advancedGenerationLoss: 0.14,
     advancedMacroBlocking: 0.24,
-    maskType: "none",
+    maskType: "irBloomSpeckle",
   },
   "Police Bodycam 2016": {
     scanlineStrength: 0,
@@ -1281,7 +1281,7 @@ export const PRESETS = {
     advancedQuantization: 0.36,
     advancedGenerationLoss: 0.09,
     advancedMacroBlocking: 0.32,
-    maskType: "none",
+    maskType: "cmosRollingColumn",
   },
   "Covert Spycam Button Lens": {
     scanlineStrength: 0,
@@ -1313,7 +1313,7 @@ export const PRESETS = {
     advancedQuantization: 0.46,
     advancedGenerationLoss: 0.13,
     advancedMacroBlocking: 0.41,
-    maskType: "none",
+    maskType: "lowBitrateBlockGrid",
   },
   "Ring Doorbell Daytime": {
     scanlineStrength: 0,
@@ -1345,7 +1345,7 @@ export const PRESETS = {
     advancedQuantization: 0.37,
     advancedGenerationLoss: 0.08,
     advancedMacroBlocking: 0.33,
-    maskType: "none",
+    maskType: "fisheyeMicrolens",
   },
   "Ring Doorbell Night IR": {
     scanlineStrength: 0,
@@ -1378,7 +1378,7 @@ export const PRESETS = {
     advancedQuantization: 0.44,
     advancedGenerationLoss: 0.12,
     advancedMacroBlocking: 0.36,
-    maskType: "none",
+    maskType: "irBloomSpeckle",
   },
   "GoPro Hero3 Action Cam": {
     scanlineStrength: 0,
@@ -1411,7 +1411,7 @@ export const PRESETS = {
     advancedQuantization: 0.27,
     advancedGenerationLoss: 0.06,
     advancedMacroBlocking: 0.21,
-    maskType: "none",
+    maskType: "fisheyeMicrolens",
   },
   "Disposable Security IR Flood": {
     scanlineStrength: 0,
