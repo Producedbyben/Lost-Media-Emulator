@@ -1617,7 +1617,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   let loadedSourceType = "image";
   let loadedVideo = null;
   let loadedImage = null;
-  const presets = { ...FALLBACK_PRESETS };
+  let presets = { ...FALLBACK_PRESETS };
   let start = performance.now();
   let previewFrameSeconds = 0;
   let previewTargetSeconds = 0;
@@ -1650,6 +1650,23 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   };
 
   const panelEffectState = Object.fromEntries(Object.keys(EFFECT_PANEL_CONFIGS).map((name) => [name, { enabled: true, savedValues: null }]));
+
+
+  async function loadPresets() {
+    try {
+      const module = await import("./presets.js");
+      const loaded = module?.PRESETS;
+      if (loaded && Object.keys(loaded).length > 0) {
+        presets = loaded;
+        setStatus(`Loaded ${Object.keys(loaded).length} presets.`, "success");
+        return;
+      }
+      setStatus("Preset file was empty. Using built-in presets.", "warn");
+    } catch (error) {
+      setStatus("Could not load presets.js. Using built-in presets.", "warn");
+      console.warn("Preset loading failed", error);
+    }
+  }
 
   const RANGE_CONTROL_LABELS = {
     scanlineStrength: "Scanline strength",
@@ -2451,11 +2468,11 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
 
   function getPresetCategory(name = "", preset = {}) {
     const lowerName = String(name).toLowerCase();
-    if (/(silent film|technicolor|super\s*8|16mm|kinescope|film|reel)/.test(lowerName)) return "Film";
+    if (/(silent film|technicolor|super\s*8|16mm|kinescope|nitrate|newsreel|film|reel)/.test(lowerName)) return "Film";
     if (/(security|surveillance|cctv)/.test(lowerName)) return "Surveillance";
-    if (/(web rip|streaming|digital|compression)/.test(lowerName)) return "Digital";
+    if (/(web rip|streaming|digital|compression|dvd|hdv|smartphone|dslr|4k|hdr|laserdisc)/.test(lowerName)) return "Digital";
     if (/(pvm|consumer tv|arcade|oled|lcd)/.test(lowerName)) return "Display";
-    if (/(vhs|tape|cam|broadcast|analog|archive|hi8|minidv)/.test(lowerName)) return "Analog Video";
+    if (/(vhs|tape|cam|broadcast|analog|archive|hi8|minidv|u-matic|betacam)/.test(lowerName)) return "Analog Video";
     if (Number(preset.advancedFilmGrain || 0) > 0.35 || Number(preset.advancedFilmHalation || 0) > 0.35) return "Film";
     return "Experimental";
   }
@@ -3236,12 +3253,15 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   setExportAvailability();
   loadParameterPolicyState();
   buildMacroPolicyControls();
-  initializePresets();
-  defaultParamValues = readParams();
-  updatePreviewControlsState();
-  updateExportControlsState();
-  syncPreviewTimeControl();
-  updateExportEstimate();
+
+  loadPresets().finally(() => {
+    initializePresets();
+    defaultParamValues = readParams();
+    updatePreviewControlsState();
+    updateExportControlsState();
+    syncPreviewTimeControl();
+    updateExportEstimate();
+  });
   window.addEventListener("beforeunload", () => {
     if (loadedVideo?.objectUrl) {
       URL.revokeObjectURL(loadedVideo.objectUrl);
