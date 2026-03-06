@@ -210,7 +210,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.12,
     advancedTapeCrease: 0,
     advancedTimestampOSD: 0.51,
-    advancedOSDStyle: 0,
+    advancedOSDStyle: 4,
     advancedCctvMonochrome: 0,
     advancedQuantization: 0.12,
     advancedGenerationLoss: 0.05,
@@ -272,7 +272,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.15,
     advancedTapeCrease: 0.11,
     advancedTimestampOSD: 0.68,
-    advancedOSDStyle: 0,
+    advancedOSDStyle: 7,
     advancedCctvMonochrome: 0,
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
@@ -336,7 +336,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.09,
     advancedTapeCrease: 0.03,
     advancedTimestampOSD: 0.76,
-    advancedOSDStyle: 3,
+    advancedOSDStyle: 8,
     advancedCctvMonochrome: 1,
     advancedSaturation: 0,
     advancedQuantization: 0.42,
@@ -529,7 +529,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0,
     advancedTapeCrease: 0,
     advancedTimestampOSD: 0.42,
-    advancedOSDStyle: 3,
+    advancedOSDStyle: 8,
     advancedCctvMonochrome: 1,
     advancedSaturation: 0,
     advancedQuantization: 0.24,
@@ -745,7 +745,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.12,
     advancedTapeCrease: 0.06,
     advancedTimestampOSD: 0.18,
-    advancedOSDStyle: 0,
+    advancedOSDStyle: 7,
     advancedCctvMonochrome: 0,
     advancedQuantization: 0.02,
     advancedGenerationLoss: 0.06,
@@ -841,7 +841,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.09,
     advancedTapeCrease: 0,
     advancedTimestampOSD: 0.36,
-    advancedOSDStyle: 1,
+    advancedOSDStyle: 4,
     advancedCctvMonochrome: 0,
     advancedQuantization: 0.2,
     advancedGenerationLoss: 0.05,
@@ -1065,7 +1065,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.16,
     advancedTapeCrease: 0.24,
     advancedTimestampOSD: 0.47,
-    advancedOSDStyle: 0,
+    advancedOSDStyle: 7,
     advancedCctvMonochrome: 0,
     advancedQuantization: 0,
     advancedGenerationLoss: 0.28,
@@ -1360,13 +1360,31 @@ class CRTRenderer {
     const focusBreathing = Math.max(0, Math.min(1, Number(params.advancedFocusBreathing) || 0));
     const tapeCrease = Math.max(0, Math.min(1, Number(params.advancedTapeCrease) || 0));
     const timestampOSD = Math.max(0, Math.min(1, Number(params.advancedTimestampOSD) || 0));
-    const osdStyle = Math.max(0, Math.min(3, Math.round(Number(params.advancedOSDStyle) || 0)));
+    const osdStyle = Math.max(0, Math.min(8, Math.round(Number(params.advancedOSDStyle) || 0)));
     const osdStartDate = Number.isFinite(Date.parse(renderOptions.osdStartDateTime || "")) ? new Date(renderOptions.osdStartDateTime) : new Date("1998-10-31T22:48:00");
     const osdCountWithExport = renderOptions.osdCountWithExport !== false;
     const osdElapsedSeconds = osdCountWithExport ? Math.max(0, Number(renderOptions.osdElapsedSeconds ?? frameSeconds) || 0) : 0;
     const osdPrimaryColor = renderOptions.osdPrimaryColor || "#ffa84a";
     const osdAccentColor = renderOptions.osdAccentColor || "#ff3a3a";
     const osdFontPreset = renderOptions.osdFontPreset || "vhs";
+    const osdCornerConfig = {
+      topLeft: {
+        enabled: renderOptions.osdCornerTopLeftEnabled !== false,
+        text: String(renderOptions.osdCornerTopLeftText || "").trim() || "CAM2",
+      },
+      topRight: {
+        enabled: renderOptions.osdCornerTopRightEnabled !== false,
+        text: String(renderOptions.osdCornerTopRightText || "").trim() || "CTFID CHANNEL3",
+      },
+      bottomLeft: {
+        enabled: renderOptions.osdCornerBottomLeftEnabled === true,
+        text: String(renderOptions.osdCornerBottomLeftText || "").trim(),
+      },
+      bottomRight: {
+        enabled: renderOptions.osdCornerBottomRightEnabled === true,
+        text: String(renderOptions.osdCornerBottomRightText || "").trim(),
+      },
+    };
     const osdFontByPreset = {
       vhs: '"VCR OSD Mono", "Lucida Console", "Courier New", monospace',
       camcorder: '"MS Gothic", "Small Fonts", "Tahoma", sans-serif',
@@ -1855,7 +1873,7 @@ class CRTRenderer {
         drawOsdLine(zoomLabel, Math.floor(width * 0.44), topY, osdPrimaryColor);
         const spLabel = "SP";
         drawOsdLine(spLabel, rightX - measureOsdWidth(spLabel), topY, osdPrimaryColor);
-      } else {
+      } else if (osdStyle === 3) {
         const lineHeight = Math.max(12, Math.floor(baseSize * 1.18));
         drawOsdLine(stampIso, padX, padY, osdPrimaryColor);
         const camLabel = `CAM ${1 + Math.floor(seededNoise(7, temporalSeconds * 0.2, 149) * 8)}`;
@@ -1863,6 +1881,64 @@ class CRTRenderer {
         const status = recBlink ? "LIVE" : "MOTION";
         drawOsdLine(status, padX, topY, osdPrimaryColor);
         drawOsdLine(`GAIN ${Math.floor(8 + seededNoise(temporalFrame, 5, 151) * 16)}dB`, padX, topY + lineHeight, osdPrimaryColor);
+      } else if (osdStyle === 4) {
+        const shotNum = `${Math.max(1, Math.floor(seededNoise(temporalFrame, 0.4, 171) * 999))}`.padStart(3, "0");
+        drawOsdLine(stampDigital, padX, padY, "rgb(239 247 255)");
+        drawOsdLine(`IMG_${yy}${mm}${dd}_${shotNum}`, padX, topY, "rgb(239 247 255)");
+        const qualityLabel = "FINE 5M";
+        drawOsdLine(qualityLabel, rightX - measureOsdWidth(qualityLabel), topY, "rgb(239 247 255)");
+      } else if (osdStyle === 5) {
+        const fpsLabel = recBlink ? "24FPS" : "23.98";
+        const stockLabel = seededNoise(temporalSeconds, 9, 173) > 0.5 ? "500T" : "250D";
+        drawOsdLine(`${mm}.${dd}.${yy}`, padX, padY, osdPrimaryColor);
+        drawOsdLine(`ROLL A${Math.max(1, Math.floor(seededNoise(temporalFrame, 1.2, 175) * 9))}`, padX, topY, osdPrimaryColor);
+        const rightLabel = `${stockLabel} ${fpsLabel}`;
+        drawOsdLine(rightLabel, rightX - measureOsdWidth(rightLabel), topY, osdPrimaryColor);
+      } else if (osdStyle === 6) {
+        const tcSep = recBlink ? ":" : ";";
+        const policeTimecode = `${hh}${tcSep}${min}${tcSep}${sec}${tcSep}${String(Math.floor((temporalSeconds % 1) * 30)).padStart(2, "0")}`;
+        drawOsdLine(policeTimecode, padX, topY, "#f8f8f8");
+        drawOsdLine(stampIso, padX, padY, "#f8f8f8");
+        const unitLabel = `UNIT ${100 + Math.floor(seededNoise(temporalFrame, 2.2, 177) * 900)}`;
+        drawOsdLine(unitLabel, rightX - measureOsdWidth(unitLabel), topY, "#f8f8f8");
+      } else if (osdStyle === 7) {
+        const dropFrame = `${hh}:${min}:${sec}:${String(Math.floor((temporalSeconds % 1) * 30)).padStart(2, "0")}`;
+        const drawCorner = (corner, fallbackText, x, y, align = "left") => {
+          const cfg = osdCornerConfig[corner];
+          if (!cfg?.enabled) return;
+          const label = cfg.text || fallbackText;
+          if (!label) return;
+          const lines = String(label).split(/\n|\|/).filter(Boolean);
+          const lineHeight = Math.max(12, Math.floor(baseSize * 1.12));
+          lines.forEach((line, index) => {
+            const drawX = align === "right" ? x - measureOsdWidth(line) : x;
+            drawOsdLine(line, drawX, y + index * lineHeight, "#f5f5f5");
+          });
+        };
+        drawCorner("topLeft", `CAM${1 + Math.floor(seededNoise(temporalSeconds, 2, 179) * 4)}`, padX, topY, "left");
+        drawCorner("topRight", "CTFID\nCHANNEL3", rightX, topY, "right");
+        drawCorner("bottomLeft", "", padX, padY, "left");
+        drawCorner("bottomRight", "", rightX, padY, "right");
+
+        const tcWidth = measureOsdWidth(dropFrame);
+        const tcX = Math.floor((width - tcWidth) * 0.5);
+        const tcBaseline = Math.floor(height * 0.95);
+        const boxPadX = Math.max(5, Math.floor(baseSize * 0.35));
+        const boxPadY = Math.max(3, Math.floor(baseSize * 0.25));
+        outCtx.save();
+        outCtx.globalAlpha = Math.min(1, osdAlpha * 1.15);
+        outCtx.fillStyle = "rgb(0 0 0 / 0.82)";
+        outCtx.fillRect(tcX - boxPadX, tcBaseline - baseSize - boxPadY, tcWidth + boxPadX * 2, baseSize + boxPadY * 2);
+        outCtx.restore();
+        drawOsdLine(dropFrame, tcX, tcBaseline, "#f5f5f5");
+      } else {
+        const lineHeight = Math.max(12, Math.floor(baseSize * 1.18));
+        drawOsdLine(stampIso, padX, padY, osdPrimaryColor);
+        const camLabel = `CAM ${1 + Math.floor(seededNoise(7, temporalSeconds * 0.2, 149) * 8)}`;
+        drawOsdLine(camLabel, rightX - measureOsdWidth(camLabel), topY, osdPrimaryColor);
+        const status = recBlink ? "REC" : "MOTION";
+        drawOsdLine(status, padX, topY, osdPrimaryColor);
+        drawOsdLine(`H.265 ${Math.floor(1 + seededNoise(temporalFrame, 6, 181) * 3)}.0Mbps`, padX, topY + lineHeight, osdPrimaryColor);
       }
 
       outCtx.restore();
@@ -2190,6 +2266,14 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   const osdCountWithExportInput = document.getElementById("osdCountWithExport");
   const osdPrimaryColorInput = document.getElementById("osdPrimaryColor");
   const osdAccentColorInput = document.getElementById("osdAccentColor");
+  const osdCornerTopLeftEnabledInput = document.getElementById("osdCornerTopLeftEnabled");
+  const osdCornerTopRightEnabledInput = document.getElementById("osdCornerTopRightEnabled");
+  const osdCornerBottomLeftEnabledInput = document.getElementById("osdCornerBottomLeftEnabled");
+  const osdCornerBottomRightEnabledInput = document.getElementById("osdCornerBottomRightEnabled");
+  const osdCornerTopLeftTextInput = document.getElementById("osdCornerTopLeftText");
+  const osdCornerTopRightTextInput = document.getElementById("osdCornerTopRightText");
+  const osdCornerBottomLeftTextInput = document.getElementById("osdCornerBottomLeftText");
+  const osdCornerBottomRightTextInput = document.getElementById("osdCornerBottomRightText");
   const osdStyleInput = document.getElementById("advancedOSDStyle");
   const compareHoldBtn = document.getElementById("compareHoldBtn");
   const compareLockBtn = document.getElementById("compareLockBtn");
@@ -2386,13 +2470,13 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     "Late-80s Home VHS": { startDateTime: "1988-07-14T19:28:00", fontPreset: "vhs", style: 0, primaryColor: "#ffb15a", accentColor: "#ff4f4f" },
     "90s Rental Tape (3rd Gen Dub)": { startDateTime: "1994-03-19T21:07:00", fontPreset: "vhs", style: 2, primaryColor: "#ffaf58", accentColor: "#ff4a4a" },
     "Hi8 Vacation Cam": { startDateTime: "1997-08-09T14:22:00", fontPreset: "camcorder", style: 0, primaryColor: "#ffb66d", accentColor: "#ff4a4a" },
-    "MiniDV Family Cam (2002)": { startDateTime: "2002-12-24T17:41:00", fontPreset: "camcorder", style: 1, primaryColor: "#e8f3ff", accentColor: "#ff3a3a" },
-    "Public Access Archive": { startDateTime: "1992-05-03T20:13:00", fontPreset: "broadcast", style: 0, primaryColor: "#f8d37a", accentColor: "#ff4f4f" },
-    "Security Camera Dump": { startDateTime: "2004-11-02T02:16:00", fontPreset: "hdzeroVision", style: 3, primaryColor: "#d9f7d1", accentColor: "#6cff8a" },
-    "Digital Surveillance": { startDateTime: "2016-02-18T23:47:00", fontPreset: "hdzeroVision", style: 3, primaryColor: "#d3ffd2", accentColor: "#5aff85" },
+    "MiniDV Family Cam (2002)": { startDateTime: "2002-12-24T17:41:00", fontPreset: "camcorder", style: 4, primaryColor: "#e8f3ff", accentColor: "#ff3a3a" },
+    "Public Access Archive": { startDateTime: "1992-05-03T20:13:00", fontPreset: "broadcast", style: 7, primaryColor: "#f8d37a", accentColor: "#ff4f4f" },
+    "Security Camera Dump": { startDateTime: "2004-11-02T02:16:00", fontPreset: "cctv", style: 8, primaryColor: "#d9f7d1", accentColor: "#6cff8a" },
+    "Digital Surveillance": { startDateTime: "2016-02-18T23:47:00", fontPreset: "cctv", style: 8, primaryColor: "#d3ffd2", accentColor: "#5aff85" },
     "Damaged Archive Recovery": { startDateTime: "1987-10-03T01:54:00", fontPreset: "hdzeroConthrax", style: 2, primaryColor: "#f0cc7e", accentColor: "#ff5d5d" },
-    "Betacam SP ENG 1980s": { startDateTime: "1986-09-17T07:32:00", fontPreset: "broadcast", style: 0, primaryColor: "#ffe28d", accentColor: "#ff5b5b" },
-    "HDV Camcorder 2005": { startDateTime: "2005-06-11T15:09:00", fontPreset: "camcorder", style: 1, primaryColor: "#eef6ff", accentColor: "#ff4444" },
+    "Betacam SP ENG 1980s": { startDateTime: "1986-09-17T07:32:00", fontPreset: "broadcast", style: 7, primaryColor: "#ffe28d", accentColor: "#ff5b5b" },
+    "HDV Camcorder 2005": { startDateTime: "2005-06-11T15:09:00", fontPreset: "camcorder", style: 4, primaryColor: "#eef6ff", accentColor: "#ff4444" },
     "Early Smartphone 2012": { startDateTime: "2012-04-28T13:05:00", fontPreset: "modern", style: 1, primaryColor: "#f4f7ff", accentColor: "#ff4d4d" },
     "Found Footage Incident 1999": { startDateTime: "1999-10-21T23:18:00", fontPreset: "hdzeroConthrax", style: 0, primaryColor: "#ffad5c", accentColor: "#ff4d4d" },
   };
@@ -2414,15 +2498,19 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     const generatedDate = `${eraYear}-06-15T19:24:00`;
 
     let fontPreset = "vhs";
-    if (/security|surveillance|cctv/.test(lower)) fontPreset = "hdzeroVision";
-    else if (/camcorder|minidv|hdv|hi8/.test(lower)) fontPreset = "hdzeroDefault";
+    if (/security|surveillance|cctv/.test(lower)) fontPreset = "cctv";
+    else if (/camcorder|minidv|hdv|hi8/.test(lower)) fontPreset = "camcorder";
     else if (/smartphone|dslr/.test(lower)) fontPreset = "modern";
     else if (/dvd|digital|stream|web|broadcast/.test(lower)) fontPreset = "broadcast";
-    else if (/vhs|tape|archive|bootleg|rental|damaged/.test(lower)) fontPreset = "hdzeroConthrax";
+    else if (/vhs|tape|archive|bootleg|rental|damaged/.test(lower)) fontPreset = "vhs";
 
-    let style = Math.max(0, Math.min(3, Math.round(Number(preset.advancedOSDStyle) || 0)));
-    if (/security|surveillance|cctv/.test(lower)) style = 3;
-    else if (/digital|smartphone|dslr|web|dvd|stream|hdv/.test(lower)) style = Math.max(style, 1);
+    let style = Math.max(0, Math.min(8, Math.round(Number(preset.advancedOSDStyle) || 0)));
+    if (/security|surveillance|cctv/.test(lower)) style = 8;
+    else if (/police|body ?cam|dash ?cam|evidence/.test(lower)) style = 6;
+    else if (/broadcast|eng|atsc|off-air|public access/.test(lower)) style = 7;
+    else if (/film|super 8|16mm|nitrate|kinescope/.test(lower)) style = 5;
+    else if (/digital still|digicam|minidv|hdv|camcorder|smartphone|dslr/.test(lower)) style = Math.max(style, 4);
+    else if (/digital|web|dvd|stream/.test(lower)) style = Math.max(style, 1);
     else if (/rental|dub|archive|damaged/.test(lower)) style = Math.max(style, 2);
 
     return {
@@ -3283,6 +3371,14 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       osdFontPreset: osdFontPresetControl?.getValue() || "vhs",
       osdCountWithExport: osdCountWithExportInput?.checked !== false,
       osdElapsedSeconds: elapsedSeconds,
+      osdCornerTopLeftEnabled: osdCornerTopLeftEnabledInput?.checked !== false,
+      osdCornerTopRightEnabled: osdCornerTopRightEnabledInput?.checked !== false,
+      osdCornerBottomLeftEnabled: osdCornerBottomLeftEnabledInput?.checked === true,
+      osdCornerBottomRightEnabled: osdCornerBottomRightEnabledInput?.checked === true,
+      osdCornerTopLeftText: osdCornerTopLeftTextInput?.value || "",
+      osdCornerTopRightText: osdCornerTopRightTextInput?.value || "",
+      osdCornerBottomLeftText: osdCornerBottomLeftTextInput?.value || "",
+      osdCornerBottomRightText: osdCornerBottomRightTextInput?.value || "",
     };
   }
 
@@ -3858,7 +3954,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     applyPresetFilters();
   });
 
-  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport"]) {
+  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport", "osdCornerTopLeftEnabled", "osdCornerTopRightEnabled", "osdCornerBottomLeftEnabled", "osdCornerBottomRightEnabled", "osdCornerTopLeftText", "osdCornerTopRightText", "osdCornerBottomLeftText", "osdCornerBottomRightText"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       markPreviewDirty();
       progressEl.value = 0;
