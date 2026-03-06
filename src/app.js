@@ -1367,6 +1367,24 @@ class CRTRenderer {
     const osdPrimaryColor = renderOptions.osdPrimaryColor || "#ffa84a";
     const osdAccentColor = renderOptions.osdAccentColor || "#ff3a3a";
     const osdFontPreset = renderOptions.osdFontPreset || "vhs";
+    const osdCornerConfig = {
+      topLeft: {
+        enabled: renderOptions.osdCornerTopLeftEnabled !== false,
+        text: String(renderOptions.osdCornerTopLeftText || "").trim() || "CAM2",
+      },
+      topRight: {
+        enabled: renderOptions.osdCornerTopRightEnabled !== false,
+        text: String(renderOptions.osdCornerTopRightText || "").trim() || "CTFID CHANNEL3",
+      },
+      bottomLeft: {
+        enabled: renderOptions.osdCornerBottomLeftEnabled === true,
+        text: String(renderOptions.osdCornerBottomLeftText || "").trim(),
+      },
+      bottomRight: {
+        enabled: renderOptions.osdCornerBottomRightEnabled === true,
+        text: String(renderOptions.osdCornerBottomRightText || "").trim(),
+      },
+    };
     const osdFontByPreset = {
       vhs: '"VCR OSD Mono", "Lucida Console", "Courier New", monospace',
       camcorder: '"MS Gothic", "Small Fonts", "Tahoma", sans-serif',
@@ -1884,12 +1902,35 @@ class CRTRenderer {
         const unitLabel = `UNIT ${100 + Math.floor(seededNoise(temporalFrame, 2.2, 177) * 900)}`;
         drawOsdLine(unitLabel, rightX - measureOsdWidth(unitLabel), topY, "#f8f8f8");
       } else if (osdStyle === 7) {
-        const dropFrame = `${hh}:${min}:${sec};${String(Math.floor((temporalSeconds % 1) * 30)).padStart(2, "0")}`;
-        drawOsdLine(dropFrame, padX, padY, "#f5f5f5");
-        const srcLabel = `VTR ${1 + Math.floor(seededNoise(temporalSeconds, 2, 179) * 4)}`;
-        drawOsdLine(srcLabel, padX, topY, "#f5f5f5");
-        const modeLabel = recBlink ? "PROGRAM" : "PREVIEW";
-        drawOsdLine(modeLabel, rightX - measureOsdWidth(modeLabel), topY, "#f5f5f5");
+        const dropFrame = `${hh}:${min}:${sec}:${String(Math.floor((temporalSeconds % 1) * 30)).padStart(2, "0")}`;
+        const drawCorner = (corner, fallbackText, x, y, align = "left") => {
+          const cfg = osdCornerConfig[corner];
+          if (!cfg?.enabled) return;
+          const label = cfg.text || fallbackText;
+          if (!label) return;
+          const lines = String(label).split(/\n|\|/).filter(Boolean);
+          const lineHeight = Math.max(12, Math.floor(baseSize * 1.12));
+          lines.forEach((line, index) => {
+            const drawX = align === "right" ? x - measureOsdWidth(line) : x;
+            drawOsdLine(line, drawX, y + index * lineHeight, "#f5f5f5");
+          });
+        };
+        drawCorner("topLeft", `CAM${1 + Math.floor(seededNoise(temporalSeconds, 2, 179) * 4)}`, padX, topY, "left");
+        drawCorner("topRight", "CTFID\nCHANNEL3", rightX, topY, "right");
+        drawCorner("bottomLeft", "", padX, padY, "left");
+        drawCorner("bottomRight", "", rightX, padY, "right");
+
+        const tcWidth = measureOsdWidth(dropFrame);
+        const tcX = Math.floor((width - tcWidth) * 0.5);
+        const tcBaseline = Math.floor(height * 0.95);
+        const boxPadX = Math.max(5, Math.floor(baseSize * 0.35));
+        const boxPadY = Math.max(3, Math.floor(baseSize * 0.25));
+        outCtx.save();
+        outCtx.globalAlpha = Math.min(1, osdAlpha * 1.15);
+        outCtx.fillStyle = "rgb(0 0 0 / 0.82)";
+        outCtx.fillRect(tcX - boxPadX, tcBaseline - baseSize - boxPadY, tcWidth + boxPadX * 2, baseSize + boxPadY * 2);
+        outCtx.restore();
+        drawOsdLine(dropFrame, tcX, tcBaseline, "#f5f5f5");
       } else {
         const lineHeight = Math.max(12, Math.floor(baseSize * 1.18));
         drawOsdLine(stampIso, padX, padY, osdPrimaryColor);
@@ -2225,6 +2266,14 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   const osdCountWithExportInput = document.getElementById("osdCountWithExport");
   const osdPrimaryColorInput = document.getElementById("osdPrimaryColor");
   const osdAccentColorInput = document.getElementById("osdAccentColor");
+  const osdCornerTopLeftEnabledInput = document.getElementById("osdCornerTopLeftEnabled");
+  const osdCornerTopRightEnabledInput = document.getElementById("osdCornerTopRightEnabled");
+  const osdCornerBottomLeftEnabledInput = document.getElementById("osdCornerBottomLeftEnabled");
+  const osdCornerBottomRightEnabledInput = document.getElementById("osdCornerBottomRightEnabled");
+  const osdCornerTopLeftTextInput = document.getElementById("osdCornerTopLeftText");
+  const osdCornerTopRightTextInput = document.getElementById("osdCornerTopRightText");
+  const osdCornerBottomLeftTextInput = document.getElementById("osdCornerBottomLeftText");
+  const osdCornerBottomRightTextInput = document.getElementById("osdCornerBottomRightText");
   const osdStyleInput = document.getElementById("advancedOSDStyle");
   const compareHoldBtn = document.getElementById("compareHoldBtn");
   const compareLockBtn = document.getElementById("compareLockBtn");
@@ -3322,6 +3371,14 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       osdFontPreset: osdFontPresetControl?.getValue() || "vhs",
       osdCountWithExport: osdCountWithExportInput?.checked !== false,
       osdElapsedSeconds: elapsedSeconds,
+      osdCornerTopLeftEnabled: osdCornerTopLeftEnabledInput?.checked !== false,
+      osdCornerTopRightEnabled: osdCornerTopRightEnabledInput?.checked !== false,
+      osdCornerBottomLeftEnabled: osdCornerBottomLeftEnabledInput?.checked === true,
+      osdCornerBottomRightEnabled: osdCornerBottomRightEnabledInput?.checked === true,
+      osdCornerTopLeftText: osdCornerTopLeftTextInput?.value || "",
+      osdCornerTopRightText: osdCornerTopRightTextInput?.value || "",
+      osdCornerBottomLeftText: osdCornerBottomLeftTextInput?.value || "",
+      osdCornerBottomRightText: osdCornerBottomRightTextInput?.value || "",
     };
   }
 
@@ -3897,7 +3954,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     applyPresetFilters();
   });
 
-  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport"]) {
+  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport", "osdCornerTopLeftEnabled", "osdCornerTopRightEnabled", "osdCornerBottomLeftEnabled", "osdCornerBottomRightEnabled", "osdCornerTopLeftText", "osdCornerTopRightText", "osdCornerBottomLeftText", "osdCornerBottomRightText"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       markPreviewDirty();
       progressEl.value = 0;

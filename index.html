@@ -301,7 +301,7 @@
             <div class="panel-body">
               <label>Timestamp intensity <span class="range-control"><input id="advancedTimestampOSD" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
               <label>OSD style
-                <div id="advancedOSDStyleSelect" class="selection-box selection-inline" role="radiogroup" aria-label="OSD style">
+                <div id="advancedOSDStyleSelect" class="selection-box selection-box-wrap" role="radiogroup" aria-label="OSD style">
                   <button type="button" data-value="0" data-selected="true">Classic</button>
                   <button type="button" data-value="1">Digital</button>
                   <button type="button" data-value="2">Tape Cam</button>
@@ -320,6 +320,15 @@
                 <label>Primary text colour <input id="osdPrimaryColor" type="color" value="#ffa84a" /></label>
                 <label>Accent colour <input id="osdAccentColor" type="color" value="#ff3a3a" /></label>
               </div>
+              <section class="osd-corner-panel">
+                <header class="osd-corner-title">Corner labels</header>
+                <div class="osd-corner-grid">
+                  <label class="osd-corner-item"><span><input id="osdCornerTopLeftEnabled" type="checkbox" checked /> Top-left</span><input id="osdCornerTopLeftText" type="text" value="CAM2" maxlength="24" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerTopRightEnabled" type="checkbox" checked /> Top-right</span><input id="osdCornerTopRightText" type="text" value="CTFID CHANNEL3" maxlength="24" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomLeftEnabled" type="checkbox" /> Bottom-left</span><input id="osdCornerBottomLeftText" type="text" value="" maxlength="24" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomRightEnabled" type="checkbox" /> Bottom-right</span><input id="osdCornerBottomRightText" type="text" value="" maxlength="24" placeholder="Optional" /></label>
+                </div>
+              </section>
               <label>Era font
                 <div id="osdFontPreset" class="selection-box selection-box-wrap" role="radiogroup" aria-label="OSD font preset">
                   <button type="button" data-value="vhs" data-selected="true">VHS 80s/90s</button>
