@@ -2451,11 +2451,11 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
 
   function getPresetCategory(name = "", preset = {}) {
     const lowerName = String(name).toLowerCase();
-    if (/(silent film|technicolor|super\s*8|16mm|kinescope|film|reel)/.test(lowerName)) return "Film";
+    if (/(silent film|technicolor|super\s*8|16mm|kinescope|nitrate|newsreel|film|reel)/.test(lowerName)) return "Film";
     if (/(security|surveillance|cctv)/.test(lowerName)) return "Surveillance";
-    if (/(web rip|streaming|digital|compression)/.test(lowerName)) return "Digital";
+    if (/(web rip|streaming|digital|compression|dvd|hdv|smartphone|dslr|4k|hdr|laserdisc)/.test(lowerName)) return "Digital";
     if (/(pvm|consumer tv|arcade|oled|lcd)/.test(lowerName)) return "Display";
-    if (/(vhs|tape|cam|broadcast|analog|archive|hi8|minidv)/.test(lowerName)) return "Analog Video";
+    if (/(vhs|tape|cam|broadcast|analog|archive|hi8|minidv|u-matic|betacam)/.test(lowerName)) return "Analog Video";
     if (Number(preset.advancedFilmGrain || 0) > 0.35 || Number(preset.advancedFilmHalation || 0) > 0.35) return "Film";
     return "Experimental";
   }
