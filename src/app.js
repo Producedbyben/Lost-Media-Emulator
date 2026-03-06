@@ -1569,13 +1569,13 @@ class CRTRenderer {
     return glyphs[up] || glyphs["?"];
   }
 
-  drawPixelOSDText(ctx, text, x, y, size, color, preset) {
+  drawPixelOSDText(ctx, text, x, y, size, color, preset, thicknessScale = 1) {
     const presetCfg = this.osdPixelFontPresets[preset];
     if (!presetCfg) return false;
 
     const cellH = Math.max(1, size / presetCfg.heightCells);
     const cellW = Math.max(1, cellH * 0.9);
-    const stroke = Math.max(1, cellH * presetCfg.stroke);
+    const stroke = Math.max(1, cellH * presetCfg.stroke * Math.max(0.4, thicknessScale));
     const charW = presetCfg.widthCells * cellW;
     const charStep = charW + Math.max(1, presetCfg.spacing * cellW * 0.45);
 
@@ -1794,6 +1794,9 @@ class CRTRenderer {
     const osdPrimaryColor = renderOptions.osdPrimaryColor || "#ffa84a";
     const osdAccentColor = renderOptions.osdAccentColor || "#ff3a3a";
     const osdFontPreset = renderOptions.osdFontPreset || "vhs";
+    const osdBloom = Math.max(0, Math.min(1, Number(renderOptions.osdBloom) || 0));
+    const osdFontScale = Math.max(0.6, Math.min(2, Number(renderOptions.osdFontScale) || 1));
+    const osdThickness = Math.max(0.5, Math.min(2, Number(renderOptions.osdThickness) || 1));
     const osdCornerConfig = {
       topLeft: {
         enabled: renderOptions.osdCornerTopLeftEnabled !== false,
@@ -2312,7 +2315,7 @@ class CRTRenderer {
       const padY = Math.floor(height * 0.95);
       const topY = Math.floor(height * 0.07);
       const rightX = Math.floor(width * 0.96);
-      const baseSize = Math.max(11, Math.floor(height * (osdStyle === 3 ? 0.023 : 0.027)));
+      const baseSize = Math.max(11, Math.floor(height * (osdStyle === 3 ? 0.023 : 0.027) * osdFontScale));
       const fontFamily = osdFontByPreset[osdFontPreset] || osdFontByPreset.vhs;
       const hasPixelFont = Boolean(this.osdPixelFontPresets[osdFontPreset]);
       const hasSevenSegmentFont = osdFontPreset === "filmSegmentThin";
@@ -2326,17 +2329,22 @@ class CRTRenderer {
       };
       const drawOsdLine = (text, x, y, color = osdPrimaryColor) => {
         if (hasPixelFont) {
-          const drawn = this.drawPixelOSDText(outCtx, String(text), x, y, baseSize, color, osdFontPreset);
+          const drawn = this.drawPixelOSDText(outCtx, String(text), x, y, baseSize, color, osdFontPreset, osdThickness);
           if (drawn) return;
         }
         if (hasSevenSegmentFont) {
           this.drawSevenSegmentOSDText(outCtx, String(text), x, y, baseSize, color, {
             glowColor: color,
-            glowStrength: 0.4,
-            weight: 0.09,
+            glowStrength: 0.4 + osdBloom * 0.8,
+            weight: 0.09 * osdThickness,
             gapScale: 0.18,
           });
           return;
+        }
+        if (osdThickness > 0.55) {
+          outCtx.lineWidth = Math.max(0.4, osdThickness * Math.max(0.8, baseSize * 0.04));
+          outCtx.strokeStyle = "rgb(0 0 0 / 0.7)";
+          outCtx.strokeText(String(text), x, y);
         }
         outCtx.fillStyle = color;
         outCtx.fillText(String(text), x, y);
@@ -2346,8 +2354,8 @@ class CRTRenderer {
       outCtx.font = `${baseSize}px ${fontFamily}`;
       outCtx.textBaseline = "bottom";
       outCtx.globalAlpha = osdAlpha;
-      outCtx.shadowColor = "rgb(0 0 0 / 0.6)";
-      outCtx.shadowBlur = Math.max(0.5, baseSize * 0.06);
+      outCtx.shadowColor = osdBloom > 0.01 ? osdPrimaryColor : "rgb(0 0 0 / 0.6)";
+      outCtx.shadowBlur = Math.max(0.5, baseSize * (0.06 + osdBloom * 0.42));
       outCtx.shadowOffsetX = Math.max(1, Math.floor(baseSize * 0.08));
       outCtx.shadowOffsetY = Math.max(1, Math.floor(baseSize * 0.08));
 
@@ -2395,15 +2403,15 @@ class CRTRenderer {
         outCtx.globalAlpha = Math.min(1, osdAlpha * 1.25);
         this.drawSevenSegmentOSDText(outCtx, filmLabel, filmX, filmY, filmSize, burnCore, {
           glowColor: burnHue,
-          glowStrength: 1.1,
-          weight: 0.09,
+          glowStrength: 1.1 + osdBloom * 0.8,
+          weight: 0.09 * osdThickness,
           gapScale: 0.18,
         });
-        outCtx.globalAlpha = Math.min(1, osdAlpha * 0.35);
+        outCtx.globalAlpha = Math.min(1, osdAlpha * (0.35 + osdBloom * 0.2));
         this.drawSevenSegmentOSDText(outCtx, filmLabel, filmX + 1, filmY + 1, filmSize, burnHue, {
           glowColor: "rgb(255 48 10)",
-          glowStrength: 0.55,
-          weight: 0.08,
+          glowStrength: 0.55 + osdBloom * 0.5,
+          weight: 0.08 * osdThickness,
           gapScale: 0.18,
         });
         outCtx.restore();
@@ -2790,6 +2798,9 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   const osdCountWithExportInput = document.getElementById("osdCountWithExport");
   const osdPrimaryColorInput = document.getElementById("osdPrimaryColor");
   const osdAccentColorInput = document.getElementById("osdAccentColor");
+  const osdBloomInput = document.getElementById("osdBloom");
+  const osdFontScaleInput = document.getElementById("osdFontScale");
+  const osdThicknessInput = document.getElementById("osdThickness");
   const osdCornerTopLeftEnabledInput = document.getElementById("osdCornerTopLeftEnabled");
   const osdCornerTopCenterEnabledInput = document.getElementById("osdCornerTopCenterEnabled");
   const osdCornerTopRightEnabledInput = document.getElementById("osdCornerTopRightEnabled");
@@ -3900,6 +3911,9 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       osdStartDateTime: osdStartDateTimeInput?.value,
       osdPrimaryColor: osdPrimaryColorInput?.value,
       osdAccentColor: osdAccentColorInput?.value,
+      osdBloom: Number(osdBloomInput?.value || 0),
+      osdFontScale: Number(osdFontScaleInput?.value || 1),
+      osdThickness: Number(osdThicknessInput?.value || 1),
       osdFontPreset: osdFontPresetControl?.getValue() || "vhs",
       osdCountWithExport: osdCountWithExportInput?.checked !== false,
       osdElapsedSeconds: elapsedSeconds,
@@ -4517,14 +4531,14 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     });
   });
 
-  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport", "osdCornerTopLeftEnabled", "osdCornerTopCenterEnabled", "osdCornerTopRightEnabled", "osdCornerBottomLeftEnabled", "osdCornerBottomCenterEnabled", "osdCornerBottomRightEnabled", "osdCornerTopLeftText", "osdCornerTopCenterText", "osdCornerTopRightText", "osdCornerBottomLeftText", "osdCornerBottomCenterText", "osdCornerBottomRightText"]) {
+  for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdBloom", "osdFontScale", "osdThickness", "osdCountWithExport", "osdCornerTopLeftEnabled", "osdCornerTopCenterEnabled", "osdCornerTopRightEnabled", "osdCornerBottomLeftEnabled", "osdCornerBottomCenterEnabled", "osdCornerBottomRightEnabled", "osdCornerTopLeftText", "osdCornerTopCenterText", "osdCornerTopRightText", "osdCornerBottomLeftText", "osdCornerBottomCenterText", "osdCornerBottomRightText"]) {
     document.getElementById(id)?.addEventListener("input", () => {
       markPreviewDirty();
       progressEl.value = 0;
     });
   }
 
-  for (const id of [...controlIds, ...macroControlIds, "previewTime", "presetIntensity", "quickPresetIntensity", "quickScanlineStrength", "quickBloom", "quickChroma"]) {
+  for (const id of [...controlIds, ...macroControlIds, "previewTime", "presetIntensity", "quickPresetIntensity", "quickScanlineStrength", "quickBloom", "quickChroma", "osdBloom", "osdFontScale", "osdThickness"]) {
     setupRangeWithNumber(id);
   }
 
