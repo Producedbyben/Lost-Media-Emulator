@@ -1086,7 +1086,8 @@ class CRTRenderer {
       broadcast: '"Arial Narrow", "Arial", sans-serif',
     };
     const cctvMonochrome = Math.max(0, Math.min(1, Number(params.advancedCctvMonochrome) || 0));
-    const saturation = Math.max(0, Math.min(2, Number(params.advancedSaturation) || 1));
+    const saturationRaw = Number(params.advancedSaturation);
+    const saturation = Math.max(0, Math.min(2, Number.isFinite(saturationRaw) ? saturationRaw : 1));
     const quantization = Math.max(0, Math.min(1, Number(params.advancedQuantization) || 0));
     const generationLoss = Math.max(0, Math.min(1, Number(params.advancedGenerationLoss) || 0));
     const macroBlocking = Math.max(0, Math.min(1, Number(params.advancedMacroBlocking) || 0));
