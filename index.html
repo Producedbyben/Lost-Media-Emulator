@@ -305,6 +305,9 @@
             <header class="panel-header">Overlays & OSD</header>
             <div class="panel-body">
               <label>Timestamp intensity <span class="range-control"><input id="advancedTimestampOSD" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
+              <label>OSD bloom <span class="range-control"><input id="osdBloom" type="range" min="0" max="1" step="0.01" value="0.35" /></span></label>
+              <label>OSD font scale <span class="range-control"><input id="osdFontScale" type="range" min="0.6" max="2" step="0.01" value="1" /></span></label>
+              <label>OSD thickness <span class="range-control"><input id="osdThickness" type="range" min="0.5" max="2" step="0.01" value="1" /></span></label>
               <label>OSD style
                 <div id="advancedOSDStyleSelect" class="selection-box selection-box-wrap" role="radiogroup" aria-label="OSD style">
                   <button type="button" data-value="0" data-selected="true">Classic</button>
@@ -316,8 +319,9 @@
                   <button type="button" data-value="6">Police Recorder</button>
                   <button type="button" data-value="7">Broadcast Timecode</button>
                   <button type="button" data-value="8">Modern CCTV Screen</button>
+                  <button type="button" data-value="9">Custom Corners</button>
                 </div>
-                <input id="advancedOSDStyle" type="range" min="0" max="8" step="1" value="0" hidden />
+                <input id="advancedOSDStyle" type="range" min="0" max="9" step="1" value="0" hidden />
               </label>
               <label>Start date/time <input id="osdStartDateTime" type="datetime-local" value="1998-10-31T22:48:00" /></label>
               <label class="checkbox-row"><input id="osdCountWithExport" type="checkbox" checked /> Timecode counts up with export/playback</label>
@@ -326,12 +330,20 @@
                 <label>Accent colour <input id="osdAccentColor" type="color" value="#ff3a3a" /></label>
               </div>
               <section class="osd-corner-panel">
-                <header class="osd-corner-title">Corner labels</header>
+                <header class="osd-corner-title">Custom labels</header>
+                <div class="osd-corner-token-help">Use <code>{date}</code>, <code>{time}</code>, or <code>{datetime}</code>. Quick insert:</div>
+                <div class="osd-corner-token-actions">
+                  <button type="button" class="secondary-btn osd-token-btn" data-osd-token="{date}">Date</button>
+                  <button type="button" class="secondary-btn osd-token-btn" data-osd-token="{time}">Time</button>
+                  <button type="button" class="secondary-btn osd-token-btn" data-osd-token="{datetime}">Date+Time</button>
+                </div>
                 <div class="osd-corner-grid">
-                  <label class="osd-corner-item"><span><input id="osdCornerTopLeftEnabled" type="checkbox" checked /> Top-left</span><input id="osdCornerTopLeftText" type="text" value="CAM2" maxlength="24" /></label>
-                  <label class="osd-corner-item"><span><input id="osdCornerTopRightEnabled" type="checkbox" checked /> Top-right</span><input id="osdCornerTopRightText" type="text" value="CTFID CHANNEL3" maxlength="24" /></label>
-                  <label class="osd-corner-item"><span><input id="osdCornerBottomLeftEnabled" type="checkbox" /> Bottom-left</span><input id="osdCornerBottomLeftText" type="text" value="" maxlength="24" placeholder="Optional" /></label>
-                  <label class="osd-corner-item"><span><input id="osdCornerBottomRightEnabled" type="checkbox" /> Bottom-right</span><input id="osdCornerBottomRightText" type="text" value="" maxlength="24" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerTopLeftEnabled" type="checkbox" checked /> Top-left</span><input id="osdCornerTopLeftText" type="text" value="CAM2" maxlength="80" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerTopCenterEnabled" type="checkbox" /> Top-center</span><input id="osdCornerTopCenterText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerTopRightEnabled" type="checkbox" checked /> Top-right</span><input id="osdCornerTopRightText" type="text" value="CTFID CHANNEL3" maxlength="80" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomLeftEnabled" type="checkbox" /> Bottom-left</span><input id="osdCornerBottomLeftText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomCenterEnabled" type="checkbox" /> Bottom-center</span><input id="osdCornerBottomCenterText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
+                  <label class="osd-corner-item"><span><input id="osdCornerBottomRightEnabled" type="checkbox" /> Bottom-right</span><input id="osdCornerBottomRightText" type="text" value="" maxlength="80" placeholder="Optional" /></label>
                 </div>
               </section>
               <label>Era font
@@ -344,6 +356,7 @@
                   <button type="button" data-value="hdzeroConthrax">HDZero Conthrax</button>
                   <button type="button" data-value="hdzeroVision">HDZero Vision+</button>
                   <button type="button" data-value="led">7-segment LED</button>
+                  <button type="button" data-value="filmSegmentThin">Film 7-seg Thin</button>
                   <button type="button" data-value="lcd">Pocket LCD</button>
                   <button type="button" data-value="modern">Modern UI</button>
                 </div>
