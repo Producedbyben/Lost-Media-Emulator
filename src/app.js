@@ -337,7 +337,7 @@ const FALLBACK_PRESETS = {
     advancedTapeCrease: 0.03,
     advancedTimestampOSD: 0.76,
     advancedOSDStyle: 3,
-    advancedCctvMonochrome: 0.72,
+    advancedCctvMonochrome: 1,
     advancedQuantization: 0.42,
     advancedGenerationLoss: 0.2,
     advancedMacroBlocking: 0.3,
@@ -529,7 +529,7 @@ const FALLBACK_PRESETS = {
     advancedTapeCrease: 0,
     advancedTimestampOSD: 0.42,
     advancedOSDStyle: 3,
-    advancedCctvMonochrome: 0.36,
+    advancedCctvMonochrome: 1,
     advancedQuantization: 0.24,
     advancedGenerationLoss: 0.08,
     advancedMacroBlocking: 0.18,
@@ -548,7 +548,7 @@ const FALLBACK_PRESETS = {
     advancedWhiteBalanceDrift: 0,
     advancedFocusBreathing: 0,
     advancedQuantization: 0,
-    advancedCctvMonochrome: 0.92,
+    advancedCctvMonochrome: 1,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
     advancedFilmGrain: 0.68,
@@ -1302,18 +1302,21 @@ class CRTRenderer {
     }
 
     if (cctvMonochrome > 0) {
+      const fullMonochromeLock = cctvMonochrome >= 0.999;
       outCtx.save();
-      outCtx.globalAlpha = Math.min(0.9, 0.2 + cctvMonochrome * 0.7);
-      outCtx.filter = `grayscale(1) contrast(${(1 + cctvMonochrome * 0.22).toFixed(3)}) brightness(${(0.95 + cctvMonochrome * 0.08).toFixed(3)})`;
+      outCtx.globalAlpha = fullMonochromeLock ? 1 : Math.min(0.9, 0.2 + cctvMonochrome * 0.7);
+      outCtx.filter = `grayscale(1) saturate(0) contrast(${(1 + cctvMonochrome * 0.22).toFixed(3)}) brightness(${(0.95 + cctvMonochrome * 0.08).toFixed(3)})`;
       outCtx.drawImage(outCtx.canvas, 0, 0);
       outCtx.restore();
 
-      outCtx.save();
-      outCtx.globalCompositeOperation = "multiply";
-      outCtx.globalAlpha = cctvMonochrome * 0.25;
-      outCtx.fillStyle = "rgb(145 182 148)";
-      outCtx.fillRect(0, 0, width, height);
-      outCtx.restore();
+      if (!fullMonochromeLock) {
+        outCtx.save();
+        outCtx.globalCompositeOperation = "multiply";
+        outCtx.globalAlpha = cctvMonochrome * 0.25;
+        outCtx.fillStyle = "rgb(145 182 148)";
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.restore();
+      }
     }
 
     const bloom = params.bloom;
