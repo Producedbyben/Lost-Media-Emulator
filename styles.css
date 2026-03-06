@@ -259,6 +259,19 @@ progress { width: 100%; height: 8px; }
   color: #e8f7de;
 }
 .preset-headline { grid-template-columns: 1fr auto; align-items: center; }
+.preset-filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.preset-filter-row > label {
+  margin: 0;
+}
+.preset-filter-meta {
+  margin: -0.1rem 0 0;
+  font-size: 0.72rem;
+  color: #9ea8b8;
+}
 input[type="number"] { font-variant-numeric: tabular-nums; }
 
 body[data-density="compact"] .panel-header {
@@ -272,6 +285,10 @@ body[data-density="compact"] .panel-body {
 
 body[data-density="compact"] label {
   font-size: 0.74rem;
+}
+
+body[data-density="compact"] .preset-filter-meta {
+  font-size: 0.69rem;
 }
 
 body[data-density="compact"] input,

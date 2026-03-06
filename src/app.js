@@ -1538,6 +1538,9 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   const compareLockBtn = document.getElementById("compareLockBtn");
   const presetDirtyTag = document.getElementById("presetDirtyTag");
   const presetIntensityInput = document.getElementById("presetIntensity");
+  const presetCategoryFilter = document.getElementById("presetCategoryFilter");
+  const presetSearchInput = document.getElementById("presetSearch");
+  const presetFilterMeta = document.getElementById("presetFilterMeta");
   const exportEstimateEl = document.getElementById("exportEstimate");
   const densityModeRoot = document.getElementById("densityMode");
 
@@ -1627,6 +1630,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   let showOriginalPreview = false;
   let compareLocked = false;
   let activePresetName = null;
+  const presetCategories = new Map();
   const detachedMacroIds = new Set();
   const presetPinnedIds = new Set();
   const PARAM_POLICY_STORAGE_KEY = "lme:param-policy:v1";
@@ -2445,6 +2449,58 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     updatePresetDirtyState();
   }
 
+  function getPresetCategory(name = "", preset = {}) {
+    const lowerName = String(name).toLowerCase();
+    if (/(silent film|technicolor|super\s*8|16mm|kinescope|film|reel)/.test(lowerName)) return "Film";
+    if (/(security|surveillance|cctv)/.test(lowerName)) return "Surveillance";
+    if (/(web rip|streaming|digital|compression)/.test(lowerName)) return "Digital";
+    if (/(pvm|consumer tv|arcade|oled|lcd)/.test(lowerName)) return "Display";
+    if (/(vhs|tape|cam|broadcast|analog|archive|hi8|minidv)/.test(lowerName)) return "Analog Video";
+    if (Number(preset.advancedFilmGrain || 0) > 0.35 || Number(preset.advancedFilmHalation || 0) > 0.35) return "Film";
+    return "Experimental";
+  }
+
+  function updatePresetFilterMeta(visibleCount, totalCount) {
+    if (!presetFilterMeta) return;
+    const query = String(presetSearchInput?.value || "").trim();
+    if (visibleCount === totalCount && !query) {
+      presetFilterMeta.textContent = `${totalCount} presets`;
+      return;
+    }
+    const querySuffix = query ? ` matching “${query}”` : "";
+    presetFilterMeta.textContent = `${visibleCount} of ${totalCount} presets${querySuffix}`;
+  }
+
+  function applyPresetFilters() {
+    if (!presetSelect || !presetControl) return;
+    const selectedCategory = String(presetCategoryFilter?.value || "all");
+    const query = String(presetSearchInput?.value || "").trim().toLowerCase();
+
+    const buttons = Array.from(presetSelect.querySelectorAll("button[data-value]"));
+    const visibleNames = [];
+    for (const button of buttons) {
+      const name = button.dataset.value || "";
+      const category = presetCategories.get(name) || "Experimental";
+      const categoryMatch = selectedCategory === "all" || category === selectedCategory;
+      const searchMatch = !query || name.toLowerCase().includes(query);
+      const visible = categoryMatch && searchMatch;
+      button.hidden = !visible;
+      if (visible) visibleNames.push(name);
+    }
+
+    updatePresetFilterMeta(visibleNames.length, buttons.length);
+
+    const current = activePresetName || presetControl.getValue();
+    if (visibleNames.length > 0 && !visibleNames.includes(current)) {
+      presetControl.setValue(visibleNames[0]);
+      return;
+    }
+
+    if (visibleNames.length === 0 && presetFilterMeta) {
+      presetFilterMeta.textContent = "No presets match this filter.";
+    }
+  }
+
   function updatePresetDirtyState() {
     if (!presetDirtyTag) return;
     if (!activePresetName) {
@@ -2462,6 +2518,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
 
   function initializePresets() {
     const names = Object.keys(presets);
+    presetCategories.clear();
     presetSelect.innerHTML = "";
 
     if (names.length === 0) {
@@ -2473,6 +2530,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     }
 
     for (const name of names) {
+      presetCategories.set(name, getPresetCategory(name, presets[name]));
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.value = name;
@@ -2481,6 +2539,17 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
         button.dataset.selected = "true";
       }
       presetSelect.appendChild(button);
+    }
+
+    if (presetCategoryFilter) {
+      const categories = ["all", ...Array.from(new Set(names.map((name) => presetCategories.get(name))).values()).sort((a, b) => a.localeCompare(b))];
+      presetCategoryFilter.innerHTML = "";
+      for (const category of categories) {
+        const opt = document.createElement("option");
+        opt.value = category;
+        opt.textContent = category === "all" ? "All categories" : category;
+        presetCategoryFilter.appendChild(opt);
+      }
     }
 
     presetControl = setupSelectionBox("presetSelect", {
@@ -2499,6 +2568,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     const defaultPreset = presets["Consumer TV"] ? "Consumer TV" : names[0];
     presetControl.setValue(defaultPreset, { silent: true });
     applyPreset(defaultPreset, Number(presetIntensityInput?.value || 1));
+    applyPresetFilters();
     updatePresetDirtyState();
   }
 
@@ -2923,6 +2993,14 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     applyPreset(activePresetName, Number(presetIntensityInput.value || 1));
     markPreviewDirty();
     progressEl.value = 0;
+  });
+
+  presetCategoryFilter?.addEventListener("change", () => {
+    applyPresetFilters();
+  });
+
+  presetSearchInput?.addEventListener("input", () => {
+    applyPresetFilters();
   });
 
   for (const id of ["osdStartDateTime", "osdPrimaryColor", "osdAccentColor", "osdCountWithExport"]) {
