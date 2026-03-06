@@ -239,6 +239,27 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   grid-template-columns: 1fr;
 }
 
+
+.osd-corner-token-help {
+  font-size: 0.69rem;
+  color: #9fb7d8;
+}
+
+.osd-corner-token-help code {
+  color: #d6e6ff;
+}
+
+.osd-corner-token-actions {
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.osd-corner-token-actions button {
+  font-size: 0.68rem;
+  padding: 0.3rem;
+}
+
 .osd-corner-item {
   gap: 0.2rem;
 }
