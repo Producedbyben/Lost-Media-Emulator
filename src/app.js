@@ -1601,15 +1601,24 @@ class CRTRenderer {
   }
 
 
-  drawSevenSegmentOSDText(ctx, text, x, y, size, color, { align = "left", glowColor = color, glowStrength = 1 } = {}) {
+  getSevenSegmentOSDWidth(text, size, { gapScale = 0.16 } = {}) {
+    const chars = String(text || "");
+    if (!chars.length) return 0;
+    const digitW = Math.max(6, Math.floor(size * 0.66));
+    const gap = Math.max(3, Math.floor(size * gapScale));
+    const charStep = digitW + gap;
+    return chars.length * charStep - gap;
+  }
+
+  drawSevenSegmentOSDText(ctx, text, x, y, size, color, { align = "left", glowColor = color, glowStrength = 1, weight = 0.12, gapScale = 0.16 } = {}) {
     const chars = String(text || "").toUpperCase();
     const digitW = Math.max(6, Math.floor(size * 0.66));
     const digitH = Math.max(10, Math.floor(size));
-    const thickness = Math.max(2, Math.floor(size * 0.15));
-    const gap = Math.max(3, Math.floor(size * 0.16));
+    const thickness = Math.max(1, Math.floor(size * weight));
+    const gap = Math.max(3, Math.floor(size * gapScale));
     const segmentLen = Math.max(2, digitW - thickness * 2);
     const charStep = digitW + gap;
-    const textWidth = chars.length * charStep - gap;
+    const textWidth = this.getSevenSegmentOSDWidth(chars, size, { gapScale });
 
     const segmentDefs = {
       A: [thickness, 0, segmentLen, thickness],
@@ -1820,6 +1829,7 @@ class CRTRenderer {
       hdzeroConthrax: '"VCR OSD Mono", "Lucida Console", monospace',
       hdzeroVision: '"VCR OSD Mono", "Lucida Console", monospace',
       led: '"Digital-7 Mono", "DS-Digital", "Consolas", monospace',
+      filmSegmentThin: '"Digital-7 Mono", "DS-Digital", "Consolas", monospace',
       lcd: '"MS Sans Serif", "Geneva", "Tahoma", sans-serif',
       modern: '"Inter", "Segoe UI", "Arial", sans-serif',
     };
@@ -2305,14 +2315,28 @@ class CRTRenderer {
       const baseSize = Math.max(11, Math.floor(height * (osdStyle === 3 ? 0.023 : 0.027)));
       const fontFamily = osdFontByPreset[osdFontPreset] || osdFontByPreset.vhs;
       const hasPixelFont = Boolean(this.osdPixelFontPresets[osdFontPreset]);
+      const hasSevenSegmentFont = osdFontPreset === "filmSegmentThin";
       const pixelGlyphWidth = hasPixelFont
         ? Math.max(1, Math.round(baseSize * 0.64))
         : 0;
-      const measureOsdWidth = (text) => (hasPixelFont ? String(text).length * pixelGlyphWidth : outCtx.measureText(String(text)).width);
+      const measureOsdWidth = (text) => {
+        if (hasPixelFont) return String(text).length * pixelGlyphWidth;
+        if (hasSevenSegmentFont) return this.getSevenSegmentOSDWidth(String(text), baseSize, { gapScale: 0.18 });
+        return outCtx.measureText(String(text)).width;
+      };
       const drawOsdLine = (text, x, y, color = osdPrimaryColor) => {
         if (hasPixelFont) {
           const drawn = this.drawPixelOSDText(outCtx, String(text), x, y, baseSize, color, osdFontPreset);
           if (drawn) return;
+        }
+        if (hasSevenSegmentFont) {
+          this.drawSevenSegmentOSDText(outCtx, String(text), x, y, baseSize, color, {
+            glowColor: color,
+            glowStrength: 0.4,
+            weight: 0.09,
+            gapScale: 0.18,
+          });
+          return;
         }
         outCtx.fillStyle = color;
         outCtx.fillText(String(text), x, y);
@@ -2360,8 +2384,7 @@ class CRTRenderer {
         drawOsdLine(qualityLabel, rightX - measureOsdWidth(qualityLabel), topY, "rgb(239 247 255)");
       } else if (osdStyle === 5) {
         const filmDate = `${Number(dd)} ${Number(mm)} ${Number(yy)}`;
-        const filmTime = `${hh}:${min}:${sec}`;
-        const filmLabel = `${filmDate} ${filmTime}`;
+        const filmLabel = filmDate;
         const filmSize = Math.max(20, Math.floor(height * 0.048));
         const filmX = padX;
         const filmY = padY;
@@ -2372,12 +2395,16 @@ class CRTRenderer {
         outCtx.globalAlpha = Math.min(1, osdAlpha * 1.25);
         this.drawSevenSegmentOSDText(outCtx, filmLabel, filmX, filmY, filmSize, burnCore, {
           glowColor: burnHue,
-          glowStrength: 1.45,
+          glowStrength: 1.1,
+          weight: 0.09,
+          gapScale: 0.18,
         });
-        outCtx.globalAlpha = Math.min(1, osdAlpha * 0.55);
+        outCtx.globalAlpha = Math.min(1, osdAlpha * 0.35);
         this.drawSevenSegmentOSDText(outCtx, filmLabel, filmX + 1, filmY + 1, filmSize, burnHue, {
           glowColor: "rgb(255 48 10)",
-          glowStrength: 0.8,
+          glowStrength: 0.55,
+          weight: 0.08,
+          gapScale: 0.18,
         });
         outCtx.restore();
       } else if (osdStyle === 6) {
