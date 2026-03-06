@@ -1702,7 +1702,7 @@ class CRTRenderer {
     const focusBreathing = Math.max(0, Math.min(1, Number(params.advancedFocusBreathing) || 0));
     const tapeCrease = Math.max(0, Math.min(1, Number(params.advancedTapeCrease) || 0));
     const timestampOSD = Math.max(0, Math.min(1, Number(params.advancedTimestampOSD) || 0));
-    const osdStyle = Math.max(0, Math.min(8, Math.round(Number(params.advancedOSDStyle) || 0)));
+    const osdStyle = Math.max(0, Math.min(9, Math.round(Number(params.advancedOSDStyle) || 0)));
     const osdStartDate = Number.isFinite(Date.parse(renderOptions.osdStartDateTime || "")) ? new Date(renderOptions.osdStartDateTime) : new Date("1998-10-31T22:48:00");
     const osdCountWithExport = renderOptions.osdCountWithExport !== false;
     const osdElapsedSeconds = osdCountWithExport ? Math.max(0, Number(renderOptions.osdElapsedSeconds ?? frameSeconds) || 0) : 0;
@@ -2287,8 +2287,7 @@ class CRTRenderer {
         drawOsdLine(stampIso, padX, padY, "#f8f8f8");
         const unitLabel = `UNIT ${100 + Math.floor(seededNoise(temporalFrame, 2.2, 177) * 900)}`;
         drawOsdLine(unitLabel, rightX - measureOsdWidth(unitLabel), topY, "#f8f8f8");
-      } else if (osdStyle === 7) {
-        const dropFrame = `${hh}:${min}:${sec}:${String(Math.floor((temporalSeconds % 1) * 30)).padStart(2, "0")}`;
+      } else if (osdStyle === 7 || osdStyle === 9) {
         const drawCorner = (corner, fallbackText, x, y, align = "left") => {
           const cfg = osdCornerConfig[corner];
           if (!cfg?.enabled) return;
@@ -2306,17 +2305,20 @@ class CRTRenderer {
         drawCorner("bottomLeft", "", padX, padY, "left");
         drawCorner("bottomRight", "", rightX, padY, "right");
 
-        const tcWidth = measureOsdWidth(dropFrame);
-        const tcX = Math.floor((width - tcWidth) * 0.5);
-        const tcBaseline = Math.floor(height * 0.95);
-        const boxPadX = Math.max(5, Math.floor(baseSize * 0.35));
-        const boxPadY = Math.max(3, Math.floor(baseSize * 0.25));
-        outCtx.save();
-        outCtx.globalAlpha = Math.min(1, osdAlpha * 1.15);
-        outCtx.fillStyle = "rgb(0 0 0 / 0.82)";
-        outCtx.fillRect(tcX - boxPadX, tcBaseline - baseSize - boxPadY, tcWidth + boxPadX * 2, baseSize + boxPadY * 2);
-        outCtx.restore();
-        drawOsdLine(dropFrame, tcX, tcBaseline, "#f5f5f5");
+        if (osdStyle === 7) {
+          const dropFrame = `${hh}:${min}:${sec}:${String(Math.floor((temporalSeconds % 1) * 30)).padStart(2, "0")}`;
+          const tcWidth = measureOsdWidth(dropFrame);
+          const tcX = Math.floor((width - tcWidth) * 0.5);
+          const tcBaseline = Math.floor(height * 0.95);
+          const boxPadX = Math.max(5, Math.floor(baseSize * 0.35));
+          const boxPadY = Math.max(3, Math.floor(baseSize * 0.25));
+          outCtx.save();
+          outCtx.globalAlpha = Math.min(1, osdAlpha * 1.15);
+          outCtx.fillStyle = "rgb(0 0 0 / 0.82)";
+          outCtx.fillRect(tcX - boxPadX, tcBaseline - baseSize - boxPadY, tcWidth + boxPadX * 2, baseSize + boxPadY * 2);
+          outCtx.restore();
+          drawOsdLine(dropFrame, tcX, tcBaseline, "#f5f5f5");
+        }
       } else {
         const lineHeight = Math.max(12, Math.floor(baseSize * 1.18));
         drawOsdLine(stampIso, padX, padY, osdPrimaryColor);
@@ -2890,7 +2892,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     else if (/dvd|digital|stream|web|broadcast/.test(lower)) fontPreset = "broadcast";
     else if (/vhs|tape|archive|bootleg|rental|damaged/.test(lower)) fontPreset = "vhs";
 
-    let style = Math.max(0, Math.min(8, Math.round(Number(preset.advancedOSDStyle) || 0)));
+    let style = Math.max(0, Math.min(9, Math.round(Number(preset.advancedOSDStyle) || 0)));
     if (/security|surveillance|cctv/.test(lower)) style = 8;
     else if (/police|body ?cam|dash ?cam|evidence/.test(lower)) style = 6;
     else if (/broadcast|eng|atsc|off-air|public access/.test(lower)) style = 7;
