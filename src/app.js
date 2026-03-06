@@ -1160,6 +1160,102 @@ class CRTRenderer {
     this.tempCanvas = document.createElement("canvas");
     this.quantCanvas = document.createElement("canvas");
     this.hasImage = false;
+    this.osdPixelFontPresets = {
+      hdzeroDefault: { stroke: 1, spacing: 1, heightCells: 7, widthCells: 5 },
+      hdzeroConthrax: { stroke: 1.15, spacing: 1, heightCells: 7, widthCells: 5 },
+      hdzeroVision: { stroke: 1, spacing: 2, heightCells: 7, widthCells: 5 },
+    };
+  }
+
+  getOSDPixelGlyph(char = " ") {
+    const glyphs = {
+      " ": ["00000","00000","00000","00000","00000","00000","00000"],
+      "0": ["01110","10001","10001","10001","10001","10001","01110"],
+      "1": ["00100","01100","00100","00100","00100","00100","01110"],
+      "2": ["01110","10001","00001","00010","00100","01000","11111"],
+      "3": ["11110","00001","00001","01110","00001","00001","11110"],
+      "4": ["00010","00110","01010","10010","11111","00010","00010"],
+      "5": ["11111","10000","11110","00001","00001","10001","01110"],
+      "6": ["00111","01000","10000","11110","10001","10001","01110"],
+      "7": ["11111","00001","00010","00100","01000","01000","01000"],
+      "8": ["01110","10001","10001","01110","10001","10001","01110"],
+      "9": ["01110","10001","10001","01111","00001","00010","11100"],
+      "A": ["01110","10001","10001","11111","10001","10001","10001"],
+      "B": ["11110","10001","10001","11110","10001","10001","11110"],
+      "C": ["01111","10000","10000","10000","10000","10000","01111"],
+      "D": ["11110","10001","10001","10001","10001","10001","11110"],
+      "E": ["11111","10000","10000","11110","10000","10000","11111"],
+      "F": ["11111","10000","10000","11110","10000","10000","10000"],
+      "G": ["01111","10000","10000","10111","10001","10001","01110"],
+      "H": ["10001","10001","10001","11111","10001","10001","10001"],
+      "I": ["01110","00100","00100","00100","00100","00100","01110"],
+      "J": ["00001","00001","00001","00001","10001","10001","01110"],
+      "K": ["10001","10010","10100","11000","10100","10010","10001"],
+      "L": ["10000","10000","10000","10000","10000","10000","11111"],
+      "M": ["10001","11011","10101","10101","10001","10001","10001"],
+      "N": ["10001","11001","10101","10011","10001","10001","10001"],
+      "O": ["01110","10001","10001","10001","10001","10001","01110"],
+      "P": ["11110","10001","10001","11110","10000","10000","10000"],
+      "Q": ["01110","10001","10001","10001","10101","10010","01101"],
+      "R": ["11110","10001","10001","11110","10100","10010","10001"],
+      "S": ["01111","10000","10000","01110","00001","00001","11110"],
+      "T": ["11111","00100","00100","00100","00100","00100","00100"],
+      "U": ["10001","10001","10001","10001","10001","10001","01110"],
+      "V": ["10001","10001","10001","10001","10001","01010","00100"],
+      "W": ["10001","10001","10001","10101","10101","10101","01010"],
+      "X": ["10001","10001","01010","00100","01010","10001","10001"],
+      "Y": ["10001","10001","01010","00100","00100","00100","00100"],
+      "Z": ["11111","00001","00010","00100","01000","10000","11111"],
+      "/": ["00001","00010","00100","01000","10000","00000","00000"],
+      ":": ["00000","00100","00100","00000","00100","00100","00000"],
+      "-": ["00000","00000","00000","01110","00000","00000","00000"],
+      ".": ["00000","00000","00000","00000","00000","00100","00100"],
+      "%": ["11001","11010","00100","01000","10110","00110","00000"],
+      "(": ["00010","00100","01000","01000","01000","00100","00010"],
+      ")": ["01000","00100","00010","00010","00010","00100","01000"],
+      "#": ["01010","11111","01010","01010","11111","01010","01010"],
+      "@": ["01110","10001","10111","10101","10111","10000","01110"],
+      "!": ["00100","00100","00100","00100","00100","00000","00100"],
+      "'": ["00100","00100","00000","00000","00000","00000","00000"],
+      ",": ["00000","00000","00000","00000","00100","00100","01000"],
+      "?": ["01110","10001","00001","00010","00100","00000","00100"],
+      "&": ["01100","10010","10100","01000","10101","10010","01101"],
+      "$": ["00100","01111","10100","01110","00101","11110","00100"],
+      "●": ["00000","01110","11111","11111","11111","01110","00000"],
+    };
+    const up = String(char || " ").toUpperCase();
+    return glyphs[up] || glyphs["?"];
+  }
+
+  drawPixelOSDText(ctx, text, x, y, size, color, preset) {
+    const presetCfg = this.osdPixelFontPresets[preset];
+    if (!presetCfg) return false;
+
+    const cellH = Math.max(1, size / presetCfg.heightCells);
+    const cellW = Math.max(1, cellH * 0.9);
+    const stroke = Math.max(1, cellH * presetCfg.stroke);
+    const charW = presetCfg.widthCells * cellW;
+    const charStep = charW + Math.max(1, presetCfg.spacing * cellW * 0.45);
+
+    let dx = Math.round(x);
+    const top = Math.round(y - size);
+    ctx.fillStyle = color;
+
+    for (const raw of String(text)) {
+      const glyph = this.getOSDPixelGlyph(raw);
+      for (let gy = 0; gy < glyph.length; gy++) {
+        const row = glyph[gy];
+        for (let gx = 0; gx < row.length; gx++) {
+          if (row[gx] !== "1") continue;
+          const px = dx + gx * cellW;
+          const py = top + gy * cellH;
+          ctx.fillRect(Math.round(px), Math.round(py), Math.max(1, Math.round(stroke)), Math.max(1, Math.round(stroke)));
+        }
+      }
+      dx += charStep;
+    }
+
+    return true;
   }
 
   setImage(img, sourceScale = 1) {
@@ -1276,6 +1372,12 @@ class CRTRenderer {
       camcorder: '"MS Gothic", "Small Fonts", "Tahoma", sans-serif',
       cctv: '"OCR A Std", "Consolas", "Lucida Console", monospace',
       broadcast: '"Arial Narrow", "Arial", sans-serif',
+      hdzeroDefault: '"VCR OSD Mono", "Lucida Console", monospace',
+      hdzeroConthrax: '"VCR OSD Mono", "Lucida Console", monospace',
+      hdzeroVision: '"VCR OSD Mono", "Lucida Console", monospace',
+      led: '"Digital-7 Mono", "DS-Digital", "Consolas", monospace',
+      lcd: '"MS Sans Serif", "Geneva", "Tahoma", sans-serif',
+      modern: '"Inter", "Segoe UI", "Arial", sans-serif',
     };
     const cctvMonochrome = Math.max(0, Math.min(1, Number(params.advancedCctvMonochrome) || 0));
     const saturationRaw = Number(params.advancedSaturation);
@@ -1693,34 +1795,74 @@ class CRTRenderer {
     if (timestampOSD > 0) {
       const stampDate = new Date(osdStartDate.getTime());
       stampDate.setSeconds(stampDate.getSeconds() + Math.floor(osdElapsedSeconds));
-      const stamp = `${String(stampDate.getMonth() + 1).padStart(2, "0")}/${String(stampDate.getDate()).padStart(2, "0")}/${String(stampDate.getFullYear()).slice(-2)} ${String(stampDate.getHours()).padStart(2, "0")}:${String(stampDate.getMinutes()).padStart(2, "0")}:${String(stampDate.getSeconds()).padStart(2, "0")}`;
-      const flickerAlpha = 0.35 + seededNoise(temporalFrame, temporalSeconds, 113) * 0.45;
-      const osdAlpha = Math.min(0.9, timestampOSD * flickerAlpha);
+      const mm = String(stampDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(stampDate.getDate()).padStart(2, "0");
+      const yyyy = String(stampDate.getFullYear());
+      const yy = yyyy.slice(-2);
+      const hh = String(stampDate.getHours()).padStart(2, "0");
+      const min = String(stampDate.getMinutes()).padStart(2, "0");
+      const sec = String(stampDate.getSeconds()).padStart(2, "0");
+      const stampClassic = `${mm}/${dd}/${yy} ${hh}:${min}:${sec}`;
+      const stampIso = `${yyyy}-${mm}-${dd} ${hh}:${min}:${sec}`;
+      const stampDigital = `${dd}-${mm}-${yyyy} ${hh}:${min}:${sec}`;
+      const recBlink = seededNoise(Math.floor(temporalSeconds * 2), 0, 121) > 0.27;
+      const noisePulse = seededNoise(temporalFrame, temporalSeconds * 0.5, 127);
+      const flickerAlpha = 0.32 + noisePulse * 0.52;
+      const osdAlpha = Math.min(0.92, timestampOSD * flickerAlpha);
       const padX = Math.floor(width * 0.03);
       const padY = Math.floor(height * 0.95);
+      const topY = Math.floor(height * 0.07);
+      const rightX = Math.floor(width * 0.96);
+      const baseSize = Math.max(11, Math.floor(height * (osdStyle === 3 ? 0.023 : 0.027)));
+      const fontFamily = osdFontByPreset[osdFontPreset] || osdFontByPreset.vhs;
+      const hasPixelFont = Boolean(this.osdPixelFontPresets[osdFontPreset]);
+      const pixelGlyphWidth = hasPixelFont
+        ? Math.max(1, Math.round(baseSize * 0.64))
+        : 0;
+      const measureOsdWidth = (text) => (hasPixelFont ? String(text).length * pixelGlyphWidth : outCtx.measureText(String(text)).width);
+      const drawOsdLine = (text, x, y, color = osdPrimaryColor) => {
+        if (hasPixelFont) {
+          const drawn = this.drawPixelOSDText(outCtx, String(text), x, y, baseSize, color, osdFontPreset);
+          if (drawn) return;
+        }
+        outCtx.fillStyle = color;
+        outCtx.fillText(String(text), x, y);
+      };
 
       outCtx.save();
-      outCtx.font = `${Math.max(12, Math.floor(height * 0.027))}px ${osdFontByPreset[osdFontPreset] || osdFontByPreset.vhs}`;
+      outCtx.font = `${baseSize}px ${fontFamily}`;
       outCtx.textBaseline = "bottom";
       outCtx.globalAlpha = osdAlpha;
+      outCtx.shadowColor = "rgb(0 0 0 / 0.6)";
+      outCtx.shadowBlur = Math.max(0.5, baseSize * 0.06);
+      outCtx.shadowOffsetX = Math.max(1, Math.floor(baseSize * 0.08));
+      outCtx.shadowOffsetY = Math.max(1, Math.floor(baseSize * 0.08));
 
       if (osdStyle === 0) {
-        outCtx.fillStyle = osdPrimaryColor;
-        outCtx.fillText(stamp, padX, padY);
+        drawOsdLine(stampClassic, padX, padY, osdPrimaryColor);
+        drawOsdLine("SP", rightX - measureOsdWidth("SP"), topY, osdPrimaryColor);
+        drawOsdLine("CH 03", padX, topY, osdPrimaryColor);
       } else if (osdStyle === 1) {
-        outCtx.fillStyle = "rgb(237 244 255)";
-        outCtx.fillText(stamp, padX, padY);
-        outCtx.fillStyle = osdAccentColor;
-        outCtx.fillText("REC", padX, Math.floor(height * 0.08));
+        drawOsdLine(stampDigital, padX, padY, "rgb(237 244 255)");
+        if (recBlink) drawOsdLine("● REC", padX, topY, osdAccentColor);
+        const batt = `${Math.max(5, Math.floor(92 - seededNoise(temporalSeconds, 3, 133) * 24))}%`;
+        const battLabel = `BAT ${batt}`;
+        drawOsdLine(battLabel, rightX - measureOsdWidth(battLabel), topY, "rgb(237 244 255)");
       } else if (osdStyle === 2) {
-        outCtx.fillStyle = osdPrimaryColor;
-        outCtx.fillText(stamp, padX, padY);
-        outCtx.fillText("CH 03", Math.floor(width * 0.03), Math.floor(height * 0.09));
-        outCtx.fillText("SP", Math.floor(width * 0.9), Math.floor(height * 0.09));
+        drawOsdLine(stampClassic, padX, padY, osdPrimaryColor);
+        drawOsdLine("TBC", padX, topY, osdPrimaryColor);
+        const zoomLabel = `Z${(1 + seededNoise(temporalSeconds, 8, 137) * 7).toFixed(1)}x`;
+        drawOsdLine(zoomLabel, Math.floor(width * 0.44), topY, osdPrimaryColor);
+        const spLabel = "SP";
+        drawOsdLine(spLabel, rightX - measureOsdWidth(spLabel), topY, osdPrimaryColor);
       } else {
-        outCtx.fillStyle = osdPrimaryColor;
-        outCtx.fillText(stamp, padX, padY);
-        outCtx.fillText("CAM 4", Math.floor(width * 0.82), Math.floor(height * 0.09));
+        const lineHeight = Math.max(12, Math.floor(baseSize * 1.18));
+        drawOsdLine(stampIso, padX, padY, osdPrimaryColor);
+        const camLabel = `CAM ${1 + Math.floor(seededNoise(7, temporalSeconds * 0.2, 149) * 8)}`;
+        drawOsdLine(camLabel, rightX - measureOsdWidth(camLabel), topY, osdPrimaryColor);
+        const status = recBlink ? "LIVE" : "MOTION";
+        drawOsdLine(status, padX, topY, osdPrimaryColor);
+        drawOsdLine(`GAIN ${Math.floor(8 + seededNoise(temporalFrame, 5, 151) * 16)}dB`, padX, topY + lineHeight, osdPrimaryColor);
       }
 
       outCtx.restore();
@@ -2236,6 +2378,80 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       refined[name] = next;
     }
     return refined;
+  }
+
+
+
+  const PRESET_OSD_OVERRIDES = {
+    "Late-80s Home VHS": { startDateTime: "1988-07-14T19:28:00", fontPreset: "vhs", style: 0, primaryColor: "#ffb15a", accentColor: "#ff4f4f" },
+    "90s Rental Tape (3rd Gen Dub)": { startDateTime: "1994-03-19T21:07:00", fontPreset: "vhs", style: 2, primaryColor: "#ffaf58", accentColor: "#ff4a4a" },
+    "Hi8 Vacation Cam": { startDateTime: "1997-08-09T14:22:00", fontPreset: "camcorder", style: 0, primaryColor: "#ffb66d", accentColor: "#ff4a4a" },
+    "MiniDV Family Cam (2002)": { startDateTime: "2002-12-24T17:41:00", fontPreset: "camcorder", style: 1, primaryColor: "#e8f3ff", accentColor: "#ff3a3a" },
+    "Public Access Archive": { startDateTime: "1992-05-03T20:13:00", fontPreset: "broadcast", style: 0, primaryColor: "#f8d37a", accentColor: "#ff4f4f" },
+    "Security Camera Dump": { startDateTime: "2004-11-02T02:16:00", fontPreset: "hdzeroVision", style: 3, primaryColor: "#d9f7d1", accentColor: "#6cff8a" },
+    "Digital Surveillance": { startDateTime: "2016-02-18T23:47:00", fontPreset: "hdzeroVision", style: 3, primaryColor: "#d3ffd2", accentColor: "#5aff85" },
+    "Damaged Archive Recovery": { startDateTime: "1987-10-03T01:54:00", fontPreset: "hdzeroConthrax", style: 2, primaryColor: "#f0cc7e", accentColor: "#ff5d5d" },
+    "Betacam SP ENG 1980s": { startDateTime: "1986-09-17T07:32:00", fontPreset: "broadcast", style: 0, primaryColor: "#ffe28d", accentColor: "#ff5b5b" },
+    "HDV Camcorder 2005": { startDateTime: "2005-06-11T15:09:00", fontPreset: "camcorder", style: 1, primaryColor: "#eef6ff", accentColor: "#ff4444" },
+    "Early Smartphone 2012": { startDateTime: "2012-04-28T13:05:00", fontPreset: "modern", style: 1, primaryColor: "#f4f7ff", accentColor: "#ff4d4d" },
+    "Found Footage Incident 1999": { startDateTime: "1999-10-21T23:18:00", fontPreset: "hdzeroConthrax", style: 0, primaryColor: "#ffad5c", accentColor: "#ff4d4d" },
+  };
+
+  function derivePresetOSDProfile(name, preset = {}) {
+    const lower = String(name || "").toLowerCase();
+    const override = PRESET_OSD_OVERRIDES[name];
+    const hasTimestamp = Number(preset.advancedTimestampOSD || 0) > 0.03;
+    if (!hasTimestamp && !override) return null;
+
+    const yearMatch = name.match(/(19|20)\d{2}/);
+    const eraYear = yearMatch ? Number(yearMatch[0]) : (
+      /late-80s|1980s/.test(lower) ? 1988 :
+      /90s/.test(lower) ? 1996 :
+      /200[0-9]/.test(lower) ? 2004 :
+      /201[0-9]|2020s/.test(lower) ? 2016 :
+      1998
+    );
+    const generatedDate = `${eraYear}-06-15T19:24:00`;
+
+    let fontPreset = "vhs";
+    if (/security|surveillance|cctv/.test(lower)) fontPreset = "hdzeroVision";
+    else if (/camcorder|minidv|hdv|hi8/.test(lower)) fontPreset = "hdzeroDefault";
+    else if (/smartphone|dslr/.test(lower)) fontPreset = "modern";
+    else if (/dvd|digital|stream|web|broadcast/.test(lower)) fontPreset = "broadcast";
+    else if (/vhs|tape|archive|bootleg|rental|damaged/.test(lower)) fontPreset = "hdzeroConthrax";
+
+    let style = Math.max(0, Math.min(3, Math.round(Number(preset.advancedOSDStyle) || 0)));
+    if (/security|surveillance|cctv/.test(lower)) style = 3;
+    else if (/digital|smartphone|dslr|web|dvd|stream|hdv/.test(lower)) style = Math.max(style, 1);
+    else if (/rental|dub|archive|damaged/.test(lower)) style = Math.max(style, 2);
+
+    return {
+      startDateTime: override?.startDateTime || generatedDate,
+      fontPreset: override?.fontPreset || fontPreset,
+      style: override?.style ?? style,
+      primaryColor: override?.primaryColor || (/security|surveillance/.test(lower) ? "#d7ffd0" : "#ffa84a"),
+      accentColor: override?.accentColor || (/security|surveillance/.test(lower) ? "#6cff8a" : "#ff3a3a"),
+      countWithExport: true,
+    };
+  }
+
+  function applyOSDProfile(profile, { silent = false } = {}) {
+    if (!profile) return;
+    if (osdStartDateTimeInput && profile.startDateTime) osdStartDateTimeInput.value = profile.startDateTime;
+    if (osdPrimaryColorInput && profile.primaryColor) osdPrimaryColorInput.value = profile.primaryColor;
+    if (osdAccentColorInput && profile.accentColor) osdAccentColorInput.value = profile.accentColor;
+    if (osdCountWithExportInput && typeof profile.countWithExport === "boolean") osdCountWithExportInput.checked = profile.countWithExport;
+    if (typeof profile.style === "number" && osdStyleInput) {
+      osdStyleInput.value = String(profile.style);
+      osdStyleInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    if (profile.fontPreset) {
+      osdFontPresetControl?.setValue(profile.fontPreset, { silent: true });
+    }
+    if (!silent) {
+      markPreviewDirty();
+      progressEl.value = 0;
+    }
   }
 
   function buildPresetIntensityProfile(name, preset = {}) {
@@ -3074,6 +3290,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     const preset = presets[name];
     if (!preset) return;
     const mapped = interpolatePresetValues(name, intensity);
+    const osdProfile = derivePresetOSDProfile(name, preset);
     for (const id of controlIds) {
       if (presetPinnedIds.has(id)) continue;
       const slider = document.getElementById(id);
@@ -3081,6 +3298,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       slider.__syncRangeNumber?.();
     }
     maskTypeControl?.setValue(mapped.maskType, { silent: true });
+    if (osdProfile) applyOSDProfile(osdProfile, { silent: true });
     enforceDisabledEffectPanels();
     activePresetName = name;
     updatePresetDirtyState();
