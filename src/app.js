@@ -634,6 +634,312 @@ const FALLBACK_PRESETS = {
     advancedFilmHalation: 0.24,
     maskType: "film16mm",
   },
+  "Nitrate Newsreel 1930s": {
+    scanlineStrength: 0,
+    phosphorMask: 0,
+    barrelDistortion: 0,
+    bloom: 0.18,
+    flicker: 0.28,
+    chromaticAberration: 0,
+    noise: 0.42,
+    pixelSize: 3,
+    advancedFrameStutter: 0.24,
+    advancedExposurePump: 0.34,
+    advancedWhiteBalanceDrift: 0,
+    advancedFocusBreathing: 0.08,
+    advancedQuantization: 0,
+    advancedCctvMonochrome: 1,
+    advancedGenerationLoss: 0,
+    advancedMacroBlocking: 0,
+    advancedFilmGrain: 0.82,
+    advancedFilmDust: 0.54,
+    advancedFilmScratches: 0.74,
+    advancedFilmGateWeave: 0.63,
+    advancedFilmHalation: 0.29,
+    maskType: "none",
+  },
+  "Live NTSC Kinescope 1950s": {
+    scanlineStrength: 0.17,
+    phosphorMask: 0.12,
+    barrelDistortion: -0.03,
+    bloom: 0.26,
+    flicker: 0.11,
+    chromaticAberration: 0.05,
+    noise: 0.26,
+    pixelSize: 2,
+    advancedLineJitter: 0.18,
+    advancedTimebaseWobble: 0.19,
+    advancedGhosting: 0.14,
+    advancedInterlacing: 0.32,
+    advancedDropouts: 0.07,
+    advancedRfInterference: 0.13,
+    advancedFrameStutter: 0.16,
+    advancedExposurePump: 0.15,
+    advancedWhiteBalanceDrift: 0.08,
+    advancedFocusBreathing: 0.07,
+    advancedFilmGrain: 0.51,
+    advancedFilmDust: 0.23,
+    advancedFilmScratches: 0.21,
+    advancedFilmGateWeave: 0.37,
+    advancedFilmHalation: 0.17,
+    maskType: "film16mm",
+  },
+  "U-matic Field Tape 1970s": {
+    scanlineStrength: 0.37,
+    phosphorMask: 0.28,
+    barrelDistortion: -0.061,
+    bloom: 0.54,
+    flicker: 0.16,
+    chromaticAberration: 0.35,
+    noise: 0.36,
+    pixelSize: 2,
+    maskScale: 1,
+    advancedLineJitter: 0.27,
+    advancedTimebaseWobble: 0.33,
+    advancedHeadSwitching: 0.45,
+    advancedChromaDelay: 0.36,
+    advancedCrossColor: 0.34,
+    advancedDropouts: 0.42,
+    advancedGhosting: 0.31,
+    advancedInterlacing: 0.41,
+    advancedFrameStutter: 0.22,
+    advancedRfInterference: 0.35,
+    advancedExposurePump: 0.23,
+    advancedWhiteBalanceDrift: 0.22,
+    advancedFocusBreathing: 0.18,
+    advancedTapeCrease: 0.29,
+    advancedTimestampOSD: 0,
+    advancedOSDStyle: 0,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0,
+    advancedGenerationLoss: 0.22,
+    advancedMacroBlocking: 0,
+    maskType: "phosphor",
+  },
+  "Betacam SP ENG 1980s": {
+    scanlineStrength: 0.3,
+    phosphorMask: 0.41,
+    barrelDistortion: -0.043,
+    bloom: 0.35,
+    flicker: 0.09,
+    chromaticAberration: 0.15,
+    noise: 0.22,
+    pixelSize: 1,
+    maskScale: 1,
+    advancedLineJitter: 0.11,
+    advancedTimebaseWobble: 0.15,
+    advancedHeadSwitching: 0.08,
+    advancedChromaDelay: 0.16,
+    advancedCrossColor: 0.12,
+    advancedDropouts: 0.14,
+    advancedGhosting: 0.17,
+    advancedInterlacing: 0.34,
+    advancedFrameStutter: 0.09,
+    advancedRfInterference: 0.11,
+    advancedExposurePump: 0.18,
+    advancedWhiteBalanceDrift: 0.15,
+    advancedFocusBreathing: 0.12,
+    advancedTapeCrease: 0.06,
+    advancedTimestampOSD: 0.18,
+    advancedOSDStyle: 0,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0.02,
+    advancedGenerationLoss: 0.06,
+    advancedMacroBlocking: 0,
+    maskType: "aperture",
+  },
+  "LaserDisc Transfer 1990s": {
+    scanlineStrength: 0.19,
+    phosphorMask: 0.24,
+    barrelDistortion: -0.02,
+    bloom: 0.22,
+    flicker: 0.06,
+    chromaticAberration: 0.11,
+    noise: 0.16,
+    pixelSize: 1,
+    maskScale: 1,
+    advancedLineJitter: 0.05,
+    advancedTimebaseWobble: 0.08,
+    advancedHeadSwitching: 0,
+    advancedChromaDelay: 0.18,
+    advancedCrossColor: 0.19,
+    advancedDropouts: 0.04,
+    advancedGhosting: 0.12,
+    advancedInterlacing: 0.22,
+    advancedFrameStutter: 0.03,
+    advancedRfInterference: 0.1,
+    advancedExposurePump: 0.04,
+    advancedWhiteBalanceDrift: 0.05,
+    advancedFocusBreathing: 0.04,
+    advancedTapeCrease: 0,
+    advancedTimestampOSD: 0,
+    advancedOSDStyle: 0,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0,
+    advancedGenerationLoss: 0,
+    advancedMacroBlocking: 0,
+    maskType: "dot",
+  },
+  "DVD Rip 2001": {
+    scanlineStrength: 0,
+    phosphorMask: 0,
+    barrelDistortion: 0,
+    bloom: 0.05,
+    flicker: 0,
+    chromaticAberration: 0.01,
+    noise: 0.06,
+    pixelSize: 2,
+    maskScale: 1.2,
+    advancedLineJitter: 0,
+    advancedTimebaseWobble: 0,
+    advancedHeadSwitching: 0,
+    advancedChromaDelay: 0,
+    advancedCrossColor: 0,
+    advancedDropouts: 0,
+    advancedGhosting: 0,
+    advancedInterlacing: 0.18,
+    advancedFrameStutter: 0.05,
+    advancedRfInterference: 0,
+    advancedExposurePump: 0,
+    advancedWhiteBalanceDrift: 0,
+    advancedFocusBreathing: 0,
+    advancedTapeCrease: 0,
+    advancedTimestampOSD: 0,
+    advancedOSDStyle: 0,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0.24,
+    advancedGenerationLoss: 0.04,
+    advancedMacroBlocking: 0.19,
+    maskType: "none",
+  },
+  "HDV Camcorder 2005": {
+    scanlineStrength: 0.12,
+    phosphorMask: 0.2,
+    barrelDistortion: -0.012,
+    bloom: 0.18,
+    flicker: 0.03,
+    chromaticAberration: 0.08,
+    noise: 0.12,
+    pixelSize: 2,
+    maskScale: 1,
+    advancedLineJitter: 0.01,
+    advancedTimebaseWobble: 0.03,
+    advancedHeadSwitching: 0,
+    advancedChromaDelay: 0.08,
+    advancedCrossColor: 0.03,
+    advancedDropouts: 0.02,
+    advancedGhosting: 0.07,
+    advancedInterlacing: 0.27,
+    advancedFrameStutter: 0.08,
+    advancedRfInterference: 0.02,
+    advancedExposurePump: 0.14,
+    advancedWhiteBalanceDrift: 0.11,
+    advancedFocusBreathing: 0.09,
+    advancedTapeCrease: 0,
+    advancedTimestampOSD: 0.36,
+    advancedOSDStyle: 1,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0.2,
+    advancedGenerationLoss: 0.05,
+    advancedMacroBlocking: 0.14,
+    maskType: "none",
+  },
+  "DSLR Video 2010": {
+    scanlineStrength: 0.03,
+    phosphorMask: 0.04,
+    barrelDistortion: -0.008,
+    bloom: 0.12,
+    flicker: 0.02,
+    chromaticAberration: 0.07,
+    noise: 0.08,
+    pixelSize: 1,
+    maskScale: 1,
+    advancedLineJitter: 0,
+    advancedTimebaseWobble: 0,
+    advancedHeadSwitching: 0,
+    advancedChromaDelay: 0,
+    advancedCrossColor: 0,
+    advancedDropouts: 0,
+    advancedGhosting: 0.03,
+    advancedInterlacing: 0,
+    advancedFrameStutter: 0.02,
+    advancedRfInterference: 0,
+    advancedExposurePump: 0.18,
+    advancedWhiteBalanceDrift: 0.12,
+    advancedFocusBreathing: 0.14,
+    advancedTapeCrease: 0,
+    advancedTimestampOSD: 0,
+    advancedOSDStyle: 0,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0.04,
+    advancedGenerationLoss: 0,
+    advancedMacroBlocking: 0.05,
+    maskType: "none",
+  },
+  "Early Smartphone 2012": {
+    scanlineStrength: 0,
+    phosphorMask: 0,
+    barrelDistortion: 0,
+    bloom: 0.06,
+    flicker: 0,
+    chromaticAberration: 0.04,
+    noise: 0.14,
+    pixelSize: 2,
+    maskScale: 1.1,
+    advancedLineJitter: 0,
+    advancedTimebaseWobble: 0,
+    advancedHeadSwitching: 0,
+    advancedChromaDelay: 0,
+    advancedCrossColor: 0,
+    advancedDropouts: 0,
+    advancedGhosting: 0.04,
+    advancedInterlacing: 0,
+    advancedFrameStutter: 0.15,
+    advancedRfInterference: 0,
+    advancedExposurePump: 0.12,
+    advancedWhiteBalanceDrift: 0.17,
+    advancedFocusBreathing: 0.08,
+    advancedTapeCrease: 0,
+    advancedTimestampOSD: 0.2,
+    advancedOSDStyle: 1,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0.31,
+    advancedGenerationLoss: 0.07,
+    advancedMacroBlocking: 0.28,
+    maskType: "none",
+  },
+  "4K HDR Streaming 2020s": {
+    scanlineStrength: 0,
+    phosphorMask: 0,
+    barrelDistortion: 0,
+    bloom: 0.16,
+    flicker: 0,
+    chromaticAberration: 0.01,
+    noise: 0.03,
+    pixelSize: 1,
+    maskScale: 1,
+    advancedLineJitter: 0,
+    advancedTimebaseWobble: 0,
+    advancedHeadSwitching: 0,
+    advancedChromaDelay: 0,
+    advancedCrossColor: 0,
+    advancedDropouts: 0,
+    advancedGhosting: 0,
+    advancedInterlacing: 0,
+    advancedFrameStutter: 0.03,
+    advancedRfInterference: 0,
+    advancedExposurePump: 0,
+    advancedWhiteBalanceDrift: 0,
+    advancedFocusBreathing: 0.01,
+    advancedTapeCrease: 0,
+    advancedTimestampOSD: 0,
+    advancedOSDStyle: 0,
+    advancedCctvMonochrome: 0,
+    advancedQuantization: 0.08,
+    advancedGenerationLoss: 0.01,
+    advancedMacroBlocking: 0.1,
+    maskType: "none",
+  },
 };
 
 const MP4_MUXER_CDN = "https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.2/build/mp4-muxer.mjs";
@@ -1617,7 +1923,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   let loadedSourceType = "image";
   let loadedVideo = null;
   let loadedImage = null;
-  const presets = { ...FALLBACK_PRESETS };
+  let presets = { ...FALLBACK_PRESETS };
   let start = performance.now();
   let previewFrameSeconds = 0;
   let previewTargetSeconds = 0;
@@ -1650,6 +1956,23 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   };
 
   const panelEffectState = Object.fromEntries(Object.keys(EFFECT_PANEL_CONFIGS).map((name) => [name, { enabled: true, savedValues: null }]));
+
+
+  async function loadPresets() {
+    try {
+      const module = await import("./presets.js");
+      const loaded = module?.PRESETS;
+      if (loaded && Object.keys(loaded).length > 0) {
+        presets = loaded;
+        setStatus(`Loaded ${Object.keys(loaded).length} presets.`, "success");
+        return;
+      }
+      setStatus("Preset file was empty. Using built-in presets.", "warn");
+    } catch (error) {
+      setStatus("Could not load presets.js. Using built-in presets.", "warn");
+      console.warn("Preset loading failed", error);
+    }
+  }
 
   const RANGE_CONTROL_LABELS = {
     scanlineStrength: "Scanline strength",
@@ -2451,11 +2774,11 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
 
   function getPresetCategory(name = "", preset = {}) {
     const lowerName = String(name).toLowerCase();
-    if (/(silent film|technicolor|super\s*8|16mm|kinescope|film|reel)/.test(lowerName)) return "Film";
+    if (/(silent film|technicolor|super\s*8|16mm|kinescope|nitrate|newsreel|film|reel)/.test(lowerName)) return "Film";
     if (/(security|surveillance|cctv)/.test(lowerName)) return "Surveillance";
-    if (/(web rip|streaming|digital|compression)/.test(lowerName)) return "Digital";
+    if (/(web rip|streaming|digital|compression|dvd|hdv|smartphone|dslr|4k|hdr|laserdisc)/.test(lowerName)) return "Digital";
     if (/(pvm|consumer tv|arcade|oled|lcd)/.test(lowerName)) return "Display";
-    if (/(vhs|tape|cam|broadcast|analog|archive|hi8|minidv)/.test(lowerName)) return "Analog Video";
+    if (/(vhs|tape|cam|broadcast|analog|archive|hi8|minidv|u-matic|betacam)/.test(lowerName)) return "Analog Video";
     if (Number(preset.advancedFilmGrain || 0) > 0.35 || Number(preset.advancedFilmHalation || 0) > 0.35) return "Film";
     return "Experimental";
   }
@@ -3236,12 +3559,15 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   setExportAvailability();
   loadParameterPolicyState();
   buildMacroPolicyControls();
-  initializePresets();
-  defaultParamValues = readParams();
-  updatePreviewControlsState();
-  updateExportControlsState();
-  syncPreviewTimeControl();
-  updateExportEstimate();
+
+  loadPresets().finally(() => {
+    initializePresets();
+    defaultParamValues = readParams();
+    updatePreviewControlsState();
+    updateExportControlsState();
+    syncPreviewTimeControl();
+    updateExportEstimate();
+  });
   window.addEventListener("beforeunload", () => {
     if (loadedVideo?.objectUrl) {
       URL.revokeObjectURL(loadedVideo.objectUrl);
