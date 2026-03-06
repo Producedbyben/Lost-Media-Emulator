@@ -3160,20 +3160,20 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     advancedFilmScratches: "Film scratches",
     advancedFilmGateWeave: "Gate weave",
     advancedFilmHalation: "Halation glow",
-    macroSourceProvenance: "Source Provenance",
-    shapeGenerationDepth: "Generation Depth",
-    macroDisplayEmulation: "Display Emulation",
-    shapeTubeAge: "Tube Age",
-    macroSignalPathDamage: "Signal Path Damage",
-    shapePathInstability: "Path Instability",
-    macroDistributionArtifacts: "Distribution Artifacts",
-    shapeEventRate: "Event Rate",
-    macroDigitalDecay: "Digital Decay",
-    shapeBitrateStress: "Bitrate Stress",
-    macroRecoveryRuin: "Recovery ↔ Ruin",
-    shapeTextureKeep: "Texture Keep",
-    macroEraStyling: "Era Styling",
-    shapeOverlayContext: "Overlay Context",
+    macroSourceProvenance: "Detail loss",
+    shapeGenerationDepth: "Softness amount",
+    macroDisplayEmulation: "Display texture",
+    shapeTubeAge: "Glow and flicker",
+    macroSignalPathDamage: "Image instability",
+    shapePathInstability: "Jitter speed",
+    macroDistributionArtifacts: "Damage and dropouts",
+    shapeEventRate: "Damage frequency",
+    macroDigitalDecay: "Compression damage",
+    shapeBitrateStress: "Blockiness strength",
+    macroRecoveryRuin: "Clean ↔ worn",
+    shapeTextureKeep: "Keep fine detail",
+    macroEraStyling: "Age and mood",
+    shapeOverlayContext: "Timestamp/OSD amount",
   };
 
   function setupRangeWithNumber(id) {
@@ -3644,7 +3644,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       const detach = document.createElement("input");
       detach.type = "checkbox";
       detach.checked = detachedMacroIds.has(id);
-      detach.title = `Detach ${pretty} from macro automation`;
+      detach.title = `Detach ${pretty} from quick-control automation`;
       detach.addEventListener("input", () => {
         if (detach.checked) detachedMacroIds.add(id);
         else detachedMacroIds.delete(id);

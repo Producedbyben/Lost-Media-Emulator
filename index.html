@@ -99,42 +99,42 @@
 
         <section class="panel panel-collapsible" id="macroSystemsPanel" aria-label="Macro control systems">
           <header class="panel-header panel-header-toggle">
-            <span>Macro systems</span>
+            <span>Quick look controls</span>
             <label class="panel-toggle"><input id="macroSystemsEnabled" type="checkbox" checked /> Enabled</label>
           </header>
           <div class="panel-body quick-grid panel-grid-2">
-            <p class="panel-hint panel-span-2">Use macro systems for fast look design. Fine-grain controls remain available in effect panels and advanced sections.</p>
+            <p class="panel-hint panel-span-2">Start here: these beginner controls shape the core image basics first (clarity, stability, color, and damage). Fine controls remain available below.</p>
 
-            <label>Source Provenance <span class="range-control"><input id="macroSourceProvenance" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
-            <label>Generation Depth <span class="range-control"><input id="shapeGenerationDepth" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
+            <label>Detail loss <span class="range-control"><input id="macroSourceProvenance" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
+            <label>Softness amount <span class="range-control"><input id="shapeGenerationDepth" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
 
-            <label>Display Emulation <span class="range-control"><input id="macroDisplayEmulation" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
-            <label>Tube Age <span class="range-control"><input id="shapeTubeAge" type="range" min="0" max="1" step="0.01" value="0.4" /></span></label>
+            <label>Display texture <span class="range-control"><input id="macroDisplayEmulation" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
+            <label>Glow and flicker <span class="range-control"><input id="shapeTubeAge" type="range" min="0" max="1" step="0.01" value="0.4" /></span></label>
 
-            <label>Signal Path Damage <span class="range-control"><input id="macroSignalPathDamage" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
-            <label>Path Instability <span class="range-control"><input id="shapePathInstability" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
+            <label>Image instability <span class="range-control"><input id="macroSignalPathDamage" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
+            <label>Jitter speed <span class="range-control"><input id="shapePathInstability" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
 
-            <label>Distribution Artifacts <span class="range-control"><input id="macroDistributionArtifacts" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
-            <label>Event Rate <span class="range-control"><input id="shapeEventRate" type="range" min="0" max="1" step="0.01" value="0.4" /></span></label>
+            <label>Damage and dropouts <span class="range-control"><input id="macroDistributionArtifacts" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
+            <label>Damage frequency <span class="range-control"><input id="shapeEventRate" type="range" min="0" max="1" step="0.01" value="0.4" /></span></label>
 
-            <label>Digital Decay <span class="range-control"><input id="macroDigitalDecay" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
-            <label>Bitrate Stress <span class="range-control"><input id="shapeBitrateStress" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
+            <label>Compression damage <span class="range-control"><input id="macroDigitalDecay" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
+            <label>Blockiness strength <span class="range-control"><input id="shapeBitrateStress" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
 
-            <label>Recovery ↔ Ruin <span class="range-control"><input id="macroRecoveryRuin" type="range" min="-1" max="1" step="0.01" value="0" /></span></label>
-            <label>Texture Keep <span class="range-control"><input id="shapeTextureKeep" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
+            <label>Clean ↔ worn <span class="range-control"><input id="macroRecoveryRuin" type="range" min="-1" max="1" step="0.01" value="0" /></span></label>
+            <label>Keep fine detail <span class="range-control"><input id="shapeTextureKeep" type="range" min="0" max="1" step="0.01" value="0.5" /></span></label>
 
-            <label>Era Styling <span class="range-control"><input id="macroEraStyling" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
-            <label>Overlay Context <span class="range-control"><input id="shapeOverlayContext" type="range" min="0" max="1" step="0.01" value="0.3" /></span></label>
+            <label>Age and mood <span class="range-control"><input id="macroEraStyling" type="range" min="0" max="1" step="0.01" value="0" /></span></label>
+            <label>Timestamp/OSD amount <span class="range-control"><input id="shapeOverlayContext" type="range" min="0" max="1" step="0.01" value="0.3" /></span></label>
 
             <div class="actions two-up panel-span-2">
-              <button id="macroRandomizeSubtle" type="button" class="secondary-btn">Randomize subtle</button>
-              <button id="macroRandomizeMedium" type="button" class="secondary-btn">Randomize medium</button>
-              <button id="macroRandomizeWild" type="button" class="secondary-btn">Randomize wild</button>
-              <button id="macroResetBtn" type="button" class="secondary-btn">Reset macros</button>
+              <button id="macroRandomizeSubtle" type="button" class="secondary-btn">Randomize light</button>
+              <button id="macroRandomizeMedium" type="button" class="secondary-btn">Randomize balanced</button>
+              <button id="macroRandomizeWild" type="button" class="secondary-btn">Randomize heavy</button>
+              <button id="macroResetBtn" type="button" class="secondary-btn">Reset quick controls</button>
             </div>
 
             <details class="advanced-disclosure panel-span-2" id="macroPolicyPanel">
-              <summary>Macro detach / preset pin (expert)</summary>
+              <summary>Quick-control detach / preset pin (expert)</summary>
               <div id="macroPolicyControls" class="quick-grid"></div>
             </details>
           </div>
