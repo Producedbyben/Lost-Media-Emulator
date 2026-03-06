@@ -1941,7 +1941,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   let loadedSourceType = "image";
   let loadedVideo = null;
   let loadedImage = null;
-  let presets = { ...FALLBACK_PRESETS };
+  let presets = refinePresetLibrary(FALLBACK_PRESETS);
   let start = performance.now();
   let previewFrameSeconds = 0;
   let previewTargetSeconds = 0;
@@ -1954,6 +1954,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
   let showOriginalPreview = false;
   let compareLocked = false;
   let activePresetName = null;
+  const presetIntensityProfiles = new Map();
   const presetCategories = new Map();
   const detachedMacroIds = new Set();
   const presetPinnedIds = new Set();
@@ -1981,15 +1982,109 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       const module = await import("./presets.js");
       const loaded = module?.PRESETS;
       if (loaded && Object.keys(loaded).length > 0) {
-        presets = loaded;
+        presets = refinePresetLibrary(loaded);
         setStatus(`Loaded ${Object.keys(loaded).length} presets.`, "success");
         return;
       }
+      presets = refinePresetLibrary(FALLBACK_PRESETS);
       setStatus("Preset file was empty. Using built-in presets.", "warn");
     } catch (error) {
+      presets = refinePresetLibrary(FALLBACK_PRESETS);
       setStatus("Could not load presets.js. Using built-in presets.", "warn");
       console.warn("Preset loading failed", error);
     }
+  }
+
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, Number(value) || 0));
+  }
+
+  function refinePresetLibrary(library = {}) {
+    const refined = {};
+    for (const [name, preset] of Object.entries(library)) {
+      const next = { ...preset };
+      const lower = name.toLowerCase();
+      const isFilm = /film|super 8|16mm|nitrate|technicolor|kinescope/.test(lower);
+      const isTape = /vhs|tape|hi8|betacam|u-matic|broadcast|archive|bootleg|cam/.test(lower) && !isFilm;
+      const isDigital = /dvd|web|stream|smartphone|dslr|hdv|4k|digital|compression/.test(lower);
+
+      if (isFilm) {
+        next.scanlineStrength = clamp01((next.scanlineStrength || 0) * 0.35);
+        next.phosphorMask = clamp01((next.phosphorMask || 0) * 0.4);
+        next.advancedFilmGrain = clamp01((next.advancedFilmGrain || 0) + 0.06);
+        next.advancedFilmGateWeave = clamp01((next.advancedFilmGateWeave || 0) + 0.04);
+        next.advancedFilmHalation = clamp01((next.advancedFilmHalation || 0) + 0.03);
+      }
+
+      if (isTape) {
+        next.advancedLineJitter = clamp01((next.advancedLineJitter || 0) + 0.04);
+        next.advancedTimebaseWobble = clamp01((next.advancedTimebaseWobble || 0) + 0.04);
+        next.advancedChromaDelay = clamp01((next.advancedChromaDelay || 0) + 0.03);
+        next.advancedCrossColor = clamp01((next.advancedCrossColor || 0) + 0.03);
+        next.advancedHeadSwitching = clamp01((next.advancedHeadSwitching || 0) + 0.02);
+      }
+
+      if (isDigital) {
+        next.scanlineStrength = clamp01((next.scanlineStrength || 0) * 0.6);
+        next.phosphorMask = clamp01((next.phosphorMask || 0) * 0.65);
+        next.advancedQuantization = clamp01((next.advancedQuantization || 0) + 0.05);
+        next.advancedMacroBlocking = clamp01((next.advancedMacroBlocking || 0) + 0.04);
+      }
+
+      if (lower.includes("pvm") || lower.includes("bvm")) {
+        next.bloom = clamp01((next.bloom || 0) * 0.9);
+        next.noise = clamp01((next.noise || 0) * 0.85);
+      }
+
+      if (lower.includes("consumer tv") || lower.includes("arcade")) {
+        next.barrelDistortion = Number(next.barrelDistortion || 0) - 0.015;
+        next.scanlineStrength = clamp01((next.scanlineStrength || 0) + 0.06);
+      }
+
+      refined[name] = next;
+    }
+    return refined;
+  }
+
+  function buildPresetIntensityProfile(name, preset = {}) {
+    const neutralSource = defaultParamValues || {};
+    const ranked = [];
+    for (const id of controlIds) {
+      if (typeof preset[id] !== "number") continue;
+      const neutral = typeof neutralSource[id] === "number"
+        ? neutralSource[id]
+        : (Number(document.getElementById(id)?.defaultValue) || 0);
+      const min = Number(document.getElementById(id)?.min);
+      const max = Number(document.getElementById(id)?.max);
+      const range = Number.isFinite(max - min) && (max - min) > 0 ? (max - min) : 1;
+      const delta = Math.abs((preset[id] - neutral) / range);
+      ranked.push({ id, delta });
+    }
+    ranked.sort((a, b) => b.delta - a.delta);
+    const top = ranked.slice(0, 6);
+    const weights = {};
+    for (const [index, item] of top.entries()) {
+      const rankBonus = (6 - index) * 0.08;
+      weights[item.id] = 1.05 + rankBonus;
+    }
+
+    if (/vhs|tape|archive|bootleg|broadcast|hi8|betacam|u-matic/.test(name.toLowerCase())) {
+      for (const key of ["advancedLineJitter", "advancedTimebaseWobble", "advancedDropouts", "advancedHeadSwitching", "advancedGenerationLoss"]) {
+        weights[key] = Math.max(weights[key] || 1, 1.45);
+      }
+    }
+    if (/film|super 8|16mm|nitrate|technicolor|kinescope/.test(name.toLowerCase())) {
+      for (const key of ["advancedFilmGrain", "advancedFilmDust", "advancedFilmScratches", "advancedFilmGateWeave", "advancedFilmHalation"]) {
+        weights[key] = Math.max(weights[key] || 1, 1.5);
+      }
+    }
+    if (/web|stream|digital|dvd|smartphone|dslr|4k|compression/.test(name.toLowerCase())) {
+      for (const key of ["advancedQuantization", "advancedMacroBlocking", "advancedFrameStutter"]) {
+        weights[key] = Math.max(weights[key] || 1, 1.45);
+      }
+    }
+
+    return { weights };
   }
 
   const RANGE_CONTROL_LABELS = {
@@ -2740,6 +2835,12 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
 
   function interpolatePresetValues(name, intensity = 1) {
     const preset = presets[name] || {};
+    const profile = presetIntensityProfiles.get(name) || buildPresetIntensityProfile(name, preset);
+    presetIntensityProfiles.set(name, profile);
+    const normalized = Math.max(0, Number(intensity) || 0);
+    const pull = normalized <= 1
+      ? Math.pow(normalized, 1.35)
+      : 1 + Math.pow(normalized - 1, 1.2);
     const expected = {};
     for (const id of controlIds) {
       const slider = document.getElementById(id);
@@ -2749,7 +2850,9 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
       if (typeof preset[id] === "number") {
         const min = Number(slider?.min);
         const max = Number(slider?.max);
-        let value = neutral + (preset[id] - neutral) * intensity;
+        const weight = profile.weights?.[id] || 1;
+        const localPull = pull * weight;
+        let value = neutral + (preset[id] - neutral) * localPull;
         if (Number.isFinite(min)) value = Math.max(min, value);
         if (Number.isFinite(max)) value = Math.min(max, value);
         expected[id] = value;
