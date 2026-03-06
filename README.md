@@ -72,6 +72,36 @@ These are all deterministic per frame, so preview and export stay visually align
 - **PVM/BVM look**: reduce barrel distortion and bloom, increase phosphor mask clarity, keep flicker/noise low.
 - For subtle realism, keep noise under `0.2` and flicker under `0.15`.
 
+## Suggested mask additions for higher preset accuracy
+
+The current mask set is strong for CRT/film structure, but the modern camera presets (doorbell, bodycam, action cam, covert cams) can be pushed further with sensor-era masks.
+
+### Priority masks to add
+
+- **`instantDyeCloud` (Polaroid / instant film):** irregular dye-cloud microtexture, edge pooling, and center-to-corner density shift.
+- **`irBloomSpeckle` (night vision / IR security):** hot-center IR bloom, low-frequency sensor grain clumping, and slight fixed-pattern shimmer.
+- **`cmosRollingColumn` (bodycam / spycam / doorbell):** faint column fixed-pattern noise + row/column response mismatch to mimic small CMOS sensors.
+- **`lowBitrateBlockGrid` (spycam / Ring / bodycam cloud transcode):** soft 8x8/16x16 luma-chroma block boundaries that fluctuate with motion.
+- **`fisheyeMicrolens` (GoPro / wide doorbell):** radial corner shading and periphery micro-contrast drop from wide lens + microlens angle falloff.
+
+### Preset-specific recommendations
+
+- **Polaroid SX-70 Instant:** use `instantDyeCloud` as default mask type; keep film grain/halation but add subtle uneven dye distribution.
+- **Night Vision Camcorder:** use `irBloomSpeckle`; pair with monochrome mode to avoid CRT-style triad artifacts.
+- **Police Bodycam 2016:** use `cmosRollingColumn`; combine with current timestamp + compression settings for better wearable-camera realism.
+- **Covert Spycam Button Lens:** stack `cmosRollingColumn` with `lowBitrateBlockGrid` for tiny-sensor + cheap-encoder look.
+- **Ring Doorbell Daytime:** use `fisheyeMicrolens` with mild `lowBitrateBlockGrid` to mimic app-stream transcode.
+- **Ring Doorbell Night IR:** use `irBloomSpeckle` plus stronger `lowBitrateBlockGrid` for IR-lit + cloud-compressed output.
+- **GoPro Hero3 Action Cam:** use `fisheyeMicrolens` with light `cmosRollingColumn` to capture early action-cam edge behavior.
+
+### Broad accuracy gains across the entire preset library
+
+- Keep **CRT masks** (`phosphor`, `aperture`, `slot`, `dot`) for display-emulation presets.
+- Keep **film masks** (`filmSuper8`, `film16mm`) for analog stock presets.
+- Route **digital capture presets** to sensor/compression masks above by default.
+
+This keeps mask semantics aligned to image formation source (display phosphor vs. film grain vs. CMOS sensor/compression), which improves authenticity before any secondary tuning.
+
 ## Effect pass order
 
 1. Geometry warp (barrel distortion)
