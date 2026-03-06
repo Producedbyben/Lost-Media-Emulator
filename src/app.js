@@ -338,6 +338,7 @@ const FALLBACK_PRESETS = {
     advancedTimestampOSD: 0.76,
     advancedOSDStyle: 3,
     advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedQuantization: 0.42,
     advancedGenerationLoss: 0.2,
     advancedMacroBlocking: 0.3,
@@ -530,6 +531,7 @@ const FALLBACK_PRESETS = {
     advancedTimestampOSD: 0.42,
     advancedOSDStyle: 3,
     advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedQuantization: 0.24,
     advancedGenerationLoss: 0.08,
     advancedMacroBlocking: 0.18,
@@ -549,6 +551,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0,
     advancedQuantization: 0,
     advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
     advancedFilmGrain: 0.68,
@@ -649,6 +652,7 @@ const FALLBACK_PRESETS = {
     advancedFocusBreathing: 0.08,
     advancedQuantization: 0,
     advancedCctvMonochrome: 1,
+    advancedSaturation: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
     advancedFilmGrain: 0.82,
@@ -1082,6 +1086,7 @@ class CRTRenderer {
       broadcast: '"Arial Narrow", "Arial", sans-serif',
     };
     const cctvMonochrome = Math.max(0, Math.min(1, Number(params.advancedCctvMonochrome) || 0));
+    const saturation = Math.max(0, Math.min(2, Number(params.advancedSaturation) || 1));
     const quantization = Math.max(0, Math.min(1, Number(params.advancedQuantization) || 0));
     const generationLoss = Math.max(0, Math.min(1, Number(params.advancedGenerationLoss) || 0));
     const macroBlocking = Math.max(0, Math.min(1, Number(params.advancedMacroBlocking) || 0));
@@ -1527,6 +1532,14 @@ class CRTRenderer {
 
       outCtx.restore();
     }
+
+    if (Math.abs(saturation - 1) > 0.001) {
+      outCtx.save();
+      outCtx.globalAlpha = 1;
+      outCtx.filter = `saturate(${saturation.toFixed(3)})`;
+      outCtx.drawImage(outCtx.canvas, 0, 0);
+      outCtx.restore();
+    }
   }
 }
 
@@ -1880,6 +1893,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     "advancedTimestampOSD",
     "advancedOSDStyle",
     "advancedCctvMonochrome",
+    "advancedSaturation",
     "advancedQuantization",
     "advancedGenerationLoss",
     "advancedMacroBlocking",
@@ -1911,7 +1925,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     "scanlineStrength", "phosphorMask", "bloom", "flicker", "noise",
     "advancedLineJitter", "advancedTimebaseWobble", "advancedChromaDelay", "advancedCrossColor",
     "advancedDropouts", "advancedTapeCrease", "advancedRfInterference", "advancedInterlacing",
-    "advancedQuantization", "advancedMacroBlocking", "advancedFrameStutter", "advancedGenerationLoss",
+    "advancedSaturation", "advancedQuantization", "advancedMacroBlocking", "advancedFrameStutter", "advancedGenerationLoss",
     "advancedGhosting", "advancedFilmDust", "advancedFilmScratches", "advancedFilmGrain",
     "advancedFilmHalation", "advancedWhiteBalanceDrift", "advancedTimestampOSD",
   ];
@@ -1950,7 +1964,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     },
     digital: {
       toggleId: "digitalEffectsEnabled",
-      controlIds: ["noise", "advancedFrameStutter", "advancedRfInterference", "advancedCctvMonochrome", "advancedQuantization", "advancedGenerationLoss", "advancedMacroBlocking"],
+      controlIds: ["noise", "advancedFrameStutter", "advancedRfInterference", "advancedCctvMonochrome", "advancedSaturation", "advancedQuantization", "advancedGenerationLoss", "advancedMacroBlocking"],
     },
     film: {
       toggleId: "filmEffectsEnabled",
@@ -2002,6 +2016,7 @@ async function exportWebmRealtime({ canvas, renderer, params, fps, duration, loa
     advancedTapeCrease: "Tape crease events",
     advancedTimestampOSD: "Timestamp intensity",
     advancedCctvMonochrome: "CCTV monochrome",
+    advancedSaturation: "Saturation",
     advancedQuantization: "Quantization/crush",
     advancedGenerationLoss: "Generation loss",
     advancedMacroBlocking: "Macroblocking",
