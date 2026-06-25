@@ -1,0 +1,427 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 10%;
+    --foreground: 220 10% 92%;
+
+    --card: 220 14% 13%;
+    --card-foreground: 220 10% 92%;
+
+    --popover: 220 14% 13%;
+    --popover-foreground: 220 10% 92%;
+
+    --primary: 213 70% 55%;
+    --primary-foreground: 220 14% 98%;
+
+    --secondary: 220 12% 18%;
+    --secondary-foreground: 220 10% 80%;
+
+    --muted: 220 12% 16%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 213 70% 55%;
+    --accent-foreground: 220 14% 98%;
+
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 12% 20%;
+    --input: 220 12% 20%;
+    --ring: 213 70% 55%;
+
+    --radius: 0.5rem;
+
+    --surface-0: 220 14% 11%;
+    --surface-1: 220 14% 14%;
+    --surface-2: 220 12% 17%;
+    --surface-3: 220 12% 20%;
+
+    --text-dim: 220 10% 45%;
+    --text-muted: 220 10% 60%;
+
+    --accent-glow: 213 80% 60%;
+    --accent-muted: 213 70% 55%;
+
+    --success: 145 50% 55%;
+    --warning: 38 80% 65%;
+
+    --sidebar-background: 220 14% 11%;
+    --sidebar-foreground: 220 10% 80%;
+    --sidebar-primary: 213 70% 55%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 220 12% 18%;
+    --sidebar-accent-foreground: 220 10% 92%;
+    --sidebar-border: 220 12% 20%;
+    --sidebar-ring: 213 70% 55%;
+  }
+
+  /* Theme: Midnight (default dark) */
+  body[data-theme="midnight"] {
+    --background: 222 20% 8%;
+    --foreground: 222 15% 97%;
+    --card: 222 18% 12%;
+    --card-foreground: 222 15% 97%;
+    --primary: 213 80% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 18% 15%;
+    --secondary-foreground: 222 12% 80%;
+    --muted: 222 16% 14%;
+    --muted-foreground: 222 12% 58%;
+    --border: 222 16% 22%;
+    --surface-0: 222 20% 9%;
+    --surface-1: 222 18% 12%;
+    --surface-2: 222 16% 16%;
+    --surface-3: 222 14% 20%;
+    --accent-glow: 213 85% 65%;
+  }
+
+  /* Theme: Graphite */
+  body[data-theme="graphite"] {
+    --background: 0 0% 9%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 13%;
+    --card-foreground: 0 0% 95%;
+    --primary: 210 40% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 78%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 52%;
+    --border: 0 0% 22%;
+    --surface-0: 0 0% 10%;
+    --surface-1: 0 0% 13%;
+    --surface-2: 0 0% 17%;
+    --surface-3: 0 0% 22%;
+    --accent-glow: 210 50% 72%;
+  }
+
+  /* Theme: Classic */
+  body[data-theme="classic"] {
+    --background: 220 28% 10%;
+    --foreground: 220 20% 96%;
+    --card: 220 24% 14%;
+    --card-foreground: 220 20% 96%;
+    --primary: 215 75% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 22% 17%;
+    --secondary-foreground: 220 16% 80%;
+    --muted: 220 20% 15%;
+    --muted-foreground: 220 14% 55%;
+    --border: 220 18% 24%;
+    --surface-0: 220 28% 11%;
+    --surface-1: 220 24% 14%;
+    --surface-2: 220 20% 18%;
+    --surface-3: 220 16% 23%;
+    --accent-glow: 215 80% 66%;
+  }
+
+  /* Theme: Dusk */
+  body[data-theme="dusk"] {
+    --background: 250 22% 10%;
+    --foreground: 250 16% 96%;
+    --card: 250 18% 14%;
+    --card-foreground: 250 16% 96%;
+    --primary: 260 60% 68%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 250 16% 17%;
+    --secondary-foreground: 250 12% 78%;
+    --muted: 250 14% 15%;
+    --muted-foreground: 250 10% 52%;
+    --border: 250 14% 24%;
+    --surface-0: 250 22% 11%;
+    --surface-1: 250 18% 14%;
+    --surface-2: 250 14% 18%;
+    --surface-3: 250 12% 23%;
+    --accent-glow: 260 65% 72%;
+  }
+
+  /* Theme: Forest */
+  body[data-theme="forest"] {
+    --background: 150 22% 8%;
+    --foreground: 150 12% 95%;
+    --card: 150 18% 12%;
+    --card-foreground: 150 12% 95%;
+    --primary: 150 45% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 16% 15%;
+    --secondary-foreground: 150 10% 76%;
+    --muted: 150 14% 13%;
+    --muted-foreground: 150 10% 50%;
+    --border: 150 14% 22%;
+    --surface-0: 150 22% 9%;
+    --surface-1: 150 18% 12%;
+    --surface-2: 150 14% 16%;
+    --surface-3: 150 12% 21%;
+    --accent-glow: 150 50% 56%;
+  }
+
+  /* Theme: Amber */
+  body[data-theme="amber"] {
+    --background: 25 28% 9%;
+    --foreground: 30 20% 95%;
+    --card: 25 22% 13%;
+    --card-foreground: 30 20% 95%;
+    --primary: 33 70% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 25 18% 16%;
+    --secondary-foreground: 30 14% 76%;
+    --muted: 25 16% 14%;
+    --muted-foreground: 30 12% 50%;
+    --border: 25 16% 24%;
+    --surface-0: 25 28% 10%;
+    --surface-1: 25 22% 13%;
+    --surface-2: 25 18% 17%;
+    --surface-3: 25 14% 22%;
+    --accent-glow: 33 75% 60%;
+  }
+
+  /* Theme: Daylight (light) */
+  body[data-theme="daylight"] {
+    --background: 218 30% 96%;
+    --foreground: 220 30% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 18%;
+    --primary: 213 60% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 20% 92%;
+    --secondary-foreground: 220 20% 40%;
+    --muted: 218 16% 90%;
+    --muted-foreground: 220 14% 48%;
+    --border: 218 18% 82%;
+    --input: 218 18% 82%;
+    --surface-0: 0 0% 100%;
+    --surface-1: 218 24% 97%;
+    --surface-2: 218 18% 93%;
+    --surface-3: 218 16% 88%;
+    --accent-glow: 213 65% 55%;
+  }
+
+  /* Theme: Paper (light) */
+  body[data-theme="paper"] {
+    --background: 38 30% 96%;
+    --foreground: 30 30% 18%;
+    --card: 38 20% 99%;
+    --card-foreground: 30 30% 18%;
+    --popover: 38 20% 99%;
+    --popover-foreground: 30 30% 18%;
+    --primary: 33 55% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 38 18% 90%;
+    --secondary-foreground: 30 20% 38%;
+    --muted: 38 14% 88%;
+    --muted-foreground: 30 14% 46%;
+    --border: 38 20% 78%;
+    --input: 38 20% 78%;
+    --surface-0: 38 20% 99%;
+    --surface-1: 38 22% 96%;
+    --surface-2: 38 18% 91%;
+    --surface-3: 38 16% 86%;
+    --accent-glow: 33 60% 52%;
+  }
+
+  /* Density: Compact */
+  body[data-density="compact"] {
+    font-size: 13px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--surface-3));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+}
+
+@layer components {
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .panel-glow {
+    box-shadow: 0 0 0 1px hsl(var(--border)),
+                0 8px 24px -4px rgba(0, 0, 0, 0.4);
+  }
+
+  .accent-glow {
+    box-shadow: 0 0 0 1px hsl(var(--accent-glow) / 0.3),
+                0 4px 16px hsl(var(--accent-glow) / 0.15);
+  }
+
+  /* Custom range slider styling */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: hsl(var(--surface-3));
+    outline: none;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  input[type="range"]:hover {
+    background: hsl(var(--surface-3) / 0.8);
+  }
+
+  input[type="range"]:focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.5);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 0 6px hsl(var(--primary) / 0.4);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.6);
+  }
+
+  input[type="range"]::-webkit-slider-thumb:active {
+    transform: scale(1.1);
+    box-shadow: 0 0 14px hsl(var(--primary) / 0.7);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    border: 2px solid hsl(var(--background));
+    box-shadow: 0 0 6px hsl(var(--primary) / 0.4);
+    cursor: pointer;
+  }
+
+  input[type="range"]::-moz-range-thumb:active {
+    box-shadow: 0 0 14px hsl(var(--primary) / 0.7);
+  }
+
+  /* Canvas checkerboard for transparency */
+  .canvas-bg {
+    background-image: 
+      linear-gradient(45deg, hsl(var(--surface-0)) 25%, transparent 25%),
+      linear-gradient(-45deg, hsl(var(--surface-0)) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, hsl(var(--surface-0)) 75%),
+      linear-gradient(-45deg, transparent 75%, hsl(var(--surface-0)) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+
+  /* Glass morphism panel */
+  .glass-panel {
+    background: hsl(var(--card) / 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Fade-in animation */
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Slide-up animation */
+  .animate-slide-up {
+    animation: slideUp 0.25s ease-out forwards;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Status bar styling */
+  .status-bar {
+    background: hsl(var(--surface-0));
+    border-top: 1px solid hsl(var(--border));
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Header gradient accent line */
+  .header-accent {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0),
+      hsl(var(--primary) / 0.6) 20%,
+      hsl(var(--accent-glow) / 0.8) 50%,
+      hsl(var(--primary) / 0.6) 80%,
+      hsl(var(--primary) / 0)
+    );
+    height: 1px;
+  }
+
+  /* Active mobile tab indicator */
+  .mobile-tab-active {
+    position: relative;
+  }
+  .mobile-tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: hsl(var(--primary));
+    border-radius: 2px 2px 0 0;
+  }
+
+  /* Pulse dot animation */
+  .pulse-dot {
+    animation: pulseDot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulseDot {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.3); }
+  }
+
+  /* Improved focus ring for all interactive elements */
+  .focus-ring:focus-visible {
+    outline: 2px solid hsl(var(--primary) / 0.5);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+}
