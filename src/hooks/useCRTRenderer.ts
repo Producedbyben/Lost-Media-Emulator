@@ -5,6 +5,7 @@ import { CRTRendererHybrid } from "@/lib/crt-renderer-hybrid.js";
 import { exportMp4, exportWebm, getVideoExportCapabilities } from "@/lib/exporter.js";
 // @ts-ignore
 import { exportGif } from "@/lib/gif-exporter.js";
+import { saveBlob, ensureFilename } from "@/lib/save-file.js";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import type { OSDOptions } from "@/components/OSDControls";
@@ -1224,6 +1225,7 @@ export function useCRTRenderer() {
     degradeAudio?: boolean;
     aspectRatio?: string;
     format?: "mp4" | "webm";
+    fileName?: string;
   }) => {
     const canvas = canvasRef.current;
     if (!canvas || !rendererRef.current) return;
@@ -1251,6 +1253,7 @@ export function useCRTRenderer() {
         sourceScale: previewSettingsRef.current.sourceScale,
         bitrate: (options?.quality || 1) * 8_000_000,
         renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+        fileName: options?.fileName,
       };
       const wantsWebm = options?.format === "webm";
       if (!wantsWebm && caps.mp4) {
@@ -1303,16 +1306,21 @@ export function useCRTRenderer() {
     exportControllerRef.current?.abort();
   }, []);
 
-  const handleExportStill = useCallback(() => {
+  const handleExportStill = useCallback((options?: { aspectRatio?: string; fileName?: string }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const link = document.createElement("a");
-    link.download = `crt-still-${Date.now()}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    // Route through the same Save dialog as video/GIF so a still also gets a
+    // chosen name + destination (and reveals in Finder on desktop), instead of
+    // a silent data-URL download to ~/Downloads.
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      void saveBlob(blob, options?.fileName || `crt-still-${Date.now()}.png`, {
+        mimeType: "image/png", extension: "png", description: "PNG image",
+      });
+    }, "image/png");
   }, []);
 
-  const handleExportGif = useCallback(async (fps: number, duration: number, evaluateParams?: (t: number, p: any) => any) => {
+  const handleExportGif = useCallback(async (fps: number, duration: number, fileName?: string, evaluateParams?: (t: number, p: any) => any) => {
     const canvas = canvasRef.current;
     if (!canvas || !rendererRef.current) return;
 
@@ -1333,6 +1341,7 @@ export function useCRTRenderer() {
         videoElement: isVideoRef.current ? videoElementRef.current : undefined,
         sourceScale: previewSettingsRef.current.sourceScale,
         renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+        fileName,
       });
     } catch (err: any) {
       console.error("GIF export failed:", err);
@@ -1357,6 +1366,8 @@ export function useCRTRenderer() {
    */
   const runExportJob = useCallback(async (
     job: {
+      name?: string;
+      fileName?: string;
       format: "mp4" | "webm" | "gif";
       fps: number;
       duration: number;
@@ -1394,6 +1405,7 @@ export function useCRTRenderer() {
           sourceScale: previewSettingsRef.current.sourceScale,
           renderOptions,
           signal,
+          fileName: ensureFilename(job.fileName || job.name || "", "gif", "lme-export"),
         });
       } else {
         // Video job (mp4 / webm). Transparently fall back when the requested
@@ -1420,10 +1432,11 @@ export function useCRTRenderer() {
             includeAudio: job.options?.includeAudio || false,
             degradeAudio: job.options?.degradeAudio || false,
             audioProfile: formatProfileRef.current?.audio || null,
+            fileName: ensureFilename(job.fileName || job.name || "", "mp4", "lme-export"),
           });
         } else if (caps.webm) {
           if (wantsMp4) progress(0, 0, 0, "MP4 encoder unavailable — exporting WebM…");
-          await exportWebm(videoArgs);
+          await exportWebm({ ...videoArgs, fileName: ensureFilename(job.fileName || job.name || "", "webm", "lme-export") });
         } else {
           progress(0, 0, 0, "No video encoder — exporting GIF…");
           await exportGif({
@@ -1437,6 +1450,7 @@ export function useCRTRenderer() {
             sourceScale: previewSettingsRef.current.sourceScale,
             renderOptions,
             signal,
+            fileName: ensureFilename(job.fileName || job.name || "", "gif", "lme-export"),
           });
         }
       }

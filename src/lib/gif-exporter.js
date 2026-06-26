@@ -3,14 +3,7 @@
  * Seeks video element frame-by-frame for actual animated output.
  */
 
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+import { saveBlob } from "./save-file.js";
 
 function seekVideoToTime(video, time) {
   return new Promise((resolve) => {
@@ -52,7 +45,7 @@ function seekVideoToTime(video, time) {
 export async function exportGif({
   canvas, renderer, params, fps, duration, onProgress,
   maxWidth = 480, evaluateParams, videoElement, sourceScale = 1,
-  renderOptions = {}, signal,
+  renderOptions = {}, signal, fileName,
 }) {
   const isVideoSource = videoElement instanceof HTMLVideoElement;
 
@@ -116,7 +109,7 @@ export async function exportGif({
 
     const gifBytes = encodeGif(frames, width, height, delay);
     const blob = new Blob([gifBytes], { type: "image/gif" });
-    downloadBlob(blob, `crt-export-${Date.now()}.gif`);
+    await saveBlob(blob, fileName || `crt-export-${Date.now()}.gif`, { mimeType: "image/gif", extension: "gif", description: "GIF animation" });
     return blob;
   } finally {
     if (isVideoSource && wasPlaying) videoElement.play().catch(() => {});

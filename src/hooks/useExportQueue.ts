@@ -14,6 +14,8 @@ export interface ExportJobOptions {
 export interface ExportJob {
   id: string;
   name: string;
+  /** Saved filename base (no extension). Falls back to `name` when unset. */
+  fileName?: string;
   format: "mp4" | "webm" | "gif";
   fps: number;
   duration: number;

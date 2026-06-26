@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus } from "lucide-react";
+import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type } from "lucide-react";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
+import { ensureFilename } from "@/lib/save-file.js";
 import type { CRTParams } from "@/hooks/useCRTRenderer";
 import ExportQueue from "@/components/ExportQueue";
 import type { ExportJob, NewExportJob } from "@/hooks/useExportQueue";
@@ -20,9 +21,9 @@ interface ValidationReport {
 interface ExportPanelProps {
   hasImage: boolean;
   isVideo?: boolean;
-  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm" }) => void;
-  onExportStill: (options?: { aspectRatio?: string }) => void;
-  onExportGif?: (fps: number, duration: number) => void;
+  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string }) => void;
+  onExportStill: (options?: { aspectRatio?: string; fileName?: string }) => void;
+  onExportGif?: (fps: number, duration: number, fileName?: string) => void;
   onCancelExport?: () => void;
   isExporting: boolean;
   exportProgress: number;
@@ -108,6 +109,22 @@ const ExportPanel = ({
   const [lutSize, setLutSize] = useState(33);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [fileName, setFileName] = useState("");
+
+  // Whether we're in the native desktop shell (native Save panel) vs the web
+  // build (browser Save dialog / download).
+  const isDesktop =
+    typeof window !== "undefined" &&
+    (window as unknown as { desktop?: { isDesktop?: boolean } }).desktop?.isDesktop === true;
+
+  // Default name derived from the active look; the user can override it. Stays a
+  // placeholder so an empty field transparently falls back to the look name.
+  const defaultBase = (lookName || "Lost Media Export")
+    .replace(/[/\\:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-");
+  const effectiveBase = fileName.trim() || defaultBase;
+  const stillExt = "png";
+  const videoExt = format; // mp4 | webm | gif
 
   const runValidation = async () => {
     if (!onValidateExport) return;
@@ -124,6 +141,7 @@ const ExportPanel = ({
     const name = `${lookName || "Custom look"} · ${fmt.toUpperCase()}${ar ? ` ${ar}` : ""} · ${duration}s`;
     onEnqueueExport({
       name,
+      fileName: ensureFilename(effectiveBase, fmt, "lme-export"),
       format: fmt,
       fps: jobFps,
       duration,
@@ -179,7 +197,34 @@ const ExportPanel = ({
     <div className="space-y-3">
       <div>
         <strong className="text-xs font-semibold text-foreground uppercase tracking-wide">Delivery</strong>
-        <p className="text-[12px] text-muted-foreground">Finalize render settings, then export.</p>
+        <p className="text-[12px] text-muted-foreground">Name it, set the render, then export.</p>
+      </div>
+
+      {/* Output name — the file is saved with this name; the destination is
+          chosen in the save dialog that opens on export. */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <Type className="w-3 h-3 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">File name</span>
+        </div>
+        <div className="flex items-stretch rounded-md border border-border bg-secondary focus-within:ring-1 focus-within:ring-primary/50 overflow-hidden">
+          <input
+            type="text"
+            value={fileName}
+            onChange={(e) => setFileName(e.target.value)}
+            placeholder={defaultBase}
+            spellCheck={false}
+            aria-label="Export file name"
+            className="flex-1 min-w-0 bg-transparent px-2.5 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+          />
+          <span className="flex items-center px-2 text-[12px] font-mono text-muted-foreground border-l border-border select-none">.{videoExt}</span>
+        </div>
+        <p className="text-[11px] text-muted-foreground flex items-start gap-1">
+          <FolderOpen className="w-3 h-3 mt-px shrink-0" />
+          {isDesktop
+            ? "Pick the folder in the save dialog — the file reveals in Finder when it's done."
+            : "Choose where to save in your browser's save dialog (otherwise it goes to Downloads)."}
+        </p>
       </div>
 
       {/* Source info badge */}
@@ -374,7 +419,7 @@ const ExportPanel = ({
         {format === "gif" ? (
           <div className="relative flex-1 group">
             <button
-              onClick={() => onExportGif?.(fps, duration)}
+              onClick={() => onExportGif?.(fps, duration, ensureFilename(effectiveBase, "gif", "lme-export"))}
               disabled={!hasImage || isExporting}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
               <Film className="w-3.5 h-3.5" /> Export GIF
@@ -388,7 +433,7 @@ const ExportPanel = ({
         ) : (
           <div className="relative flex-1 group">
             <button
-              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: isVideo && includeAudio ? true : undefined, degradeAudio: isVideo && includeAudio && degradeAudio ? true : undefined, format })}
+              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: isVideo && includeAudio ? true : undefined, degradeAudio: isVideo && includeAudio && degradeAudio ? true : undefined, format, fileName: ensureFilename(effectiveBase, videoExt, "lme-export") })}
               disabled={!hasImage || isExporting}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
               {format === "mp4" ? <Film className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
@@ -408,7 +453,7 @@ const ExportPanel = ({
           </button>
         )}
         <div className="relative group">
-          <button onClick={() => onExportStill({ aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined })} disabled={!hasImage || isExporting}
+          <button onClick={() => onExportStill({ aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, fileName: ensureFilename(effectiveBase, stillExt, "lme-export") })} disabled={!hasImage || isExporting}
             className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-border">
             <ImageIcon className="w-3.5 h-3.5" /> Still
           </button>

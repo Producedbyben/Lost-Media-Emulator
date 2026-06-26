@@ -19,6 +19,7 @@
 
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from "mp4-muxer";
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget } from "webm-muxer";
+import { saveBlob } from "./save-file.js";
 
 /**
  * Feature-detect the export encoders available in this runtime.
@@ -281,7 +282,7 @@ export async function exportMp4({
   canvas, renderer, params, fps, duration, onProgress,
   videoElement, sourceScale = 1, bitrate = 8_000_000, signal,
   includeAudio = false, degradeAudio = false, audioProfile = null,
-  renderOptions = {},
+  renderOptions = {}, fileName,
 }) {
   if (!("VideoEncoder" in window)) {
     throw new Error("WebCodecs VideoEncoder is unavailable in this context.");
@@ -355,7 +356,7 @@ export async function exportMp4({
 
     muxer.finalize();
     const blob = new Blob([muxerConfig.target.buffer], { type: "video/mp4" });
-    downloadBlob(blob, `lme-export-${Date.now()}.mp4`);
+    await saveBlob(blob, fileName || `lme-export-${Date.now()}.mp4`, { mimeType: "video/mp4", extension: "mp4", description: "MP4 video" });
     return blob;
   } catch (err) {
     try { if (encoder.state !== "closed") encoder.close(); } catch (_) {}
@@ -378,7 +379,7 @@ export async function exportWebm(args) {
 
 async function exportWebmWebCodecs({
   canvas, renderer, params, fps, duration, onProgress,
-  videoElement, sourceScale = 1, bitrate = 8_000_000, signal, renderOptions = {},
+  videoElement, sourceScale = 1, bitrate = 8_000_000, signal, renderOptions = {}, fileName,
 }) {
   const prep = prepareRender({ canvas, videoElement, duration, fps });
   const { isVideoSource, encodedSize, totalFrames, renderCanvas, renderCtx, wasPlaying } = prep;
@@ -419,7 +420,7 @@ async function exportWebmWebCodecs({
     encoder.close();
     muxer.finalize();
     const blob = new Blob([target.buffer], { type: "video/webm" });
-    downloadBlob(blob, `lme-export-${Date.now()}.webm`);
+    await saveBlob(blob, fileName || `lme-export-${Date.now()}.webm`, { mimeType: "video/webm", extension: "webm", description: "WebM video" });
     return blob;
   } catch (err) {
     try { if (encoder.state !== "closed") encoder.close(); } catch (_) {}
@@ -432,7 +433,7 @@ async function exportWebmWebCodecs({
 /** Last-resort real-time WebM capture for runtimes without WebCodecs. */
 async function exportWebmMediaRecorder({
   canvas, renderer, params, fps, duration, onProgress,
-  videoElement, sourceScale = 1, bitrate = 8_000_000, signal, renderOptions = {},
+  videoElement, sourceScale = 1, bitrate = 8_000_000, signal, renderOptions = {}, fileName,
 }) {
   const prep = prepareRender({ canvas, videoElement, duration, fps });
   const { isVideoSource, encodedSize, totalFrames, renderCanvas, renderCtx, wasPlaying } = prep;
@@ -470,7 +471,7 @@ async function exportWebmMediaRecorder({
     recorder.stop();
     await stopped;
     const blob = new Blob(chunks, { type: mimeType.split(";")[0] });
-    downloadBlob(blob, `lme-export-${Date.now()}.webm`);
+    await saveBlob(blob, fileName || `lme-export-${Date.now()}.webm`, { mimeType: "video/webm", extension: "webm", description: "WebM video" });
     return blob;
   } catch (err) {
     try { if (recorder.state !== "inactive") recorder.stop(); } catch (_) {}
