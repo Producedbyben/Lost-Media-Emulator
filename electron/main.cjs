@@ -1,9 +1,11 @@
 // Lost Media Emulator — native macOS (Apple Silicon) shell.
 // Runs the Vite/React effects studio inside a Metal-accelerated Chromium window.
 
-const { app, BrowserWindow, Menu, shell, dialog, nativeTheme } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, nativeTheme, ipcMain } = require("electron");
 const path = require("path");
 const applyGpuFlags = require("./gpu-flags.cjs");
+const { locate } = require("./ffmpeg-locate.cjs");
+const { createSession } = require("./ffmpeg-session.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -90,6 +92,74 @@ function createWindow() {
     });
   });
 }
+
+// --- Native ffmpeg export pipeline -----------------------------------------
+const ffmpegSessions = new Map();
+
+ipcMain.handle("ffmpeg:available", () => !!locate().ffmpeg);
+
+ipcMain.handle("ffmpeg:begin", (_e, { width, height, fps }) => {
+  const session = createSession({ width, height, fps, tmpRoot: app.getPath("temp") });
+  ffmpegSessions.set(session.id, session);
+  return { sessionId: session.id };
+});
+
+ipcMain.handle("ffmpeg:frame", (_e, { sessionId, index, bytes }) => {
+  const session = ffmpegSessions.get(sessionId);
+  if (!session) throw new Error("unknown ffmpeg session");
+  session.writeFrame(index, bytes);
+  return { ok: true };
+});
+
+ipcMain.handle("ffmpeg:encode", async (e, { sessionId, codec, outPath, audioSourcePath }) => {
+  const session = ffmpegSessions.get(sessionId);
+  if (!session) throw new Error("unknown ffmpeg session");
+  const { ffmpeg } = locate();
+  if (!ffmpeg) throw new Error("ffmpeg binary not found");
+  try {
+    await session.encode({
+      ffmpegPath: ffmpeg, codec, outPath, audioSourcePath,
+      onProgress: (p) => e.sender.send("ffmpeg:progress", { sessionId, ...p }),
+    });
+    shell.showItemInFolder(outPath);
+    return { ok: true, outPath };
+  } finally {
+    session.cleanup();
+    ffmpegSessions.delete(sessionId);
+  }
+});
+
+ipcMain.handle("ffmpeg:cancel", (_e, { sessionId }) => {
+  const session = ffmpegSessions.get(sessionId);
+  if (session) { session.cancel(); session.cleanup(); ffmpegSessions.delete(sessionId); }
+});
+
+// ffmpeg writes the file itself, so the renderer needs a real destination path
+// before encoding. Return the chosen absolute path (or null if cancelled).
+ipcMain.handle("ffmpeg:save-dialog", async (_e, { defaultName }) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Export",
+    defaultPath: path.join(app.getPath("downloads"), defaultName || "export.mp4"),
+    filters: [{ name: "Video", extensions: ["mp4", "mov"] }, { name: "All Files", extensions: ["*"] }],
+  });
+  return result.canceled ? null : result.filePath;
+});
+
+// Honest audio availability: does this source file actually carry an audio
+// track? Lets the UI enable/disable the "Original audio" option with a real
+// reason instead of silently producing a silent file.
+ipcMain.handle("ffmpeg:probe-audio", async (_e, { sourcePath }) => {
+  const { ffprobe } = locate();
+  if (!ffprobe || !sourcePath) return { hasAudio: false, probed: false };
+  const { execFile } = require("child_process");
+  return new Promise((resolve) => {
+    execFile(
+      ffprobe,
+      ["-v", "quiet", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", sourcePath],
+      (err, stdout) => resolve({ hasAudio: !err && stdout.trim().length > 0, probed: true }),
+    );
+  });
+});
 
 function buildMenu() {
   const template = [

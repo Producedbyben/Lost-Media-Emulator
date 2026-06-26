@@ -29,3 +29,7 @@ release
 # Build caches & local tooling config
 .vite
 .claude
+
+# Bundled ffmpeg binaries (drop-in, not committed)
+build/vendor/ffmpeg
+build/vendor/ffprobe

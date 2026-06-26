@@ -248,7 +248,7 @@ const TRANSITION_DURATION = 400; // ms
 
 const Index = () => {
   const {
-    canvasRef, containerRef, hasImage, isVideo, videoDuration, videoCurrentTime,
+    canvasRef, containerRef, hasImage, isVideo, sourceHasAudio, videoDuration, videoCurrentTime,
     videoPlaying, videoSpeed, videoLoop, videoFPS, videoWidth, videoHeight,
     loadImage, sourceInfo, setParams, setOSDOptions, setPreviewSettings,
     isExporting, exportProgress, handleExportMp4, handleExportStill, handleExportGif, handleCancelExport, runExportJob,
@@ -1554,7 +1554,7 @@ const Index = () => {
           <DialogHeader>
             <DialogTitle>Export Settings</DialogTitle>
           </DialogHeader>
-          <ExportPanel hasImage={hasImage} isVideo={isVideo}
+          <ExportPanel hasImage={hasImage} isVideo={isVideo} sourceHasAudio={sourceHasAudio}
             onExportMp4={handleExportMp4} onExportStill={handleExportStill} onExportGif={handleExportGif}
             onCancelExport={handleCancelExport} isExporting={isExporting} exportProgress={exportProgress}
             currentParams={params}
@@ -1872,7 +1872,7 @@ const Index = () => {
           )}
           {mobileTab === "export" && (
             <div className="flex-1 p-4 overflow-y-auto">
-              <ExportPanel hasImage={hasImage} isVideo={isVideo}
+              <ExportPanel hasImage={hasImage} isVideo={isVideo} sourceHasAudio={sourceHasAudio}
                 onExportMp4={handleExportMp4} onExportStill={handleExportStill} onExportGif={handleExportGif}
                 onCancelExport={handleCancelExport} isExporting={isExporting} exportProgress={exportProgress}
                 currentParams={params}

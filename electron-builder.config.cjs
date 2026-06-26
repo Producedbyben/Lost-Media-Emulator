@@ -16,6 +16,15 @@ const notarizeReady =
   !!process.env.APPLE_APP_SPECIFIC_PASSWORD &&
   !!process.env.APPLE_TEAM_ID;
 
+// Bundle the native ffmpeg/ffprobe binaries only when present, so `npm run dist`
+// keeps working before the licensed arm64 binaries are dropped into build/vendor/.
+// Without them the desktop export falls back to the WebCodecs path at runtime.
+const fs = require("fs");
+const path = require("path");
+const hasFfmpeg =
+  fs.existsSync(path.join(__dirname, "build/vendor/ffmpeg")) &&
+  fs.existsSync(path.join(__dirname, "build/vendor/ffprobe"));
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: "uk.co.producedbyben.lostmediaemulator",
@@ -32,7 +41,21 @@ module.exports = {
     "electron/main.cjs",
     "electron/preload.cjs",
     "electron/gpu-flags.cjs",
+    "electron/ffmpeg-locate.cjs",
+    "electron/ffmpeg-args.cjs",
+    "electron/ffmpeg-session.cjs",
   ],
+  // Native ffmpeg/ffprobe binaries (arm64) for the export pipeline — bundled only
+  // when present (see hasFfmpeg). The afterSign hook ad-hoc signs them.
+  extraResources: hasFfmpeg
+    ? [
+        { from: "build/vendor/ffmpeg", to: "ffmpeg" },
+        { from: "build/vendor/ffprobe", to: "ffprobe" },
+        // LGPL compliance: ship the license + credits alongside the binary.
+        { from: "build/vendor/FFMPEG-COPYING.LGPLv2.1.txt", to: "FFMPEG-COPYING.LGPLv2.1.txt" },
+        { from: "build/vendor/FFMPEG-CREDITS.txt", to: "FFMPEG-CREDITS.txt" },
+      ]
+    : [],
   mac: {
     target: [{ target: "dmg", arch: "arm64" }],
     category: "public.app-category.video",

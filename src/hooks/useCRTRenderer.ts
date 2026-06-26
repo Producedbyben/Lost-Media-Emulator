@@ -6,6 +6,7 @@ import { exportMp4, exportWebm, getVideoExportCapabilities } from "@/lib/exporte
 // @ts-ignore
 import { exportGif } from "@/lib/gif-exporter.js";
 import { saveBlob, ensureFilename } from "@/lib/save-file.js";
+import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import type { OSDOptions } from "@/components/OSDControls";
@@ -359,6 +360,9 @@ export function useCRTRenderer() {
   // Tracks the currently held object URL so we can revoke it when a new file is
   // loaded (prevents a blob-URL memory leak across many imports).
   const objectUrlRef = useRef<string | null>(null);
+  // Real on-disk path of the loaded source (desktop only), so ffmpeg can mux the
+  // original audio track directly. Null for the web build or pasted/sample input.
+  const sourcePathRef = useRef<string | null>(null);
   const exportControllerRef = useRef<AbortController | null>(null);
   const panCenterRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const sourceDimsRef = useRef<{ w: number; h: number } | null>(null);
@@ -400,6 +404,9 @@ export function useCRTRenderer() {
   const [ramPreview, setRamPreview] = useState<{ status: "idle" | "building" | "ready"; progress: number; frames: number }>({ status: "idle", progress: 0, frames: 0 });
   const [validation, setValidation] = useState<any>(null);
   const [sourceInfo, setSourceInfo] = useState<SourceInfo | null>(null);
+  // Honest audio availability for the loaded source: true only on desktop when
+  // ffprobe confirms the source file actually carries an audio track.
+  const [sourceHasAudio, setSourceHasAudio] = useState(false);
 
   // Create renderer ONCE as a stable ref
   const rendererRef = useRef<any>(null);
@@ -960,6 +967,25 @@ export function useCRTRenderer() {
       const sourceScale = previewSettingsRef.current.sourceScale;
       invalidateRamCache();
 
+      // Capture the real file path (desktop) so the ffmpeg exporter can mux the
+      // source's original audio. Falls back to null on web / non-File inputs.
+      const desktopApi = (window as unknown as {
+        desktop?: {
+          getPathForFile?: (f: File) => string | null;
+          probeAudio?: (o: { sourcePath: string }) => Promise<{ hasAudio: boolean }>;
+        };
+      }).desktop;
+      sourcePathRef.current = (isVid && desktopApi?.getPathForFile) ? (desktopApi.getPathForFile(file) || null) : null;
+      // Probe whether the source carries an audio track so the export UI can show
+      // an honest "Original audio" state instead of silently producing silence.
+      setSourceHasAudio(false);
+      if (sourcePathRef.current && desktopApi?.probeAudio) {
+        const sp = sourcePathRef.current;
+        desktopApi.probeAudio({ sourcePath: sp })
+          .then((r) => setSourceHasAudio(!!r?.hasAudio))
+          .catch(() => setSourceHasAudio(false));
+      }
+
       // Cleanup previous video + release any held object URL (avoids leaks).
       if (videoElementRef.current) {
         videoElementRef.current.pause();
@@ -1226,6 +1252,8 @@ export function useCRTRenderer() {
     aspectRatio?: string;
     format?: "mp4" | "webm";
     fileName?: string;
+    audioMode?: "off" | "original" | "degrade";
+    codec?: "h264" | "hevc" | "prores422" | "prores4444";
   }) => {
     const canvas = canvasRef.current;
     if (!canvas || !rendererRef.current) return;
@@ -1240,6 +1268,36 @@ export function useCRTRenderer() {
     if (prevPreferGPU && rendererRef.current.setPreferGPU) rendererRef.current.setPreferGPU(false);
 
     try {
+      // Desktop native ffmpeg pipeline (H.264) — the primary path. ffmpeg writes
+      // the file itself, so a native Save panel resolves the destination first.
+      // WebM and the web/dev build (no bridge) fall through to WebCodecs below.
+      const ffmpegReady = options?.format !== "webm" && await isFfmpegExportAvailable();
+      if (ffmpegReady) {
+        const desktopApi = (window as unknown as { desktop?: { saveDialog?: (o: { defaultName: string }) => Promise<string | null> } }).desktop;
+        const outPath = await desktopApi?.saveDialog?.({ defaultName: options?.fileName || "export.mp4" });
+        if (outPath) {
+          // Mux the source's original audio when the user kept audio on and the
+          // source is a video with a real path. (Degrade-to-match arrives in a
+          // later phase; until then it behaves as original.)
+          const wantsAudio = options?.audioMode !== "off";
+          const audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
+            ? sourcePathRef.current : undefined;
+          await exportViaFfmpeg({
+            canvas, renderer: rendererRef.current,
+            params: paramsRef.current, fps: Math.max(1, fps), duration: Math.max(0.5, duration),
+            codec: options?.codec || "h264", outPath, audioSourcePath,
+            videoElement: isVideoRef.current ? videoElementRef.current : undefined,
+            sourceScale: previewSettingsRef.current.sourceScale,
+            renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+            onProgress: (r) => setExportProgress(r),
+            signal: controller.signal,
+          });
+        }
+        // Whether encoded or cancelled, the ffmpeg path is done — don't also
+        // run WebCodecs.
+        return;
+      }
+
       const caps = getVideoExportCapabilities();
       const videoExportArgs = {
         canvas,
@@ -1309,10 +1367,29 @@ export function useCRTRenderer() {
   const handleExportStill = useCallback((options?: { aspectRatio?: string; fileName?: string }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Honour the chosen aspect ratio by centre-cropping the frame to it (the
+    // still previously ignored it and always exported the source ratio).
+    let target: HTMLCanvasElement = canvas;
+    const ar = options?.aspectRatio;
+    if (ar && ar !== "original" && /^\d+:\d+$/.test(ar)) {
+      const [aw, ah] = ar.split(":").map(Number);
+      const wantAR = aw / ah;
+      const sw = canvas.width, sh = canvas.height;
+      let cw = sw, ch = sh;
+      if (sw / sh > wantAR) cw = Math.round(sh * wantAR); // too wide → trim sides
+      else ch = Math.round(sw / wantAR);                  // too tall → trim top/bottom
+      const sx = Math.round((sw - cw) / 2), sy = Math.round((sh - ch) / 2);
+      const cropped = document.createElement("canvas");
+      cropped.width = cw; cropped.height = ch;
+      cropped.getContext("2d")!.drawImage(canvas, sx, sy, cw, ch, 0, 0, cw, ch);
+      target = cropped;
+    }
+
     // Route through the same Save dialog as video/GIF so a still also gets a
     // chosen name + destination (and reveals in Finder on desktop), instead of
     // a silent data-URL download to ~/Downloads.
-    canvas.toBlob((blob) => {
+    target.toBlob((blob) => {
       if (!blob) return;
       void saveBlob(blob, options?.fileName || `crt-still-${Date.now()}.png`, {
         mimeType: "image/png", extension: "png", description: "PNG image",
@@ -1536,6 +1613,7 @@ export function useCRTRenderer() {
     containerRef,
     hasImage,
     isVideo,
+    sourceHasAudio,
     videoDuration,
     videoCurrentTime,
     videoPlaying,

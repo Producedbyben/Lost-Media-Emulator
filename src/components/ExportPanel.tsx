@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type } from "lucide-react";
+import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX } from "lucide-react";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
 import { ensureFilename } from "@/lib/save-file.js";
 import type { CRTParams } from "@/hooks/useCRTRenderer";
@@ -21,7 +21,9 @@ interface ValidationReport {
 interface ExportPanelProps {
   hasImage: boolean;
   isVideo?: boolean;
-  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string }) => void;
+  // True only when the loaded source actually carries an audio track (desktop).
+  sourceHasAudio?: boolean;
+  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string; audioMode?: "off" | "original"; codec?: "h264" | "hevc" | "prores422" | "prores4444" }) => void;
   onExportStill: (options?: { aspectRatio?: string; fileName?: string }) => void;
   onExportGif?: (fps: number, duration: number, fileName?: string) => void;
   onCancelExport?: () => void;
@@ -85,10 +87,30 @@ const LUT_SIZE_OPTIONS = [
   { label: "65³", value: 65 },
 ];
 
-type ExportFormat = "mp4" | "webm" | "gif";
+type ExportCodec = "h264" | "hevc" | "prores422" | "prores4444" | "gif";
+
+// Codec tiers shown in the export panel. `desktopOnly` ones need the native
+// ffmpeg engine; `container` drives the file extension. ProRes is the editorial
+// master; H.264 is the universal deliverable.
+const CODEC_TIERS: { value: ExportCodec; label: string; ext: string; desktopOnly: boolean; hint: string }[] = [
+  { value: "h264", label: "H.264", ext: "mp4", desktopOnly: false, hint: "Universal delivery" },
+  { value: "hevc", label: "HEVC", ext: "mp4", desktopOnly: true, hint: "High quality, smaller" },
+  { value: "prores422", label: "ProRes 422", ext: "mov", desktopOnly: true, hint: "Editorial master" },
+  { value: "prores4444", label: "ProRes 4444", ext: "mov", desktopOnly: true, hint: "Highest quality" },
+  { value: "gif", label: "GIF", ext: "gif", desktopOnly: false, hint: "Quick share" },
+];
+
+// One-click delivery presets: set codec, resolution, and aspect in a single tap.
+// `desktopOnly` (Master/ProRes) is dimmed on the web build. resolution 0 = source.
+const DELIVERY_PRESETS: { value: string; label: string; codec: ExportCodec; resolution: number; aspectRatio: string; desktopOnly: boolean; hint: string }[] = [
+  { value: "web", label: "Web", codec: "h264", resolution: 1080, aspectRatio: "original", desktopOnly: false, hint: "H.264 · 1080p" },
+  { value: "social", label: "Social", codec: "h264", resolution: 1080, aspectRatio: "9:16", desktopOnly: false, hint: "H.264 · 9:16 1080p" },
+  { value: "master", label: "Master", codec: "prores422", resolution: 0, aspectRatio: "original", desktopOnly: true, hint: "ProRes 422 HQ · source res" },
+  { value: "gif", label: "GIF", codec: "gif", resolution: 0, aspectRatio: "original", desktopOnly: false, hint: "Quick share" },
+];
 
 const ExportPanel = ({
-  hasImage, isVideo, onExportMp4, onExportStill, onExportGif,
+  hasImage, isVideo, sourceHasAudio, onExportMp4, onExportStill, onExportGif,
   onCancelExport, isExporting, exportProgress, currentParams,
   onValidateExport, validation,
   videoFPS, videoDuration, videoWidth, videoHeight,
@@ -99,10 +121,11 @@ const ExportPanel = ({
   const [duration, setDuration] = useState(4);
   const [resolution, setResolution] = useState(0);
   const [quality, setQuality] = useState(1);
-  const [format, setFormat] = useState<ExportFormat>("mp4");
+  const [codec, setCodec] = useState<ExportCodec>("h264");
   const [renderQuality, setRenderQuality] = useState(0);
-  const [includeAudio, setIncludeAudio] = useState(false);
-  const [degradeAudio, setDegradeAudio] = useState(true);
+  // Keep the source's original audio. On by default for video; the engine mutes
+  // it for image sources and when the source has no audio track.
+  const [audioOn, setAudioOn] = useState(true);
   const [aspectRatio, setAspectRatio] = useState("original");
   const [frameMode, setFrameMode] = useState("none");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -124,7 +147,28 @@ const ExportPanel = ({
     .replace(/\s+/g, "-");
   const effectiveBase = fileName.trim() || defaultBase;
   const stillExt = "png";
-  const videoExt = format; // mp4 | webm | gif
+  const tier = CODEC_TIERS.find((t) => t.value === codec) ?? CODEC_TIERS[0];
+  const isGif = codec === "gif";
+  const isProRes = codec === "prores422" || codec === "prores4444";
+  const videoExt = tier.ext; // mp4 | mov | gif
+  // ffmpeg-only tiers can't run on the web build; the queue uses the WebCodecs
+  // engine, so it only accepts H.264 and GIF.
+  const queueable = codec === "h264" || codec === "gif";
+  // Which delivery preset (if any) the current settings match — for the highlight.
+  const activePreset = DELIVERY_PRESETS.find(
+    (p) => p.codec === codec && p.resolution === resolution && p.aspectRatio === aspectRatio,
+  )?.value;
+
+  // Honest audio state. On desktop we know from the probe whether the source has
+  // a track; on web we can't, so we assume it might and let the encoder decide.
+  const audioUnavailableReason = !isVideo
+    ? "Audio applies to video sources"
+    : isDesktop && !sourceHasAudio
+      ? "This source has no audio track"
+      : null;
+  const audioControllable = isVideo && !audioUnavailableReason;
+  const effectiveAudioOn = audioControllable && audioOn;
+  const audioMode: "off" | "original" = effectiveAudioOn ? "original" : "off";
 
   const runValidation = async () => {
     if (!onValidateExport) return;
@@ -135,7 +179,8 @@ const ExportPanel = ({
 
   const handleAddToQueue = () => {
     if (!onEnqueueExport || !currentParams) return;
-    const fmt = format;
+    // Queue runs on the WebCodecs engine → H.264 mp4 or GIF only.
+    const fmt: "mp4" | "gif" = isGif ? "gif" : "mp4";
     const jobFps = fmt === "gif" ? Math.min(15, fps) : fps;
     const ar = aspectRatio !== "original" ? aspectRatio : undefined;
     const name = `${lookName || "Custom look"} · ${fmt.toUpperCase()}${ar ? ` ${ar}` : ""} · ${duration}s`;
@@ -150,8 +195,7 @@ const ExportPanel = ({
         resolution,
         quality,
         aspectRatio: ar,
-        includeAudio: isVideo && includeAudio ? true : undefined,
-        degradeAudio: isVideo && includeAudio && degradeAudio ? true : undefined,
+        includeAudio: effectiveAudioOn ? true : undefined,
       },
     });
   };
@@ -225,6 +269,32 @@ const ExportPanel = ({
             ? "Pick the folder in the save dialog — the file reveals in Finder when it's done."
             : "Choose where to save in your browser's save dialog (otherwise it goes to Downloads)."}
         </p>
+      </div>
+
+      {/* Delivery presets — one tap sets codec + resolution + aspect. */}
+      <div className="space-y-1">
+        <span className="text-xs text-muted-foreground">Preset</span>
+        <div className="flex flex-wrap gap-1">
+          {DELIVERY_PRESETS.map((p) => {
+            const disabled = p.desktopOnly && !isDesktop;
+            const active = activePreset === p.value;
+            return (
+              <button key={p.value}
+                onClick={() => { if (disabled) return; setCodec(p.codec); setResolution(p.resolution); setAspectRatio(p.aspectRatio); }}
+                disabled={disabled}
+                title={disabled ? `${p.label} — desktop app only` : p.hint}
+                className={`px-2.5 py-0.5 text-[12px] rounded border transition-colors ${
+                  active
+                    ? "bg-primary/15 border-primary/30 text-primary"
+                    : disabled
+                      ? "bg-secondary/40 border-border/60 text-muted-foreground/40 cursor-not-allowed"
+                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                }`}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Source info badge */}
@@ -302,25 +372,70 @@ const ExportPanel = ({
         </label>
       </div>
 
-      {/* Format */}
+      {/* Codec tier — the deliverable. ProRes is the editorial master; HEVC/ProRes
+          need the native desktop engine and are disabled on the web build. */}
       <div className="space-y-1">
-        <span className="text-xs text-muted-foreground">Format</span>
-        <div className="flex gap-1">
-          {(["mp4", "webm", "gif"] as ExportFormat[]).map((f) => (
-            <button key={f} onClick={() => setFormat(f)}
-              className={`px-2.5 py-0.5 text-[12px] rounded border transition-colors uppercase font-semibold ${
-                format === f
-                  ? "bg-primary/15 border-primary/30 text-primary"
-                  : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-              }`}>
-              {f}
-            </button>
-          ))}
+        <span className="text-xs text-muted-foreground">Codec</span>
+        <div className="flex flex-wrap gap-1">
+          {CODEC_TIERS.map((t) => {
+            const disabled = t.desktopOnly && !isDesktop;
+            const active = codec === t.value;
+            return (
+              <button key={t.value} onClick={() => !disabled && setCodec(t.value)} disabled={disabled}
+                title={disabled ? `${t.label} — desktop app only` : t.hint}
+                className={`px-2 py-0.5 text-[12px] rounded border transition-colors font-semibold ${
+                  active
+                    ? "bg-primary/15 border-primary/30 text-primary"
+                    : disabled
+                      ? "bg-secondary/40 border-border/60 text-muted-foreground/40 cursor-not-allowed"
+                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                }`}>
+                {t.label}
+              </button>
+            );
+          })}
         </div>
-        {format === "gif" && (
-          <p className="text-[11px] text-muted-foreground">Max 480px wide · lower FPS recommended for file size</p>
-        )}
+        <p className="text-[11px] text-muted-foreground">
+          {isGif ? "Max 480px wide · lower FPS recommended for file size" : `${tier.hint} · .${tier.ext}`}
+        </p>
       </div>
+
+      {/* Audio — keep the source's original track. On desktop ffmpeg muxes it
+          straight from the source file; honest about when it can't. */}
+      {isVideo && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <Volume2 className="w-3 h-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Audio</span>
+          </div>
+          {audioControllable ? (
+            <>
+              <div className="flex gap-1">
+                {([["original", "Original", Volume2], ["off", "Muted", VolumeX]] as const).map(([val, label, Icon]) => {
+                  const active = (val === "original") === audioOn;
+                  return (
+                    <button key={val} onClick={() => setAudioOn(val === "original")}
+                      className={`flex items-center gap-1 px-2 py-0.5 text-[12px] rounded border transition-colors ${
+                        active
+                          ? "bg-primary/15 border-primary/30 text-primary"
+                          : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                      }`}>
+                      <Icon className="w-3 h-3" /> {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {audioOn && !isDesktop && (
+                <p className="text-[11px] text-muted-foreground">Muxed where the browser supports it — the desktop app guarantees it.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <VolumeX className="w-3 h-3 shrink-0" /> {audioUnavailableReason}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Advanced toggle */}
       <button onClick={() => setShowAdvanced(!showAdvanced)}
@@ -369,36 +484,19 @@ const ExportPanel = ({
             </div>
           </div>
 
-          {isVideo && (
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <input type="checkbox" checked={includeAudio} onChange={(e) => setIncludeAudio(e.target.checked)}
-                  className="rounded border-border" />
-                Include original audio
-              </label>
-              {includeAudio && (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground pl-5">
-                  <input type="checkbox" checked={degradeAudio} onChange={(e) => setDegradeAudio(e.target.checked)}
-                    className="rounded border-border" />
-                  Degrade audio to match preset
-                </label>
-              )}
-            </div>
-          )}
-
         </div>
       )}
 
       {/* Export summary */}
       <div className="px-2.5 py-1.5 bg-secondary/40 rounded-md border border-border space-y-0.5">
         <p className="text-[12px] text-foreground font-mono font-medium">
-          {totalFrames.toLocaleString()} frames · {duration}s @ {fps}fps · {format.toUpperCase()}
+          {totalFrames.toLocaleString()} frames · {duration}s @ {fps}fps · {tier.label}
           {resolution > 0 ? ` · ${resolution}p` : " · Source res"}
           {aspectRatio !== "original" ? ` · ${aspectRatio}` : ""}
         </p>
         <p className="text-[11px] text-muted-foreground font-mono">
           TC: {formatTimecode(0)} → {formatTimecode(duration)}
-          {format !== "gif" && ` · ~${estimatedFileSizeMB()} MB est.`}
+          {!isGif && !isProRes && ` · ~${estimatedFileSizeMB()} MB est.`}
         </p>
       </div>
 
@@ -416,7 +514,7 @@ const ExportPanel = ({
       )}
 
       <div className="flex gap-2">
-        {format === "gif" ? (
+        {isGif ? (
           <div className="relative flex-1 group">
             <button
               onClick={() => onExportGif?.(fps, duration, ensureFilename(effectiveBase, "gif", "lme-export"))}
@@ -433,11 +531,11 @@ const ExportPanel = ({
         ) : (
           <div className="relative flex-1 group">
             <button
-              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: isVideo && includeAudio ? true : undefined, degradeAudio: isVideo && includeAudio && degradeAudio ? true : undefined, format, fileName: ensureFilename(effectiveBase, videoExt, "lme-export") })}
+              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: effectiveAudioOn ? true : undefined, format: "mp4", codec: codec as "h264" | "hevc" | "prores422" | "prores4444", audioMode, fileName: ensureFilename(effectiveBase, videoExt, "lme-export") })}
               disabled={!hasImage || isExporting}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
-              {format === "mp4" ? <Film className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
-              Export {format.toUpperCase()}
+              {isProRes ? <Video className="w-3.5 h-3.5" /> : <Film className="w-3.5 h-3.5" />}
+              Export {tier.label}
             </button>
             {!hasImage && (
               <span className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap bg-popover text-popover-foreground text-[12px] px-2 py-1 rounded border border-border shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
@@ -465,11 +563,13 @@ const ExportPanel = ({
         </div>
       </div>
 
-      {/* Add to queue — for managing long / multiple unattended renders */}
+      {/* Add to queue — for managing long / multiple unattended renders. The
+          queue runs on the WebCodecs engine, so it accepts H.264 and GIF only. */}
       {onEnqueueExport && (
         <button
           onClick={handleAddToQueue}
-          disabled={!hasImage}
+          disabled={!hasImage || !queueable}
+          title={queueable ? undefined : "The queue supports H.264 and GIF — export ProRes/HEVC directly"}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-dashed border-border">
           <ListPlus className="w-3.5 h-3.5" /> Add to export queue
         </button>
