@@ -1,9 +1,11 @@
 // Lost Media Emulator — native macOS (Apple Silicon) shell.
 // Runs the Vite/React effects studio inside a Metal-accelerated Chromium window.
 
-const { app, BrowserWindow, Menu, shell, dialog, nativeTheme } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, nativeTheme, ipcMain } = require("electron");
 const path = require("path");
 const applyGpuFlags = require("./gpu-flags.cjs");
+const { locate } = require("./ffmpeg-locate.cjs");
+const { createSession } = require("./ffmpeg-session.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -90,6 +92,47 @@ function createWindow() {
     });
   });
 }
+
+// --- Native ffmpeg export pipeline -----------------------------------------
+const ffmpegSessions = new Map();
+
+ipcMain.handle("ffmpeg:available", () => !!locate().ffmpeg);
+
+ipcMain.handle("ffmpeg:begin", (_e, { width, height, fps }) => {
+  const session = createSession({ width, height, fps, tmpRoot: app.getPath("temp") });
+  ffmpegSessions.set(session.id, session);
+  return { sessionId: session.id };
+});
+
+ipcMain.handle("ffmpeg:frame", (_e, { sessionId, index, bytes }) => {
+  const session = ffmpegSessions.get(sessionId);
+  if (!session) throw new Error("unknown ffmpeg session");
+  session.writeFrame(index, bytes);
+  return { ok: true };
+});
+
+ipcMain.handle("ffmpeg:encode", async (e, { sessionId, codec, outPath }) => {
+  const session = ffmpegSessions.get(sessionId);
+  if (!session) throw new Error("unknown ffmpeg session");
+  const { ffmpeg } = locate();
+  if (!ffmpeg) throw new Error("ffmpeg binary not found");
+  try {
+    await session.encode({
+      ffmpegPath: ffmpeg, codec, outPath,
+      onProgress: (p) => e.sender.send("ffmpeg:progress", { sessionId, ...p }),
+    });
+    shell.showItemInFolder(outPath);
+    return { ok: true, outPath };
+  } finally {
+    session.cleanup();
+    ffmpegSessions.delete(sessionId);
+  }
+});
+
+ipcMain.handle("ffmpeg:cancel", (_e, { sessionId }) => {
+  const session = ffmpegSessions.get(sessionId);
+  if (session) { session.cancel(); session.cleanup(); ffmpegSessions.delete(sessionId); }
+});
 
 function buildMenu() {
   const template = [
