@@ -13,13 +13,11 @@ function pick(candidates, exists) {
 function resolveFfmpeg({ env, resourcesPath, isPackaged, exists }) {
   const ffmpegCandidates = [
     env.LME_FFMPEG_PATH,
-    isPackaged ? `${resourcesPath}/ffmpeg` : `${resourcesPath}/ffmpeg`,
-    ...(isPackaged ? [] : DEV_FALLBACKS.ffmpeg),
+    ...(isPackaged ? [`${resourcesPath}/ffmpeg`] : DEV_FALLBACKS.ffmpeg),
   ];
   const ffprobeCandidates = [
     env.LME_FFPROBE_PATH,
-    isPackaged ? `${resourcesPath}/ffprobe` : `${resourcesPath}/ffprobe`,
-    ...(isPackaged ? [] : DEV_FALLBACKS.ffprobe),
+    ...(isPackaged ? [`${resourcesPath}/ffprobe`] : DEV_FALLBACKS.ffprobe),
   ];
   return {
     ffmpeg: pick(ffmpegCandidates, exists),

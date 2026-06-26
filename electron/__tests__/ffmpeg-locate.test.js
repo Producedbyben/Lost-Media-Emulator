@@ -34,4 +34,14 @@ describe("resolveFfmpeg", () => {
     const r = resolveFfmpeg({ env: {}, resourcesPath: "/x", isPackaged: true, exists: exists(new Set()) });
     expect(r).toEqual({ ffmpeg: null, ffprobe: null });
   });
+
+  it("does not use resourcesPath when not packaged, even if it exists", () => {
+    const r = resolveFfmpeg({
+      env: {}, resourcesPath: "/app/resources", isPackaged: false,
+      exists: exists(new Set(["/app/resources/ffmpeg", "/app/resources/ffprobe",
+                              "/opt/homebrew/bin/ffmpeg", "/opt/homebrew/bin/ffprobe"])),
+    });
+    expect(r.ffmpeg).toBe("/opt/homebrew/bin/ffmpeg");
+    expect(r.ffprobe).toBe("/opt/homebrew/bin/ffprobe");
+  });
 });
