@@ -75,6 +75,8 @@ uniform float u_quantization;
 uniform float u_rfInterference;
 uniform float u_vignette;
 uniform float u_frameIndex;
+uniform float u_maskType;   // 0 none, 1 dot, 2 aperture, 3 slot, 4 shadow
+uniform float u_monoTint;   // 0 none, 1 green, 2 amber, 3 blue
 
 float noise(vec2 p) {
   return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
@@ -161,13 +163,26 @@ void main() {
   float scanlineGain = 1.0 - u_scan * (0.35 + 0.65 * (0.5 + 0.5 * scanPhase));
   c *= scanlineGain;
 
-  // Phosphor mask (RGB triad)
-  float triad = mod(gl_FragCoord.x, 3.0);
-  float boost = 1.0 + u_mask * 0.52;
-  float dim = 1.0 - u_mask * 0.32;
-  c.r *= (triad < 0.5) ? boost : dim;
-  c.g *= (triad >= 0.5 && triad < 1.5) ? boost : dim;
-  c.b *= (triad >= 1.5 && triad < 2.5) ? boost : dim;
+  // Phosphor mask — pattern selected by u_maskType (matches CPU renderer).
+  if (u_mask > 0.0 && u_maskType > 0.5) {
+    float col = mod(gl_FragCoord.x, 3.0);
+    float row = gl_FragCoord.y;
+    float sub = col;
+    if (u_maskType > 2.5 && u_maskType < 3.5) {       // slot: stagger every 2 rows
+      sub = mod(col + step(2.0, mod(row, 4.0)), 3.0);
+    } else if (u_maskType > 3.5) {                    // shadow: offset every row
+      sub = mod(col + mod(row, 2.0), 3.0);
+    }
+    float boost = 1.0 + u_mask * 0.52;
+    float dim = 1.0 - u_mask * 0.32;
+    c.r *= (sub < 0.5) ? boost : dim;
+    c.g *= (sub >= 0.5 && sub < 1.5) ? boost : dim;
+    c.b *= (sub >= 1.5 && sub < 2.5) ? boost : dim;
+    if (u_maskType < 1.5) {                           // dot triad: horizontal gap every 3rd row
+      float rowDim = (mod(row, 3.0) >= 2.0) ? (1.0 - u_mask * 0.35) : 1.0;
+      c *= rowDim;
+    }
+  }
 
   // Noise (no baseline — only when requested)
   float n1 = noise(gl_FragCoord.xy + u_time * 53.0) - 0.5;
@@ -205,6 +220,15 @@ void main() {
   // Apply grading
   c = applyGrading(c);
 
+  // Monochrome phosphor tint (night-vision green / amber / blue) — luma→colour map.
+  if (u_monoTint > 0.5) {
+    float lm = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 tcol = (u_monoTint < 1.5) ? vec3(0.42, 1.0, 0.30)
+              : (u_monoTint < 2.5) ? vec3(1.0, 0.72, 0.16)
+                                   : vec3(0.38, 0.6, 1.0);
+    c = lm * tcol;
+  }
+
   // Vignette
   float vigDist = length(n) * 0.707;
   float vig = 1.0 - u_vignette * vigDist * vigDist;
@@ -220,8 +244,12 @@ const UNIFORM_NAMES = [
   "u_timeWobble", "u_ghosting", "u_brightness", "u_contrast",
   "u_saturation", "u_gamma", "u_temperature", "u_tint",
   "u_interlacing", "u_filmGrain", "u_quantization", "u_rfInterference",
-  "u_vignette", "u_frameIndex",
+  "u_vignette", "u_frameIndex", "u_maskType", "u_monoTint",
 ];
+
+// String params → shader enum codes (kept here so both setUniforms and tests agree).
+const MASK_TYPE_CODE = { none: 0, dot: 1, phosphor: 1, aperture: 2, slot: 3, shadowMask: 4 };
+const MONO_TINT_CODE = { none: 0, green: 1, amber: 2, blue: 3 };
 
 export class CRTRendererGPU {
   static isSupported() {
@@ -359,6 +387,13 @@ export class CRTRendererGPU {
     set1f(u.u_rfInterference, params.advancedRfInterference || 0);
     set1f(u.u_vignette, Math.min(0.35, Math.abs(params.barrelDistortion || 0) * 0.48)); // Vignette from tube curvature
     set1f(u.u_frameIndex, frameIndex || 0);
+    // Unknown/other mask types (oledPentile, plasmaCell, film…) fall back to the
+    // triad (1) to preserve prior GPU behaviour; "none" disables the mask.
+    {
+      const mt = MASK_TYPE_CODE[params.maskType];
+      set1f(u.u_maskType, mt === undefined ? 1 : mt);
+      set1f(u.u_monoTint, MONO_TINT_CODE[params.monochromeTint] || 0);
+    }
     
     if (u.u_resolution) gl.uniform2f(u.u_resolution, width, height);
 

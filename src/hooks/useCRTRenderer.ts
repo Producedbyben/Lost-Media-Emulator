@@ -21,6 +21,10 @@ export interface CRTParams {
   pixelSize: number;
   maskType: string;
   maskScale: number;
+  // Phosphor monochrome tint: "none" | "green" | "amber" | "blue" | "white".
+  // Maps luma onto a single-colour ramp (night-vision green, amber terminal).
+  monochromeTint: string;
+  monochromeTintStrength: number;
   imageBrightness: number;
   imageContrast: number;
   advancedSaturation: number;
@@ -109,6 +113,10 @@ export interface CRTParams {
   haze: number;
   flareGhosts: number;
   vignette: number;
+  // Aerochrome IR false-colour, 2" Quadruplex banding, PAL Hanover bars.
+  infraredFalseColor: number;
+  bandingHorizontal: number;
+  hanoverBars: number;
   cornerSharpnessFalloff: number;
   // V2: Display/Panel
   scanlineProfile: string;
@@ -136,6 +144,8 @@ export const DEFAULT_PARAMS: CRTParams = {
   pixelSize: 1,
   maskType: "phosphor",
   maskScale: 1,
+  monochromeTint: "none",
+  monochromeTintStrength: 1,
   imageBrightness: 1,
   imageContrast: 1,
   advancedSaturation: 1,
@@ -224,6 +234,9 @@ export const DEFAULT_PARAMS: CRTParams = {
   haze: 0,
   flareGhosts: 0,
   vignette: 0,
+  infraredFalseColor: 0,
+  bandingHorizontal: 0,
+  hanoverBars: 0,
   cornerSharpnessFalloff: 0,
   // V2: Display/Panel
   scanlineProfile: "off",

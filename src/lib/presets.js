@@ -32,13 +32,13 @@ export const PRESETS = {
     maskType: "none",
   },
   "Consumer TV": {
-    scanlineStrength: 0.5,
+    scanlineStrength: 0.45,
     phosphorMask: 0.5,
-    barrelDistortion: 0,
-    bloom: 0.5,
-    flicker: 0.22,
-    chromaticAberration: 0.5,
-    noise: 0.5,
+    barrelDistortion: -0.03,
+    bloom: 0.36,
+    flicker: 0.16,
+    chromaticAberration: 0.14,
+    noise: 0.2,
     pixelSize: 1,
     maskScale: 1,
     advancedLineJitter: 0,
@@ -61,15 +61,16 @@ export const PRESETS = {
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
+    maskType: "phosphor",
   },
   "PVM/BVM": {
-    scanlineStrength: 0.25,
-    phosphorMask: 0.6,
-    barrelDistortion: -0.031,
-    bloom: 0.2,
-    flicker: 0.12,
-    chromaticAberration: 0.08,
-    noise: 0.16,
+    scanlineStrength: 0.32,
+    phosphorMask: 0.62,
+    barrelDistortion: -0.012,
+    bloom: 0.12,
+    flicker: 0.08,
+    chromaticAberration: 0.04,
+    noise: 0.1,
     pixelSize: 1,
     maskScale: 1,
     advancedLineJitter: 0,
@@ -92,10 +93,11 @@ export const PRESETS = {
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
+    maskType: "aperture",
   },
   Arcade: {
-    scanlineStrength: 0.4,
-    phosphorMask: 0.45,
+    scanlineStrength: 0.42,
+    phosphorMask: 0.5,
     barrelDistortion: -0.047,
     bloom: 0.55,
     flicker: 0.2,
@@ -123,6 +125,7 @@ export const PRESETS = {
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
+    maskType: "slot",
   },
   "Late-80s Home VHS": {
     scanlineStrength: 0.52,
@@ -503,7 +506,9 @@ export const PRESETS = {
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
     advancedNeonPhosphorBleed: 0.34,
-    maskType: "aperture",
+    // OLED panel = diamond PenTile subpixels, not a CRT aperture grille; vivid neon.
+    advancedSaturation: 1.22,
+    maskType: "oledPentile",
   },
   "Neon Sign Bloom (TikTok Style)": {
     scanlineStrength: 0.24,
@@ -651,12 +656,17 @@ export const PRESETS = {
     advancedCctvMonochrome: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
-    advancedFilmGrain: 0.44,
+    advancedFilmGrain: 0.4,
     advancedFilmDust: 0.14,
     advancedFilmScratches: 0.08,
     advancedFilmGateWeave: 0.2,
-    advancedFilmHalation: 0.62,
-    maskType: "dot",
+    advancedFilmHalation: 0.5,
+    // Technicolor's signature: dense subtractive saturation + deep blacks, with
+    // slight RGB-record registration fringing (chromaticAberration above).
+    advancedSaturation: 1.4,
+    imageContrast: 1.14,
+    imageBrightness: 0.96,
+    maskType: "none",
   },
   "Super 8 Home Reel 1970s": {
     scanlineStrength: 0.06,
@@ -680,6 +690,12 @@ export const PRESETS = {
     advancedFilmScratches: 0.28,
     advancedFilmGateWeave: 0.46,
     advancedFilmHalation: 0.4,
+    // Super-8 home reels read warm & golden (Kodachrome/Ektachrome) — add a warm
+    // cast + gentle saturation/contrast so it isn't a neutral grainy image.
+    imageTemperature: 0.2,
+    imageTint: 0.05,
+    advancedSaturation: 1.14,
+    imageContrast: 1.05,
     maskType: "filmSuper8",
   },
   "16mm Broadcast Kinescope": {
@@ -1213,6 +1229,9 @@ export const PRESETS = {
     advancedFilmScratches: 0.05,
     advancedFilmGateWeave: 0.11,
     advancedFilmHalation: 0.48,
+    // SX-70 integral film reads warm & creamy with a gentle green-tinged cast.
+    imageTemperature: 0.12,
+    imageTint: -0.04,
     maskType: "instantDyeCloud",
   },
   "Disposable Camera 35mm Flash": {
@@ -1280,7 +1299,10 @@ export const PRESETS = {
     advancedTimestampOSD: 0,
     advancedOSDStyle: 0,
     advancedCctvMonochrome: 0,
-    advancedSaturation: 1.55,
+    // Kodak Aerochrome: IR-reflective foliage renders vivid magenta/red. The
+    // false-colour remap does the hue work, so saturation stays moderate.
+    infraredFalseColor: 0.82,
+    advancedSaturation: 1.22,
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
@@ -1317,8 +1339,11 @@ export const PRESETS = {
     advancedTapeCrease: 0,
     advancedTimestampOSD: 0.48,
     advancedOSDStyle: 8,
-    advancedCctvMonochrome: 1,
+    // P43-phosphor / NightShot look: collapse to luma, then map onto the green
+    // phosphor ramp. (cctvMonochrome:1 forced pure grayscale before — no green.)
+    advancedCctvMonochrome: 0,
     advancedSaturation: 0,
+    monochromeTint: "green",
     advancedQuantization: 0.3,
     advancedGenerationLoss: 0.14,
     advancedMacroBlocking: 0.24,
@@ -1609,8 +1634,11 @@ export const PRESETS = {
     advancedTapeCrease: 0,
     advancedTimestampOSD: 0,
     advancedOSDStyle: 0,
-    advancedCctvMonochrome: 0.86,
-    advancedSaturation: 0.28,
+    // Amber monochrome terminal: collapse to luma then map onto the amber
+    // phosphor ramp (cctvMonochrome's fixed sage-green tint read wrong before).
+    advancedCctvMonochrome: 0,
+    advancedSaturation: 0,
+    monochromeTint: "amber",
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
@@ -1743,6 +1771,8 @@ export const PRESETS = {
     advancedQuantization: 0,
     advancedGenerationLoss: 0.18,
     advancedMacroBlocking: 0,
+    // Quad's signature "venetian-blind" banding from 4-head segment switching.
+    bandingHorizontal: 0.5,
     maskType: "shadowMask",
   },
   "VHS-C Camcorder (1993)": {
@@ -2226,7 +2256,9 @@ export const PRESETS = {
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
-    maskType: "aperture",
+    // RPTV projection optics blur the phosphor structure away — no crisp grille,
+    // just soft scanlines, bloom and convergence error. "none" keeps the soft bleed.
+    maskType: "none",
   },
   "LED Billboard Phone Capture": {
     scanlineStrength: 0,
@@ -2306,6 +2338,8 @@ export const PRESETS = {
     chromaBleedHorizontal: 0.31, blackLevelCrush: 0.18,
     flickerFrequencyHz: 0.42, flickerDepth: 0.22,
     phosphorPersistence: 0.18, beamSpotSizeX: 0.22, beamSpotSizeY: 0.28,
+    // Simple-PAL receiver with no delay line on a weak signal → Hanover bars.
+    hanoverBars: 0.4,
     maskType: "shadowMask",
   },
   "VHS Mold Damage (30yr Attic)": {
@@ -2343,6 +2377,9 @@ export const PRESETS = {
     printFadeCyan: 0.62, printFadeMagenta: 0.34, printFadeYellow: 0.78,
     cueMarks: 0.38, spliceFlash: 0.24,
     mediaAgeYears: 50, storageCondition: "hot",
+    // Faded release prints lose saturation and skew warm/pink as the cyan dye
+    // fades fastest (consumed grading; printFade* fields are not yet read).
+    advancedSaturation: 0.8, imageTemperature: 0.1, imageTint: 0.12,
     maskType: "none",
   },
   "8mm Kodachrome Home Movie": {
@@ -2357,6 +2394,9 @@ export const PRESETS = {
     printFadeCyan: 0.28, printFadeMagenta: 0.14, printFadeYellow: 0.52,
     vignette: 0.38, cornerSharpnessFalloff: 0.32,
     mediaAgeYears: 45, storageCondition: "ideal",
+    // Kodachrome = rich, dense saturation + golden warmth (consumed grading params;
+    // the printFade*/grainSize fields above are not yet read by the renderer).
+    advancedSaturation: 1.3, imageTemperature: 0.16, imageContrast: 1.07,
     maskType: "filmSuper8",
   },
   "YouTube 2007 Re-encode": {
@@ -2429,6 +2469,9 @@ export const PRESETS = {
     haze: 0.34, flareGhosts: 0.28, vignette: 0.12,
     advancedSaturation: 1.12,
     blackLevelCrush: 0.08, highlightRollOff: 0.14,
+    // OLED in sunlight = washed/raised blacks + reduced contrast (consumed grading;
+    // the haze/blackLevelCrush v2 fields above are not read by the renderer yet).
+    imageBrightness: 1.06, imageContrast: 0.9,
     maskType: "oledPentile",
   },
   "Trinitron Warm Glow": {
@@ -2438,6 +2481,9 @@ export const PRESETS = {
     scanlineProfile: "triadAware", subpixelLayoutOverride: "RGB",
     phosphorPersistence: 0.24, beamSpotSizeX: 0.18, beamSpotSizeY: 0.22,
     highlightRollOff: 0.12, gammaCurve: 1.18,
+    // "Warm glow" needs an actual warm cast + slightly pushed colour (consumed
+    // grading; the v2 highlightRollOff/gammaCurve fields are not read yet).
+    imageTemperature: 0.13, advancedSaturation: 1.05,
     maskType: "aperture",
   },
   "Drone Footage Jello": {

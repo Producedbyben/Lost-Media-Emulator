@@ -264,6 +264,10 @@ const Index = () => {
 
 
 
+  // Desktop (Electron) build on macOS uses a hidden-inset titlebar, so the app
+  // header must clear the traffic lights and act as the native drag region.
+  const isDesktopMac = typeof window !== 'undefined' && (window as any).desktop?.platform === 'darwin';
+
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   useEffect(() => {
     const mql = window.matchMedia('(min-width: 1024px)');
@@ -1562,19 +1566,41 @@ const Index = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0 relative">
+      {/* Top bar — doubles as the native window drag region on desktop. */}
+      <header
+        className={`flex items-center justify-between gap-3 py-2 bg-card border-b border-border shrink-0 relative ${
+          isDesktopMac ? "titlebar-drag pl-[78px] pr-4" : "px-4"
+        }`}
+      >
         <div className="header-accent absolute bottom-0 left-0 right-0" />
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 shrink-0">
           <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary/30 to-accent-glow/20 flex items-center justify-center ring-1 ring-primary/20">
             <Tv className="w-4 h-4 text-primary" />
           </div>
-          <div>
+          <div className="leading-none">
             <h1 className="text-sm font-semibold text-foreground leading-none tracking-tight">Lost Media Emulator</h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5 tracking-wide">CRT · VHS · Analog · Film · Digital degradation</p>
+            <p className="text-[11px] text-muted-foreground mt-1 tracking-wide hidden md:block">CRT · VHS · Analog · Film · Digital degradation</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+
+        {/* Program readout — fills the centre with the live look + signal format,
+            like the LED readout on a video processor. */}
+        <div className="hidden lg:flex flex-1 min-w-0 items-center justify-center px-2">
+          <div className="flex items-center gap-2 min-w-0 px-3 py-1 rounded-md bg-background/60 border border-border/70">
+            <span className={`led ${masterBypass ? "led-off" : "led-on"}`} aria-hidden />
+            <span className="text-[11px] font-medium text-foreground/90 truncate" title={activePreset || "Custom look"}>
+              {masterBypass ? "Bypassed — clean source" : (activePreset || "Custom look")}
+            </span>
+            {formatBadge && !masterBypass && (
+              <>
+                <span className="hidden xl:block w-px h-3.5 bg-border" />
+                <span className="hidden xl:block text-[10px] font-mono uppercase tracking-wider text-muted-foreground whitespace-nowrap">{formatBadge}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 titlebar-no-drag">
           {/* Master bypass toggle */}
           <button
             onClick={handleMasterBypass}
@@ -1647,11 +1673,19 @@ const Index = () => {
         </div>
       </header>
 
-      <div className="hidden lg:block px-4 py-1.5 bg-card/80 border-b border-border shrink-0">
+      <div className="hidden lg:flex items-center justify-between gap-3 px-4 py-1.5 bg-card/80 border-b border-border shrink-0">
         <WorkflowNav onJump={handleJump} panelStates={{
           presets: true, grading: gradingEnabled, masks: masksEnabled, display: displayEnabled,
           digital: digitalEnabled, film: filmEnabled, tape: tapeEnabled, osd: osdEnabled, preview: true,
         }} />
+        {/* Output status — render path the preview is running through. */}
+        <div className="hidden xl:flex items-center gap-1.5 shrink-0 px-2 py-1 rounded border border-border/70 bg-secondary/40"
+          title={gpuAvailable ? "GPU-accelerated rendering (Metal)" : "CPU rendering fallback"}>
+          <span className={`led ${gpuAvailable ? "led-on" : "led-off"}`} aria-hidden />
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-muted-foreground">
+            {rendererMode === "gpu" || gpuAvailable ? "GPU" : "CPU"}
+          </span>
+        </div>
       </div>
 
       <nav className="flex lg:hidden border-b border-border bg-card/95 glass-panel shrink-0">

@@ -488,6 +488,30 @@ export class CRTRendererFull {
     const filmGateWeave = Math.max(0, Math.min(1, Number(params.advancedFilmGateWeave) || 0));
     const filmHalation = Math.max(0, Math.min(1, Number(params.advancedFilmHalation) || 0));
     const neonPhosphorBleed = Math.max(0, Math.min(1, Number(params.advancedNeonPhosphorBleed) || 0));
+    // ---- v2 film / sensor / signal params (now consumed) ----
+    const c01 = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; };
+    const grainSize = c01(params.grainSize);
+    const grainChromaticity = c01(params.grainChromaticity);
+    const gateJitterX = c01(params.gateJitterX);
+    const gateJitterY = c01(params.gateJitterY);
+    const gateRotation = c01(params.gateRotation);
+    const shutterJudder = c01(params.shutterJudder);
+    const printFadeCyan = c01(params.printFadeCyan);
+    const printFadeMagenta = c01(params.printFadeMagenta);
+    const printFadeYellow = c01(params.printFadeYellow);
+    const blackLevelCrush = c01(params.blackLevelCrush);
+    const highlightRollOff = c01(params.highlightRollOff);
+    const haze = c01(params.haze);
+    const vignetteAmt = c01(params.vignette);
+    const infraredFalseColor = c01(params.infraredFalseColor);
+    const bandingHorizontal = c01(params.bandingHorizontal);
+    const hanoverBars = c01(params.hanoverBars);
+    // Per-frame film-gate displacement (random translation + small rotation +
+    // occasional shutter "judder" jump) — deterministic from the frame index.
+    const judderHit = shutterJudder > 0 && seededNoise(frameIndex, 3, 51) < shutterJudder * 0.5;
+    const gateOffX = (seededNoise(frameIndex, 11, 7) - 0.5) * gateJitterX * 0.03 + (judderHit ? (seededNoise(frameIndex, 5, 9) - 0.5) * 0.05 : 0);
+    const gateOffY = (seededNoise(frameIndex, 17, 13) - 0.5) * gateJitterY * 0.03 + (judderHit ? (seededNoise(frameIndex, 7, 3) - 0.5) * 0.06 : 0);
+    const gateRot = (seededNoise(frameIndex, 23, 19) - 0.5) * gateRotation * 0.05;
 
     const stutterHoldFrames = Math.floor(frameStutter * frameStutter * 6);
     const stutteredFrame = stutterHoldFrames > 0 ? frameIndex - (frameIndex % (stutterHoldFrames + 1)) : frameIndex;
@@ -507,7 +531,8 @@ export class CRTRendererFull {
       chromaDelay > 0 || crossColor > 0 || tapeCrease > 0 || filmGateWeave > 0 ||
       filmHalation > 0 || neonPhosphorBleed > 0 || bloomAmt > 0 ||
       filmGrain > 0 || filmDust > 0 || filmScratches > 0 || dropouts > 0 ||
-      interlacing > 0 || noiseAmt > 0;
+      interlacing > 0 || noiseAmt > 0 ||
+      gateJitterX > 0 || gateJitterY > 0 || gateRotation > 0 || shutterJudder > 0;
 
     if (needsPerPixel) {
     for (let y = 0; y < height; y++) {
@@ -531,8 +556,8 @@ export class CRTRendererFull {
 
         const weaveX = filmGateWeave * Math.sin(temporalSeconds * 1.7 + y * 0.013) * 0.01;
         const weaveY = filmGateWeave * Math.cos(temporalSeconds * 1.9 + x * 0.009) * 0.008;
-        const srcNx = (nx / warp) * barrelOverscan + wobble + perLineJitter + baseHeadSwitching + creaseWarp + weaveX;
-        const srcNy = (ny / warp) * barrelOverscan + weaveY;
+        const srcNx = (nx / warp) * barrelOverscan + wobble + perLineJitter + baseHeadSwitching + creaseWarp + weaveX + gateOffX + ny * gateRot;
+        const srcNy = (ny / warp) * barrelOverscan + weaveY + gateOffY - nx * gateRot;
         const u = Math.max(0, Math.min(1, srcNx * 0.5 + 0.5));
         const v = Math.max(0, Math.min(1, srcNy * 0.5 + 0.5));
 
@@ -711,10 +736,20 @@ export class CRTRendererFull {
           blueSoft += (wideB * 0.78 + wideR * 0.22) * neonMix;
         }
 
-        // Film grain only when requested, applied colorlessly (equal channels).
+        // Film grain — grainSize scales the spatial frequency (bigger grain = lower
+        // freq / chunkier), grainChromaticity adds per-channel colour speckle.
         if (filmGrain > 0) {
-          const grain = (seededNoise(x * 1.91, y * 1.37, temporalFrame * 1.3) - 0.5) * 255 * (filmGrain * 0.34);
-          redSoft += grain; greenSoft += grain; blueSoft += grain;
+          const gf = 1.91 / (1 + grainSize * 2.2); // larger grainSize → coarser grain
+          const gfy = 1.37 / (1 + grainSize * 2.2);
+          const grain = (seededNoise(x * gf, y * gfy, temporalFrame * 1.3) - 0.5) * 255 * (filmGrain * 0.34);
+          if (grainChromaticity > 0.001) {
+            const cAmt = filmGrain * grainChromaticity * 0.26 * 255;
+            redSoft += grain + (seededNoise(x * gf + 3.3, y * gfy, temporalFrame * 1.7) - 0.5) * cAmt;
+            greenSoft += grain + (seededNoise(x * gf, y * gfy + 5.1, temporalFrame * 1.9) - 0.5) * cAmt;
+            blueSoft += grain + (seededNoise(x * gf + 7.7, y * gfy + 2.2, temporalFrame * 2.3) - 0.5) * cAmt;
+          } else {
+            redSoft += grain; greenSoft += grain; blueSoft += grain;
+          }
         }
 
         const dustHit = seededNoise(x * 0.19 + temporalFrame * 0.03, y * 0.23, 83);
@@ -1241,6 +1276,50 @@ export class CRTRendererFull {
     }
 
 
+    // ---- Lens/optics vignette (independent of tube curvature) ----
+    if (vignetteAmt > 0.001) {
+      const cx = width * 0.5, cy = height * 0.5;
+      const grad = outCtx.createRadialGradient(cx, cy, Math.min(width, height) * 0.32, cx, cy, Math.max(width, height) * 0.62);
+      grad.addColorStop(0, "rgba(0,0,0,0)");
+      grad.addColorStop(1, `rgba(0,0,0,${Math.min(0.7, vignetteAmt * 0.7).toFixed(3)})`);
+      outCtx.fillStyle = grad; outCtx.fillRect(0, 0, width, height);
+    }
+
+    // ---- 2" Quadruplex "venetian-blind" banding: periodic horizontal luminance
+    // bands from the four-head segment switching, slowly drifting up the frame. ----
+    if (bandingHorizontal > 0.001) {
+      const bands = 14;
+      const bandH = height / bands;
+      const drift = (temporalSeconds * 0.5) % 1;
+      outCtx.save(); outCtx.globalCompositeOperation = "multiply";
+      for (let bi = 0; bi < bands + 1; bi++) {
+        const yy = (bi - drift) * bandH;
+        const a = bandingHorizontal * 0.24 * (0.5 + 0.5 * Math.sin(bi * 1.7));
+        outCtx.fillStyle = `rgba(0,0,0,${Math.max(0, a).toFixed(3)})`;
+        outCtx.fillRect(0, yy, width, bandH * 0.55);
+      }
+      outCtx.restore();
+    }
+
+    // ---- PAL Hanover bars: uncorrected half-line chroma phase error makes
+    // alternate scan lines drift toward complementary hues (venetian-blind colour). ----
+    if (hanoverBars > 0.001) {
+      const img = outCtx.getImageData(0, 0, width, height);
+      const d = img.data;
+      const amt = hanoverBars * 20;
+      for (let y = 0; y < height; y++) {
+        const s = (y & 1) ? 1 : -1;
+        const row = y * width * 4;
+        for (let x = 0; x < width; x++) {
+          const i = row + x * 4;
+          d[i] = Math.max(0, Math.min(255, d[i] + s * amt * 0.5));
+          d[i + 1] = Math.max(0, Math.min(255, d[i + 1] - s * amt));
+          d[i + 2] = Math.max(0, Math.min(255, d[i + 2] + s * amt * 0.5));
+        }
+      }
+      outCtx.putImageData(img, 0, 0);
+    }
+
     // OSD Overlay rendering (before grading, so it gets affected by color correction)
     this.renderOSD(outCtx, width, height, seconds, params, frameIndex, fps, renderOptions);
 
@@ -1249,6 +1328,66 @@ export class CRTRendererFull {
       outCtx.save(); outCtx.globalAlpha = 1;
       outCtx.filter = `brightness(${brightness.toFixed(3)}) contrast(${contrast.toFixed(3)})`;
       outCtx.drawImage(outCtx.canvas, 0, 0); outCtx.restore();
+    }
+
+    // ---- Film / sensor colour & tone pass (IR false-colour, print dye-fade,
+    // black crush, highlight roll-off, atmospheric haze). One gated per-pixel
+    // loop; every term is a no-op at 0 so unrelated looks are untouched. ----
+    if (infraredFalseColor > 0.001 || printFadeCyan > 0.001 || printFadeMagenta > 0.001 ||
+        printFadeYellow > 0.001 || blackLevelCrush > 0.001 || highlightRollOff > 0.001 || haze > 0.001) {
+      const image = outCtx.getImageData(0, 0, width, height);
+      const data = image.data;
+      for (let i = 0; i < data.length; i += 4) {
+        let r = data[i], g = data[i + 1], b = data[i + 2];
+        // Aerochrome IR false-colour: vegetation (green-reflective in normal RGB,
+        // strongly IR-reflective) remaps to red/magenta; reds shift to green; sky
+        // stays cool. Approximated as a partial channel rotation + magenta lift.
+        if (infraredFalseColor > 0.001) {
+          const r0 = r, g0 = g, b0 = b;
+          // Skyness vs vegetation-ness gate the remap so blue sky stays cool while
+          // green/IR-reflective foliage swings to magenta/red.
+          const sky = Math.max(0, (b0 - Math.max(r0, g0)) / 255);
+          const veg = Math.max(0, (g0 - Math.max(r0, b0)) / 255);
+          const t = infraredFalseColor * (1 - sky * 0.8);
+          const nr = g0;                  // foliage green -> red
+          const ng = r0 * 0.5 + b0 * 0.2; // original red  -> green
+          const nb = b0 * 0.85 + r0 * 0.1;
+          r = r0 * (1 - t) + nr * t + veg * infraredFalseColor * 40;
+          g = g0 * (1 - t) + ng * t;
+          b = b0 * (1 - t) + nb * t + veg * infraredFalseColor * 26 + sky * infraredFalseColor * 16;
+        }
+        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        // Atmospheric / screen haze: lift toward a mid grey, washing contrast out.
+        if (haze > 0.001) {
+          const lift = haze * 0.28;
+          r += (185 - r) * lift; g += (185 - g) * lift; b += (188 - b) * lift;
+        }
+        // Print dye-fade: each fading dye lets its complementary light through,
+        // weighted to the shadows (milky lifted blacks) — cyan→red, magenta→green,
+        // yellow→blue. Faded prints drift pink/magenta as cyan fades fastest.
+        if (printFadeCyan > 0.001 || printFadeMagenta > 0.001 || printFadeYellow > 0.001) {
+          const sh = Math.pow(1 - Math.min(1, luma / 255), 0.7); // shadow weight
+          r += printFadeCyan * (16 + sh * 26);
+          g += printFadeMagenta * (12 + sh * 20);
+          b += printFadeYellow * (16 + sh * 26);
+        }
+        // Black-level crush: deepen the darkest tones (adds shadow contrast).
+        if (blackLevelCrush > 0.001) {
+          const k = blackLevelCrush * 0.55 * Math.max(0, 1 - luma / 95);
+          r -= r * k; g -= g * k; b -= b * k;
+        }
+        // Highlight roll-off: soft-shoulder compression above a knee (film-like).
+        if (highlightRollOff > 0.001) {
+          const knee = 205, soft = 1 + highlightRollOff * 2.2;
+          if (r > knee) r = knee + (r - knee) / soft;
+          if (g > knee) g = knee + (g - knee) / soft;
+          if (b > knee) b = knee + (b - knee) / soft;
+        }
+        data[i] = Math.max(0, Math.min(255, r));
+        data[i + 1] = Math.max(0, Math.min(255, g));
+        data[i + 2] = Math.max(0, Math.min(255, b));
+      }
+      outCtx.putImageData(image, 0, 0);
     }
 
     // Saturation, gamma, temperature and tint as an authoritative per-pixel pass.
@@ -1277,6 +1416,34 @@ export class CRTRendererFull {
         data[i] = Math.max(0, Math.min(255, r)); data[i + 1] = Math.max(0, Math.min(255, g)); data[i + 2] = Math.max(0, Math.min(255, b));
       }
       outCtx.putImageData(image, 0, 0);
+    }
+
+    // ---- Monochrome phosphor tint (night-vision green, amber terminal, etc.) ----
+    // Maps each pixel's luma onto a phosphor colour ramp — the only way to get a
+    // strong, clean single-colour cast (additive temperature/tint can't suppress
+    // the off-channels enough). Default "none" leaves every other look untouched.
+    // The source should already be desaturated (advancedSaturation:0) for purity.
+    const monoTint = String(params.monochromeTint || "none");
+    if (monoTint !== "none") {
+      const TINTS = {
+        green: [0.42, 1.0, 0.30],  // P43 yellow-green image-intensifier phosphor
+        amber: [1.0, 0.72, 0.16],  // P3 amber monochrome terminal
+        blue: [0.38, 0.6, 1.0],    // blue CRT / NVG P45-ish
+        white: [1.0, 1.0, 1.0],
+      };
+      const col = TINTS[monoTint];
+      if (col) {
+        const strength = Math.max(0, Math.min(1, Number.isFinite(Number(params.monochromeTintStrength)) ? Number(params.monochromeTintStrength) : 1));
+        const image = outCtx.getImageData(0, 0, width, height);
+        const d = image.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const luma = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+          d[i] = d[i] * (1 - strength) + luma * col[0] * strength;
+          d[i + 1] = d[i + 1] * (1 - strength) + luma * col[1] * strength;
+          d[i + 2] = d[i + 2] * (1 - strength) + luma * col[2] * strength;
+        }
+        outCtx.putImageData(image, 0, 0);
+      }
     }
   }
 

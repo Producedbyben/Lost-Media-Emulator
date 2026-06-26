@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Monitor, Eye, Pause, Play, SlidersHorizontal, Cpu, Zap, Database, Loader2, X } from "lucide-react";
+import { Monitor, Eye, Pause, Play, SlidersHorizontal, Cpu, Zap, Database, Loader2, X, Lock, LockOpen } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export interface PreviewSettings {
@@ -148,13 +148,15 @@ const PreviewControls = ({
 
       <button
         onClick={() => update({ compareMode: settings.compareMode === "lock" ? "off" : "lock" })}
-        className={`px-2 py-1 rounded border transition-colors ${
+        className={`flex items-center gap-1 px-2 py-1 rounded border transition-colors ${
           settings.compareMode === "lock"
             ? "bg-primary/15 text-primary border-primary/30"
             : "bg-secondary text-muted-foreground border-border"
         }`}
       >
-        {settings.compareMode === "lock" ? "Unlock" : "Lock"}
+        {settings.compareMode === "lock"
+          ? <><LockOpen className="w-3 h-3" /><span className="font-medium">Unlock</span></>
+          : <><Lock className="w-3 h-3" /><span className="font-medium">Lock</span></>}
       </button>
 
       <div className="flex items-center gap-1 px-2 py-1 rounded border border-border bg-secondary text-muted-foreground">

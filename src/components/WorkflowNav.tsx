@@ -9,7 +9,8 @@ interface WorkflowNavProps {
 type Shortcut = { id: string; label: string; icon: LucideIcon };
 
 // Quick-jumps grouped to mirror the signal chain: the captured source, then the
-// display it's shown on. `presets` and `preview` are workflow anchors.
+// display it's shown on. `presets` and `preview` are workflow anchors that are
+// always "on" — they have no standby state.
 const GROUPS: { label: string; icon: LucideIcon; items: Shortcut[] }[] = [
   {
     label: "Capture", icon: Camera, items: [
@@ -22,7 +23,7 @@ const GROUPS: { label: string; icon: LucideIcon; items: Shortcut[] }[] = [
     ],
   },
   {
-    label: "Display", icon: MonitorPlay, items: [
+    label: "Output", icon: MonitorPlay, items: [
       { id: "display", label: "Display", icon: Tv },
       { id: "masks", label: "Masks", icon: Grid3X3 },
       { id: "preview", label: "Preview", icon: Monitor },
@@ -30,32 +31,37 @@ const GROUPS: { label: string; icon: LucideIcon; items: Shortcut[] }[] = [
   },
 ];
 
+// Anchors that are always available — no on/standby LED, just a jump.
+const ANCHORS = new Set(["presets", "preview"]);
+
 const WorkflowNav = ({ onJump, panelStates }: WorkflowNavProps) => {
   return (
-    <div className="space-y-1.5">
-      {GROUPS.map((group) => {
+    <div className="flex items-center gap-1 flex-wrap min-w-0">
+      {GROUPS.map((group, gi) => {
         const GroupIcon = group.icon;
         return (
-          <div key={group.label} className="flex flex-wrap items-center gap-1">
-            <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-primary/70 pr-1">
+          <div key={group.label} className="flex items-center gap-1">
+            {gi > 0 && <div className="w-px h-4 bg-border mx-1 self-center" />}
+            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary/60 pr-0.5 select-none">
               <GroupIcon className="w-3 h-3" />
-              {group.label}
+              <span className="hidden xl:inline">{group.label}</span>
             </span>
             {group.items.map((s) => {
-              const isEnabled = panelStates ? panelStates[s.id] !== false : true;
+              const isAnchor = ANCHORS.has(s.id);
+              const isOn = isAnchor || (panelStates ? panelStates[s.id] !== false : true);
               const Icon = s.icon;
               return (
                 <button
                   key={s.id}
                   onClick={() => onJump(s.id)}
-                  className={`flex items-center gap-1 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide rounded border transition-colors ${
-                    isEnabled
-                      ? "bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-primary/30"
-                      : "bg-secondary/50 border-border/50 text-muted-foreground/40 hover:text-muted-foreground hover:border-border"
-                  }`}
-                  title={`Jump to ${s.label}${!isEnabled ? " (disabled)" : ""}`}
+                  className="group flex items-center gap-1.5 pl-1.5 pr-2 py-1 text-[11px] font-semibold uppercase tracking-wide rounded border border-border bg-secondary/60 text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-secondary transition-colors"
+                  title={isAnchor ? `Jump to ${s.label}` : `Jump to ${s.label} — ${isOn ? "active" : "standby (click to edit)"}`}
                 >
-                  <Icon className={`w-3 h-3 ${isEnabled ? "opacity-80" : "opacity-30"}`} />
+                  {isAnchor ? (
+                    <Icon className="w-3 h-3 opacity-70 group-hover:opacity-100" />
+                  ) : (
+                    <span className={`led ${isOn ? "led-on" : "led-off"}`} aria-hidden />
+                  )}
                   {s.label}
                 </button>
               );
