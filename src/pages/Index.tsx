@@ -1574,8 +1574,8 @@ const Index = () => {
       >
         <div className="header-accent absolute bottom-0 left-0 right-0" />
         <div className="flex items-center gap-2.5 shrink-0">
-          <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary/30 to-accent-glow/20 flex items-center justify-center ring-1 ring-primary/20">
-            <Tv className="w-4 h-4 text-primary" />
+          <div className="w-7 h-7 rounded-[3px] bg-surface-2 flex items-center justify-center border border-border">
+            <Tv className="w-4 h-4 text-foreground/80" />
           </div>
           <div className="leading-none">
             <h1 className="text-sm font-semibold text-foreground leading-none tracking-tight">Lost Media Emulator</h1>
@@ -1583,18 +1583,23 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Program readout — fills the centre with the live look + signal format,
-            like the LED readout on a video processor. */}
+        {/* Program readout — the signature. A recessed instrument panel reporting
+            the live output as phosphor-green monospace, the way a broadcast
+            processor reports its signal. The signal LED lights green when a look
+            is passing through, dark when bypassed to clean source. */}
         <div className="hidden lg:flex flex-1 min-w-0 items-center justify-center px-2">
-          <div className="flex items-center gap-2 min-w-0 px-3 py-1 rounded-md bg-background/60 border border-border/70">
+          <div className="readout flex items-center gap-2.5 min-w-0 px-3 py-1">
             <span className={`led ${masterBypass ? "led-off" : "led-on"}`} aria-hidden />
-            <span className="text-[11px] font-medium text-foreground/90 truncate" title={activePreset || "Custom look"}>
-              {masterBypass ? "Bypassed — clean source" : (activePreset || "Custom look")}
+            <span
+              className={`text-[11px] font-mono uppercase tracking-wide truncate ${masterBypass ? "signal-dim" : "signal-text"}`}
+              title={activePreset || "Custom look"}
+            >
+              {masterBypass ? "BYPASS · CLEAN SOURCE" : (activePreset || "CUSTOM LOOK")}
             </span>
             {formatBadge && !masterBypass && (
               <>
                 <span className="hidden xl:block w-px h-3.5 bg-border" />
-                <span className="hidden xl:block text-[10px] font-mono uppercase tracking-wider text-muted-foreground whitespace-nowrap">{formatBadge}</span>
+                <span className="hidden xl:block text-[10px] font-mono uppercase tracking-wider signal-dim whitespace-nowrap">{formatBadge}</span>
               </>
             )}
           </div>
@@ -1606,7 +1611,7 @@ const Index = () => {
             onClick={handleMasterBypass}
             className={`flex items-center gap-1 px-2 py-1 rounded-md text-[12px] font-medium border transition-all ${
               masterBypass
-                ? "bg-destructive/15 border-destructive/30 text-destructive shadow-sm shadow-destructive/10"
+                ? "bg-destructive/15 border-destructive/40 text-destructive"
                 : "bg-secondary border-border text-muted-foreground hover:text-foreground"
             }`}
             title="Bypass all effects (show clean source)"
@@ -1620,7 +1625,7 @@ const Index = () => {
             onClick={() => setAbSplitEnabled(!abSplitEnabled)}
             className={`flex items-center gap-1 px-2 py-1 rounded-md text-[12px] font-medium border transition-all ${
               abSplitEnabled
-                ? "bg-primary/15 border-primary/30 text-primary shadow-sm shadow-primary/10"
+                ? "bg-primary/15 border-primary/40 text-primary"
                 : "bg-secondary border-border text-muted-foreground hover:text-foreground"
             }`}
             title="Toggle A/B split comparison"
@@ -1630,7 +1635,7 @@ const Index = () => {
           </button>
           <div className="relative group">
             <button onClick={() => setExportDialogOpen(true)} disabled={!hasImage}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[12px] font-medium hover:bg-primary/90 disabled:opacity-40 transition-all shadow-sm shadow-primary/20">
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[12px] font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors">
               <Download className="w-3 h-3" />Export
             </button>
             {!hasImage && (
@@ -1937,7 +1942,7 @@ const Index = () => {
           </span>
           <span className="text-border">|</span>
           <span
-            className={`flex items-center gap-1 ${formatPipelineEnabled ? "text-primary" : "opacity-50 line-through"}`}
+            className={`flex items-center gap-1 ${formatPipelineEnabled ? "signal-text" : "opacity-50 line-through"}`}
             title={formatPipelineEnabled
               ? `Format pipeline active — ${activeFormatProfile?.dossier?.medium || ""}`
               : "Format pipeline off"}

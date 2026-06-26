@@ -25,3 +25,7 @@ dist-ssr
 
 # Electron packaged output
 release
+
+# Build caches & local tooling config
+.vite
+.claude

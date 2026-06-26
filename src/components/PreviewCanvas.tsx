@@ -288,15 +288,15 @@ const PreviewCanvas = ({
       )}
 
       {!hasImage && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-surface-0/90 px-4">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center border-2 border-border shadow-lg">
-            <Upload className="w-9 h-9 text-foreground/80" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-surface-0/95 px-4">
+          <div className="w-16 h-16 rounded-[4px] bg-surface-1 flex items-center justify-center border border-border">
+            <Upload className="w-7 h-7 text-muted-foreground" strokeWidth={1.5} />
           </div>
-          <div className="text-center space-y-2">
-            <p className="text-base font-semibold text-foreground">Drop an image or video here</p>
-            <p className="text-sm text-muted-foreground">or paste from clipboard · Ctrl+V</p>
+          <div className="text-center space-y-1.5">
+            <p className="text-sm font-medium text-foreground">Drop an image or video to load a source</p>
+            <p className="text-[12px] text-muted-foreground font-mono">or paste from clipboard · ⌘V</p>
           </div>
-          <label className="px-5 py-2.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg cursor-pointer hover:bg-primary/90 transition-all shadow-md hover:shadow-lg accent-glow">
+          <label className="px-4 py-2 text-[13px] font-medium bg-primary text-primary-foreground rounded-[3px] cursor-pointer hover:bg-primary/90 transition-colors">
             Browse files
             <input
               type="file"

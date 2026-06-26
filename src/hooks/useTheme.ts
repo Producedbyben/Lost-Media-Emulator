@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 
-export type ThemeName = "midnight" | "graphite" | "classic" | "dusk" | "forest" | "amber" | "daylight" | "paper";
+export type ThemeName = "studio" | "midnight" | "graphite" | "classic" | "dusk" | "forest" | "amber" | "daylight" | "paper";
 export type DensityMode = "comfortable" | "compact";
 
 const THEMES: { value: ThemeName; label: string }[] = [
+  { value: "studio", label: "Studio" },
   { value: "midnight", label: "Midnight" },
   { value: "graphite", label: "Graphite" },
   { value: "classic", label: "Classic" },
@@ -18,7 +19,7 @@ export { THEMES };
 
 export function useTheme() {
   const [theme, setThemeState] = useState<ThemeName>(() => {
-    return (localStorage.getItem("lme-theme") as ThemeName) || "midnight";
+    return (localStorage.getItem("lme-theme") as ThemeName) || "studio";
   });
   const [density, setDensityState] = useState<DensityMode>(() => {
     return (localStorage.getItem("lme-density") as DensityMode) || "comfortable";
