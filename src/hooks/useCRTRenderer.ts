@@ -1367,10 +1367,29 @@ export function useCRTRenderer() {
   const handleExportStill = useCallback((options?: { aspectRatio?: string; fileName?: string }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Honour the chosen aspect ratio by centre-cropping the frame to it (the
+    // still previously ignored it and always exported the source ratio).
+    let target: HTMLCanvasElement = canvas;
+    const ar = options?.aspectRatio;
+    if (ar && ar !== "original" && /^\d+:\d+$/.test(ar)) {
+      const [aw, ah] = ar.split(":").map(Number);
+      const wantAR = aw / ah;
+      const sw = canvas.width, sh = canvas.height;
+      let cw = sw, ch = sh;
+      if (sw / sh > wantAR) cw = Math.round(sh * wantAR); // too wide → trim sides
+      else ch = Math.round(sw / wantAR);                  // too tall → trim top/bottom
+      const sx = Math.round((sw - cw) / 2), sy = Math.round((sh - ch) / 2);
+      const cropped = document.createElement("canvas");
+      cropped.width = cw; cropped.height = ch;
+      cropped.getContext("2d")!.drawImage(canvas, sx, sy, cw, ch, 0, 0, cw, ch);
+      target = cropped;
+    }
+
     // Route through the same Save dialog as video/GIF so a still also gets a
     // chosen name + destination (and reveals in Finder on desktop), instead of
     // a silent data-URL download to ~/Downloads.
-    canvas.toBlob((blob) => {
+    target.toBlob((blob) => {
       if (!blob) return;
       void saveBlob(blob, options?.fileName || `crt-still-${Date.now()}.png`, {
         mimeType: "image/png", extension: "png", description: "PNG image",

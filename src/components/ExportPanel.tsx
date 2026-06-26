@@ -100,6 +100,15 @@ const CODEC_TIERS: { value: ExportCodec; label: string; ext: string; desktopOnly
   { value: "gif", label: "GIF", ext: "gif", desktopOnly: false, hint: "Quick share" },
 ];
 
+// One-click delivery presets: set codec, resolution, and aspect in a single tap.
+// `desktopOnly` (Master/ProRes) is dimmed on the web build. resolution 0 = source.
+const DELIVERY_PRESETS: { value: string; label: string; codec: ExportCodec; resolution: number; aspectRatio: string; desktopOnly: boolean; hint: string }[] = [
+  { value: "web", label: "Web", codec: "h264", resolution: 1080, aspectRatio: "original", desktopOnly: false, hint: "H.264 · 1080p" },
+  { value: "social", label: "Social", codec: "h264", resolution: 1080, aspectRatio: "9:16", desktopOnly: false, hint: "H.264 · 9:16 1080p" },
+  { value: "master", label: "Master", codec: "prores422", resolution: 0, aspectRatio: "original", desktopOnly: true, hint: "ProRes 422 HQ · source res" },
+  { value: "gif", label: "GIF", codec: "gif", resolution: 0, aspectRatio: "original", desktopOnly: false, hint: "Quick share" },
+];
+
 const ExportPanel = ({
   hasImage, isVideo, sourceHasAudio, onExportMp4, onExportStill, onExportGif,
   onCancelExport, isExporting, exportProgress, currentParams,
@@ -145,6 +154,10 @@ const ExportPanel = ({
   // ffmpeg-only tiers can't run on the web build; the queue uses the WebCodecs
   // engine, so it only accepts H.264 and GIF.
   const queueable = codec === "h264" || codec === "gif";
+  // Which delivery preset (if any) the current settings match — for the highlight.
+  const activePreset = DELIVERY_PRESETS.find(
+    (p) => p.codec === codec && p.resolution === resolution && p.aspectRatio === aspectRatio,
+  )?.value;
 
   // Honest audio state. On desktop we know from the probe whether the source has
   // a track; on web we can't, so we assume it might and let the encoder decide.
@@ -256,6 +269,32 @@ const ExportPanel = ({
             ? "Pick the folder in the save dialog — the file reveals in Finder when it's done."
             : "Choose where to save in your browser's save dialog (otherwise it goes to Downloads)."}
         </p>
+      </div>
+
+      {/* Delivery presets — one tap sets codec + resolution + aspect. */}
+      <div className="space-y-1">
+        <span className="text-xs text-muted-foreground">Preset</span>
+        <div className="flex flex-wrap gap-1">
+          {DELIVERY_PRESETS.map((p) => {
+            const disabled = p.desktopOnly && !isDesktop;
+            const active = activePreset === p.value;
+            return (
+              <button key={p.value}
+                onClick={() => { if (disabled) return; setCodec(p.codec); setResolution(p.resolution); setAspectRatio(p.aspectRatio); }}
+                disabled={disabled}
+                title={disabled ? `${p.label} — desktop app only` : p.hint}
+                className={`px-2.5 py-0.5 text-[12px] rounded border transition-colors ${
+                  active
+                    ? "bg-primary/15 border-primary/30 text-primary"
+                    : disabled
+                      ? "bg-secondary/40 border-border/60 text-muted-foreground/40 cursor-not-allowed"
+                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                }`}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Source info badge */}
