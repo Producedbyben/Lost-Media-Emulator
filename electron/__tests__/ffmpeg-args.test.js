@@ -19,6 +19,8 @@ describe("buildVideoArgs", () => {
     const a = buildVideoArgs({ ...base, codec: "hevc" });
     expect(a).toContain("hevc_videotoolbox");
     expect(a.join(" ")).toContain("-tag:v hvc1");
+    expect(a.join(" ")).toContain("-framerate 30");
+    expect(a[a.length - 1]).toBe("/t/out.mp4");
   });
 
   it("throws on an unknown codec", () => {
