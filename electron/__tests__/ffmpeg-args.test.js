@@ -26,4 +26,24 @@ describe("buildVideoArgs", () => {
   it("throws on an unknown codec", () => {
     expect(() => buildVideoArgs({ ...base, codec: "wat" })).toThrow(/unsupported codec/i);
   });
+
+  it("adds a second input and AAC mux when audioSourcePath is given", () => {
+    const a = buildVideoArgs({ ...base, codec: "h264", audioSourcePath: "/src/clip.mov" });
+    const j = a.join(" ");
+    expect(j).toContain("-i /t/frame_%06d.png");   // video input 0
+    expect(j).toContain("-i /src/clip.mov");        // audio input 1
+    expect(j).toContain("-map 0:v:0");
+    expect(j).toContain("-map 1:a:0?");             // optional → never fails if no track
+    expect(j).toContain("-c:a aac");
+    expect(j).toContain("-b:a 192k");
+    expect(j).toContain("-shortest");
+    expect(a[a.length - 1]).toBe("/t/out.mp4");      // output still last
+  });
+
+  it("omits all audio args when no audioSourcePath", () => {
+    const j = buildVideoArgs({ ...base, codec: "h264" }).join(" ");
+    expect(j).not.toContain("-c:a");
+    expect(j).not.toContain(":a:0");
+    expect(j).not.toContain("-shortest");
+  });
 });

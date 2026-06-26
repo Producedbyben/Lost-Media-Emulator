@@ -111,14 +111,14 @@ ipcMain.handle("ffmpeg:frame", (_e, { sessionId, index, bytes }) => {
   return { ok: true };
 });
 
-ipcMain.handle("ffmpeg:encode", async (e, { sessionId, codec, outPath }) => {
+ipcMain.handle("ffmpeg:encode", async (e, { sessionId, codec, outPath, audioSourcePath }) => {
   const session = ffmpegSessions.get(sessionId);
   if (!session) throw new Error("unknown ffmpeg session");
   const { ffmpeg } = locate();
   if (!ffmpeg) throw new Error("ffmpeg binary not found");
   try {
     await session.encode({
-      ffmpegPath: ffmpeg, codec, outPath,
+      ffmpegPath: ffmpeg, codec, outPath, audioSourcePath,
       onProgress: (p) => e.sender.send("ffmpeg:progress", { sessionId, ...p }),
     });
     shell.showItemInFolder(outPath);
@@ -143,6 +143,22 @@ ipcMain.handle("ffmpeg:save-dialog", async (_e, { defaultName }) => {
     filters: [{ name: "Video", extensions: ["mp4", "mov"] }, { name: "All Files", extensions: ["*"] }],
   });
   return result.canceled ? null : result.filePath;
+});
+
+// Honest audio availability: does this source file actually carry an audio
+// track? Lets the UI enable/disable the "Original audio" option with a real
+// reason instead of silently producing a silent file.
+ipcMain.handle("ffmpeg:probe-audio", async (_e, { sourcePath }) => {
+  const { ffprobe } = locate();
+  if (!ffprobe || !sourcePath) return { hasAudio: false, probed: false };
+  const { execFile } = require("child_process");
+  return new Promise((resolve) => {
+    execFile(
+      ffprobe,
+      ["-v", "quiet", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", sourcePath],
+      (err, stdout) => resolve({ hasAudio: !err && stdout.trim().length > 0, probed: true }),
+    );
+  });
 });
 
 function buildMenu() {

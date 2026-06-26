@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type } from "lucide-react";
+import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX } from "lucide-react";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
 import { ensureFilename } from "@/lib/save-file.js";
 import type { CRTParams } from "@/hooks/useCRTRenderer";
@@ -21,7 +21,9 @@ interface ValidationReport {
 interface ExportPanelProps {
   hasImage: boolean;
   isVideo?: boolean;
-  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string }) => void;
+  // True only when the loaded source actually carries an audio track (desktop).
+  sourceHasAudio?: boolean;
+  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string; audioMode?: "off" | "original" }) => void;
   onExportStill: (options?: { aspectRatio?: string; fileName?: string }) => void;
   onExportGif?: (fps: number, duration: number, fileName?: string) => void;
   onCancelExport?: () => void;
@@ -88,7 +90,7 @@ const LUT_SIZE_OPTIONS = [
 type ExportFormat = "mp4" | "webm" | "gif";
 
 const ExportPanel = ({
-  hasImage, isVideo, onExportMp4, onExportStill, onExportGif,
+  hasImage, isVideo, sourceHasAudio, onExportMp4, onExportStill, onExportGif,
   onCancelExport, isExporting, exportProgress, currentParams,
   onValidateExport, validation,
   videoFPS, videoDuration, videoWidth, videoHeight,
@@ -101,8 +103,9 @@ const ExportPanel = ({
   const [quality, setQuality] = useState(1);
   const [format, setFormat] = useState<ExportFormat>("mp4");
   const [renderQuality, setRenderQuality] = useState(0);
-  const [includeAudio, setIncludeAudio] = useState(false);
-  const [degradeAudio, setDegradeAudio] = useState(true);
+  // Keep the source's original audio. On by default for video; the engine mutes
+  // it for image sources and when the source has no audio track.
+  const [audioOn, setAudioOn] = useState(true);
   const [aspectRatio, setAspectRatio] = useState("original");
   const [frameMode, setFrameMode] = useState("none");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -125,6 +128,17 @@ const ExportPanel = ({
   const effectiveBase = fileName.trim() || defaultBase;
   const stillExt = "png";
   const videoExt = format; // mp4 | webm | gif
+
+  // Honest audio state. On desktop we know from the probe whether the source has
+  // a track; on web we can't, so we assume it might and let the encoder decide.
+  const audioUnavailableReason = !isVideo
+    ? "Audio applies to video sources"
+    : isDesktop && !sourceHasAudio
+      ? "This source has no audio track"
+      : null;
+  const audioControllable = isVideo && !audioUnavailableReason;
+  const effectiveAudioOn = audioControllable && audioOn;
+  const audioMode: "off" | "original" = effectiveAudioOn ? "original" : "off";
 
   const runValidation = async () => {
     if (!onValidateExport) return;
@@ -150,8 +164,7 @@ const ExportPanel = ({
         resolution,
         quality,
         aspectRatio: ar,
-        includeAudio: isVideo && includeAudio ? true : undefined,
-        degradeAudio: isVideo && includeAudio && degradeAudio ? true : undefined,
+        includeAudio: effectiveAudioOn ? true : undefined,
       },
     });
   };
@@ -322,6 +335,43 @@ const ExportPanel = ({
         )}
       </div>
 
+      {/* Audio — keep the source's original track. On desktop ffmpeg muxes it
+          straight from the source file; honest about when it can't. */}
+      {isVideo && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <Volume2 className="w-3 h-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Audio</span>
+          </div>
+          {audioControllable ? (
+            <>
+              <div className="flex gap-1">
+                {([["original", "Original", Volume2], ["off", "Muted", VolumeX]] as const).map(([val, label, Icon]) => {
+                  const active = (val === "original") === audioOn;
+                  return (
+                    <button key={val} onClick={() => setAudioOn(val === "original")}
+                      className={`flex items-center gap-1 px-2 py-0.5 text-[12px] rounded border transition-colors ${
+                        active
+                          ? "bg-primary/15 border-primary/30 text-primary"
+                          : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+                      }`}>
+                      <Icon className="w-3 h-3" /> {label}
+                    </button>
+                  );
+                })}
+              </div>
+              {audioOn && !isDesktop && (
+                <p className="text-[11px] text-muted-foreground">Muxed where the browser supports it — the desktop app guarantees it.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <VolumeX className="w-3 h-3 shrink-0" /> {audioUnavailableReason}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Advanced toggle */}
       <button onClick={() => setShowAdvanced(!showAdvanced)}
         className="text-[12px] text-muted-foreground hover:text-foreground transition-colors underline">
@@ -368,23 +418,6 @@ const ExportPanel = ({
               ))}
             </div>
           </div>
-
-          {isVideo && (
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <input type="checkbox" checked={includeAudio} onChange={(e) => setIncludeAudio(e.target.checked)}
-                  className="rounded border-border" />
-                Include original audio
-              </label>
-              {includeAudio && (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground pl-5">
-                  <input type="checkbox" checked={degradeAudio} onChange={(e) => setDegradeAudio(e.target.checked)}
-                    className="rounded border-border" />
-                  Degrade audio to match preset
-                </label>
-              )}
-            </div>
-          )}
 
         </div>
       )}
@@ -433,7 +466,7 @@ const ExportPanel = ({
         ) : (
           <div className="relative flex-1 group">
             <button
-              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: isVideo && includeAudio ? true : undefined, degradeAudio: isVideo && includeAudio && degradeAudio ? true : undefined, format, fileName: ensureFilename(effectiveBase, videoExt, "lme-export") })}
+              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: effectiveAudioOn ? true : undefined, format, audioMode, fileName: ensureFilename(effectiveBase, videoExt, "lme-export") })}
               disabled={!hasImage || isExporting}
               className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
               {format === "mp4" ? <Film className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}

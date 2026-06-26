@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   // Native Save panel returning the chosen absolute path (or null if cancelled).
   saveDialog: (opts) => ipcRenderer.invoke("ffmpeg:save-dialog", opts),
+  // Whether a source file carries an audio track (honest "Original audio" state).
+  probeAudio: (opts) => ipcRenderer.invoke("ffmpeg:probe-audio", opts),
   ffmpeg: {
     available: () => ipcRenderer.invoke("ffmpeg:available"),
     begin: (opts) => ipcRenderer.invoke("ffmpeg:begin", opts),

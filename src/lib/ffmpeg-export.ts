@@ -13,7 +13,7 @@ interface FfmpegBridge {
   available: () => Promise<boolean>;
   begin: (o: { width: number; height: number; fps: number }) => Promise<{ sessionId: string }>;
   frame: (o: { sessionId: string; index: number; bytes: ArrayBuffer }) => Promise<{ ok: boolean }>;
-  encode: (o: { sessionId: string; codec: string; outPath: string }) => Promise<{ ok: boolean; outPath: string }>;
+  encode: (o: { sessionId: string; codec: string; outPath: string; audioSourcePath?: string }) => Promise<{ ok: boolean; outPath: string }>;
   cancel: (o: { sessionId: string }) => Promise<void>;
   onProgress: (cb: (d: { sessionId: string; frame: number; totalFrames: number }) => void) => () => void;
 }
@@ -51,6 +51,7 @@ export async function exportViaFfmpeg(opts: {
   duration: number;
   codec: "h264" | "hevc";
   outPath: string;
+  audioSourcePath?: string;
   videoElement?: HTMLVideoElement | null;
   sourceScale?: number;
   renderOptions?: unknown;
@@ -90,7 +91,7 @@ export async function exportViaFfmpeg(opts: {
       await b.frame({ sessionId, index: frame, bytes });
       opts.onProgress?.((frame + 1) / totalFrames * 0.9); // reserve last 10% for encode
     }
-    const res = await b.encode({ sessionId, codec, outPath });
+    const res = await b.encode({ sessionId, codec, outPath, audioSourcePath: opts.audioSourcePath });
     opts.onProgress?.(1);
     return { outPath: res.outPath };
   } catch (err) {

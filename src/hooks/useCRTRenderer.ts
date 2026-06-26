@@ -360,6 +360,9 @@ export function useCRTRenderer() {
   // Tracks the currently held object URL so we can revoke it when a new file is
   // loaded (prevents a blob-URL memory leak across many imports).
   const objectUrlRef = useRef<string | null>(null);
+  // Real on-disk path of the loaded source (desktop only), so ffmpeg can mux the
+  // original audio track directly. Null for the web build or pasted/sample input.
+  const sourcePathRef = useRef<string | null>(null);
   const exportControllerRef = useRef<AbortController | null>(null);
   const panCenterRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const sourceDimsRef = useRef<{ w: number; h: number } | null>(null);
@@ -401,6 +404,9 @@ export function useCRTRenderer() {
   const [ramPreview, setRamPreview] = useState<{ status: "idle" | "building" | "ready"; progress: number; frames: number }>({ status: "idle", progress: 0, frames: 0 });
   const [validation, setValidation] = useState<any>(null);
   const [sourceInfo, setSourceInfo] = useState<SourceInfo | null>(null);
+  // Honest audio availability for the loaded source: true only on desktop when
+  // ffprobe confirms the source file actually carries an audio track.
+  const [sourceHasAudio, setSourceHasAudio] = useState(false);
 
   // Create renderer ONCE as a stable ref
   const rendererRef = useRef<any>(null);
@@ -961,6 +967,25 @@ export function useCRTRenderer() {
       const sourceScale = previewSettingsRef.current.sourceScale;
       invalidateRamCache();
 
+      // Capture the real file path (desktop) so the ffmpeg exporter can mux the
+      // source's original audio. Falls back to null on web / non-File inputs.
+      const desktopApi = (window as unknown as {
+        desktop?: {
+          getPathForFile?: (f: File) => string | null;
+          probeAudio?: (o: { sourcePath: string }) => Promise<{ hasAudio: boolean }>;
+        };
+      }).desktop;
+      sourcePathRef.current = (isVid && desktopApi?.getPathForFile) ? (desktopApi.getPathForFile(file) || null) : null;
+      // Probe whether the source carries an audio track so the export UI can show
+      // an honest "Original audio" state instead of silently producing silence.
+      setSourceHasAudio(false);
+      if (sourcePathRef.current && desktopApi?.probeAudio) {
+        const sp = sourcePathRef.current;
+        desktopApi.probeAudio({ sourcePath: sp })
+          .then((r) => setSourceHasAudio(!!r?.hasAudio))
+          .catch(() => setSourceHasAudio(false));
+      }
+
       // Cleanup previous video + release any held object URL (avoids leaks).
       if (videoElementRef.current) {
         videoElementRef.current.pause();
@@ -1227,6 +1252,7 @@ export function useCRTRenderer() {
     aspectRatio?: string;
     format?: "mp4" | "webm";
     fileName?: string;
+    audioMode?: "off" | "original" | "degrade";
   }) => {
     const canvas = canvasRef.current;
     if (!canvas || !rendererRef.current) return;
@@ -1249,10 +1275,16 @@ export function useCRTRenderer() {
         const desktopApi = (window as unknown as { desktop?: { saveDialog?: (o: { defaultName: string }) => Promise<string | null> } }).desktop;
         const outPath = await desktopApi?.saveDialog?.({ defaultName: options?.fileName || "export.mp4" });
         if (outPath) {
+          // Mux the source's original audio when the user kept audio on and the
+          // source is a video with a real path. (Degrade-to-match arrives in a
+          // later phase; until then it behaves as original.)
+          const wantsAudio = options?.audioMode !== "off";
+          const audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
+            ? sourcePathRef.current : undefined;
           await exportViaFfmpeg({
             canvas, renderer: rendererRef.current,
             params: paramsRef.current, fps: Math.max(1, fps), duration: Math.max(0.5, duration),
-            codec: "h264", outPath,
+            codec: "h264", outPath, audioSourcePath,
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
             sourceScale: previewSettingsRef.current.sourceScale,
             renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
@@ -1561,6 +1593,7 @@ export function useCRTRenderer() {
     containerRef,
     hasImage,
     isVideo,
+    sourceHasAudio,
     videoDuration,
     videoCurrentTime,
     videoPlaying,
