@@ -51,6 +51,9 @@ module.exports = {
     ? [
         { from: "build/vendor/ffmpeg", to: "ffmpeg" },
         { from: "build/vendor/ffprobe", to: "ffprobe" },
+        // LGPL compliance: ship the license + credits alongside the binary.
+        { from: "build/vendor/FFMPEG-COPYING.LGPLv2.1.txt", to: "FFMPEG-COPYING.LGPLv2.1.txt" },
+        { from: "build/vendor/FFMPEG-CREDITS.txt", to: "FFMPEG-CREDITS.txt" },
       ]
     : [],
   mac: {

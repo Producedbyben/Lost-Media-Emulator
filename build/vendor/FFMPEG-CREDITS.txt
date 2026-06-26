@@ -1,0 +1,10 @@
+This application bundles FFmpeg (ffmpeg, ffprobe) to encode exports.
+
+FFmpeg version: 7.1
+License: GNU Lesser General Public License (LGPL) version 2.1 or later
+Build: unmodified upstream source, configured with --disable-gpl --disable-nonfree
+       (no GPL components such as x264/x265 are included).
+Source code: https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+
+The full LGPL v2.1 license text is in FFMPEG-COPYING.LGPLv2.1.txt.
