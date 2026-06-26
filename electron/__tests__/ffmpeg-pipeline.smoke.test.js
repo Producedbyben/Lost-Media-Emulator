@@ -65,4 +65,47 @@ describe.skipIf(!ffmpeg || !ffprobe)("ffmpeg pipeline smoke", () => {
       fs.rmSync(out, { force: true });
     }, 30000);
   }
+
+  it("encodes a ProRes 422 HQ .mov a real NLE can read", async () => {
+    const session = createSession({ width: 64, height: 64, fps: 10, tmpRoot: os.tmpdir() });
+    for (let i = 0; i < 10; i++) session.writeFrame(i, FRAME);
+    const out = path.join(os.tmpdir(), "lme-smoke-prores.mov");
+    await session.encode({ ffmpegPath: ffmpeg, codec: "prores422", outPath: out });
+    session.cleanup();
+
+    const probe = JSON.parse(execFileSync(ffprobe, [
+      "-v", "quiet", "-print_format", "json", "-show_streams", out,
+    ]).toString());
+    const v = probe.streams.find((s) => s.codec_type === "video");
+    expect(v.codec_name).toBe("prores");
+    expect(v.profile).toMatch(/HQ/);
+    fs.rmSync(out, { force: true });
+  }, 30000);
+
+  it("muxes the source's original audio track into the encoded mp4", () => {
+    // A 1s source clip that actually carries an audio track (sine tone).
+    const src = path.join(os.tmpdir(), "lme-smoke-src.mp4");
+    execFileSync(ffmpeg, [
+      "-y",
+      "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+      "-c:v", "h264_videotoolbox", "-c:a", "aac", "-shortest", src,
+    ]);
+
+    const session = createSession({ width: 64, height: 64, fps: 10, tmpRoot: os.tmpdir() });
+    for (let i = 0; i < 10; i++) session.writeFrame(i, FRAME);
+    const out = path.join(os.tmpdir(), "lme-smoke-audio.mp4");
+    return session.encode({ ffmpegPath: ffmpeg, codec: "h264", outPath: out, audioSourcePath: src })
+      .then(() => {
+        session.cleanup();
+        const probe = JSON.parse(execFileSync(ffprobe, [
+          "-v", "quiet", "-print_format", "json", "-show_streams", out,
+        ]).toString());
+        const a = probe.streams.find((s) => s.codec_type === "audio");
+        expect(a).toBeTruthy();
+        expect(a.codec_name).toBe("aac");
+        fs.rmSync(out, { force: true });
+        fs.rmSync(src, { force: true });
+      });
+  }, 30000);
 });

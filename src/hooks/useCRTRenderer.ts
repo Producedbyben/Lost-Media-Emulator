@@ -1253,6 +1253,7 @@ export function useCRTRenderer() {
     format?: "mp4" | "webm";
     fileName?: string;
     audioMode?: "off" | "original" | "degrade";
+    codec?: "h264" | "hevc" | "prores422" | "prores4444";
   }) => {
     const canvas = canvasRef.current;
     if (!canvas || !rendererRef.current) return;
@@ -1284,7 +1285,7 @@ export function useCRTRenderer() {
           await exportViaFfmpeg({
             canvas, renderer: rendererRef.current,
             params: paramsRef.current, fps: Math.max(1, fps), duration: Math.max(0.5, duration),
-            codec: "h264", outPath, audioSourcePath,
+            codec: options?.codec || "h264", outPath, audioSourcePath,
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
             sourceScale: previewSettingsRef.current.sourceScale,
             renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },

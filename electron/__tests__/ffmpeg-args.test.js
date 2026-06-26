@@ -46,4 +46,29 @@ describe("buildVideoArgs", () => {
     expect(j).not.toContain(":a:0");
     expect(j).not.toContain("-shortest");
   });
+
+  it("builds a ProRes 422 HQ .mov (editorial master, no faststart)", () => {
+    const a = buildVideoArgs({ ...base, codec: "prores422", outPath: "/t/out.mov" });
+    const j = a.join(" ");
+    expect(j).toContain("prores_ks");
+    expect(j).toContain("-profile:v 3");
+    expect(j).toContain("yuv422p10le");
+    expect(j).not.toContain("+faststart");   // a master is for editing, not streaming
+    expect(j).not.toContain("-b:v");          // ProRes is profile-driven, not bitrate
+    expect(a[a.length - 1]).toBe("/t/out.mov");
+  });
+
+  it("builds ProRes 4444", () => {
+    const j = buildVideoArgs({ ...base, codec: "prores4444", outPath: "/t/o.mov" }).join(" ");
+    expect(j).toContain("-profile:v 4");
+    expect(j).toContain("yuv444p10le");
+  });
+
+  it("uses PCM audio for a ProRes mov, AAC for mp4", () => {
+    const prores = buildVideoArgs({ ...base, codec: "prores422", outPath: "/t/o.mov", audioSourcePath: "/s.mov" }).join(" ");
+    expect(prores).toContain("-c:a pcm_s16le");
+    expect(prores).not.toContain("aac");
+    const mp4 = buildVideoArgs({ ...base, codec: "h264", audioSourcePath: "/s.mov" }).join(" ");
+    expect(mp4).toContain("-c:a aac");
+  });
 });

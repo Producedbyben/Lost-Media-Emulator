@@ -49,7 +49,7 @@ export async function exportViaFfmpeg(opts: {
   params: unknown;
   fps: number;
   duration: number;
-  codec: "h264" | "hevc";
+  codec: "h264" | "hevc" | "prores422" | "prores4444";
   outPath: string;
   audioSourcePath?: string;
   videoElement?: HTMLVideoElement | null;
