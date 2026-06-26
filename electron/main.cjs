@@ -134,6 +134,17 @@ ipcMain.handle("ffmpeg:cancel", (_e, { sessionId }) => {
   if (session) { session.cancel(); session.cleanup(); ffmpegSessions.delete(sessionId); }
 });
 
+// ffmpeg writes the file itself, so the renderer needs a real destination path
+// before encoding. Return the chosen absolute path (or null if cancelled).
+ipcMain.handle("ffmpeg:save-dialog", async (_e, { defaultName }) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Export",
+    defaultPath: path.join(app.getPath("downloads"), defaultName || "export.mp4"),
+    filters: [{ name: "Video", extensions: ["mp4", "mov"] }, { name: "All Files", extensions: ["*"] }],
+  });
+  return result.canceled ? null : result.filePath;
+});
+
 function buildMenu() {
   const template = [
     {

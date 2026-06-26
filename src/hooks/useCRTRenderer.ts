@@ -6,6 +6,7 @@ import { exportMp4, exportWebm, getVideoExportCapabilities } from "@/lib/exporte
 // @ts-ignore
 import { exportGif } from "@/lib/gif-exporter.js";
 import { saveBlob, ensureFilename } from "@/lib/save-file.js";
+import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import type { OSDOptions } from "@/components/OSDControls";
@@ -1240,6 +1241,30 @@ export function useCRTRenderer() {
     if (prevPreferGPU && rendererRef.current.setPreferGPU) rendererRef.current.setPreferGPU(false);
 
     try {
+      // Desktop native ffmpeg pipeline (H.264) — the primary path. ffmpeg writes
+      // the file itself, so a native Save panel resolves the destination first.
+      // WebM and the web/dev build (no bridge) fall through to WebCodecs below.
+      const ffmpegReady = options?.format !== "webm" && await isFfmpegExportAvailable();
+      if (ffmpegReady) {
+        const desktopApi = (window as unknown as { desktop?: { saveDialog?: (o: { defaultName: string }) => Promise<string | null> } }).desktop;
+        const outPath = await desktopApi?.saveDialog?.({ defaultName: options?.fileName || "export.mp4" });
+        if (outPath) {
+          await exportViaFfmpeg({
+            canvas, renderer: rendererRef.current,
+            params: paramsRef.current, fps: Math.max(1, fps), duration: Math.max(0.5, duration),
+            codec: "h264", outPath,
+            videoElement: isVideoRef.current ? videoElementRef.current : undefined,
+            sourceScale: previewSettingsRef.current.sourceScale,
+            renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+            onProgress: (r) => setExportProgress(r),
+            signal: controller.signal,
+          });
+        }
+        // Whether encoded or cancelled, the ffmpeg path is done — don't also
+        // run WebCodecs.
+        return;
+      }
+
       const caps = getVideoExportCapabilities();
       const videoExportArgs = {
         canvas,

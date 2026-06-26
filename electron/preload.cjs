@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("desktop", {
   getPathForFile: (file) => {
     try { return webUtils.getPathForFile(file); } catch { return null; }
   },
+  // Native Save panel returning the chosen absolute path (or null if cancelled).
+  saveDialog: (opts) => ipcRenderer.invoke("ffmpeg:save-dialog", opts),
   ffmpeg: {
     available: () => ipcRenderer.invoke("ffmpeg:available"),
     begin: (opts) => ipcRenderer.invoke("ffmpeg:begin", opts),
