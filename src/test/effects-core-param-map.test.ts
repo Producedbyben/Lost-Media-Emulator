@@ -55,3 +55,27 @@ describe("buildSignalUniforms", () => {
     expect(u[idx("u_monoTintStrength")]).toBeCloseTo(1, 5); // CPU defaults strength to 1
   });
 });
+
+describe("buildSignalUniforms — 6.3a", () => {
+  const ctx = (frameIndex: number) => ({ width: 640, height: 480, seconds: frameIndex / 30, frameIndex, fps: 30 });
+  const idx = (k: string) => CRT_SIGNAL_UNIFORMS.indexOf(k);
+  it("packs the new 6.3a uniforms", () => {
+    const u = buildSignalUniforms({ advancedExposurePump: 0.5, advancedWhiteBalanceDrift: 0.4, advancedGhosting: 0.3, advancedFocusBreathing: 0.2 }, ctx(0));
+    expect(u[idx("u_exposurePump")]).toBeCloseTo(0.5, 5);
+    expect(u[idx("u_whiteBalanceDrift")]).toBeCloseTo(0.4, 5);
+    expect(u[idx("u_ghosting")]).toBeCloseTo(0.3, 5);
+    expect(u[idx("u_focusBreathing")]).toBeCloseTo(0.2, 5);
+  });
+  it("computes the stuttered temporal frame (holds frames)", () => {
+    // frameStutter 0.5 → stutterHoldFrames = floor(0.25*6)=1 → period 2 → frame 7 holds to 6
+    const u7 = buildSignalUniforms({ advancedFrameStutter: 0.5 }, ctx(7));
+    expect(u7[idx("u_temporalFrame")]).toBe(6);
+    // no stutter → temporalFrame === frameIndex
+    const u7n = buildSignalUniforms({}, ctx(7));
+    expect(u7n[idx("u_temporalFrame")]).toBe(7);
+  });
+  it("maps the exotic mask codes", () => {
+    const u = buildSignalUniforms({ maskType: "cmosRollingColumn" }, ctx(0));
+    expect(u[idx("u_maskType")]).toBe(13);
+  });
+});

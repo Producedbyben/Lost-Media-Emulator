@@ -14,6 +14,9 @@ export const CRT_DISPLAY_UNIFORMS = [
 const MASK_CODES: Record<string, number> = {
   none: 0, dot: 1, aperture: 2, slot: 3, shadowMask: 4, phosphor: 5,
   lcdStripeRGB: 6, oledPentile: 7, plasmaCell: 8,
+  // Epic 6.3a exotic capture masks.
+  filmSuper8: 9, film16mm: 10, instantDyeCloud: 11, irBloomSpeckle: 12,
+  cmosRollingColumn: 13, lowBitrateBlockGrid: 14, fisheyeMicrolens: 15,
 };
 const MONO_CODES: Record<string, number> = { none: 0, green: 1, amber: 2, blue: 3, white: 4 };
 const SCANLINE_PROFILE_CODES: Record<string, number> = { off: 0, soft: 1, hard: 2, triadAware: 3 };
@@ -73,6 +76,9 @@ export const CRT_SIGNAL_UNIFORMS = [
   // shrinks the GPU argument magnitude ~67k → ~400 so the emulated-f64 hash reproduces the
   // CPU grain field (the large magnitude was what broke it on GPU float behaviour).
   "u_grainCoefXHi", "u_grainCoefXLo", "u_grainCoefYHi", "u_grainCoefYLo",
+  // Epic 6.3a: high-frequency post-process effects + the stuttered temporal frame (NOT the
+  // real frame — u_frameIndex stays the real one for gate offsets).
+  "u_exposurePump", "u_whiteBalanceDrift", "u_ghosting", "u_focusBreathing", "u_temporalFrame",
 ] as const;
 
 const TWO_PI = 2 * Math.PI;
@@ -157,5 +163,15 @@ export function buildSignalUniforms(
   set("u_grainCoefXLo", coefX - Math.fround(coefX));
   set("u_grainCoefYHi", coefY);
   set("u_grainCoefYLo", coefY - Math.fround(coefY));
+  // Epic 6.3a high-frequency effects.
+  set("u_exposurePump", n(params.advancedExposurePump));
+  set("u_whiteBalanceDrift", n(params.advancedWhiteBalanceDrift));
+  set("u_ghosting", n(params.advancedGhosting));
+  set("u_focusBreathing", n(params.advancedFocusBreathing));
+  // Stuttered temporal frame (CPU crt-renderer-full.js ~574-576): holds frames so temporal
+  // noise repeats. u_frameIndex stays the REAL frame (gate offsets use it).
+  const fs = Math.max(0, Math.min(1, n(params.advancedFrameStutter)));
+  const hold = Math.floor(fs * fs * 6);
+  set("u_temporalFrame", hold > 0 ? ctx.frameIndex - (ctx.frameIndex % (hold + 1)) : ctx.frameIndex);
   return out;
 }
