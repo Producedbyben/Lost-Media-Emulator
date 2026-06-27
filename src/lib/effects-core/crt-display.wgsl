@@ -333,7 +333,7 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
   var bMask = 1.0;
   let mt = U.u_maskType;
   if (maskActive) {
-    if (mt > 4.5) {                       // phosphor (5): vertical RGB triad
+    if (mt > 4.5 && mt < 5.5) {           // phosphor (5): vertical RGB triad
       let t = mxi % 3;
       rMask = select(dim, boost, t == 0);
       gMask = select(dim, boost, t == 1);
@@ -368,6 +368,32 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
       rMask = select(dark, bright, subpixelRow && apertureOpen && subpixel == 0);
       gMask = select(dark, bright, subpixelRow && apertureOpen && subpixel == 1);
       bMask = select(dark, bright, subpixelRow && apertureOpen && subpixel == 2);
+    } else if (mt > 5.5 && mt < 6.5) {    // lcdStripeRGB (6): RGB column stripes + leak
+      let stripe = mxi % 3;
+      let columnLeak = 1.0 - maskStrength * 0.08;
+      let litGain = 1.0 + maskStrength * 0.28;
+      let unlitGain = 1.0 - maskStrength * 0.2;
+      rMask = select(unlitGain, litGain, stripe == 0) * columnLeak;
+      gMask = select(unlitGain, litGain, stripe == 1) * columnLeak;
+      bMask = select(unlitGain, litGain, stripe == 2) * columnLeak;
+    } else if (mt > 6.5 && mt < 7.5) {    // oledPentile (7): RGBG diamond pentile
+      let pentileX = mxi % 4;
+      let pentileY = myi % 2;
+      let hot = 1.0 + maskStrength * 0.3;
+      let cool = 1.0 - maskStrength * 0.16;
+      let greenShare = select(pentileX == 0 || pentileX == 2, pentileX == 1 || pentileX == 3, pentileY == 0);
+      rMask = select(cool, hot, pentileX == 0 || pentileX == 2);
+      gMask = select(cool, hot, greenShare);
+      bMask = select(cool, hot, pentileX == 1 || pentileX == 3);
+    } else if (mt > 7.5) {                // plasmaCell (8): gas-cell pulse + noise
+      let cellXp = f32(mxi / 2);
+      let cellYp = f32(myi / 2);
+      let pulse = 0.9 + 0.1 * sin(tSec * 9.0 + (cellXp + cellYp) * 0.3);
+      let gasNoise = seededNoise(cellXp * 0.19, cellYp * 0.19, tFrame * 0.2) - 0.5;
+      let cellGain = 1.0 + maskStrength * (gasNoise * 0.24 + (pulse - 1.0) * 0.38);
+      rMask = cellGain * (1.0 + maskStrength * 0.02);
+      gMask = cellGain;
+      bMask = cellGain * (1.0 - maskStrength * 0.02);
     }
   }
 

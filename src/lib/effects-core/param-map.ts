@@ -11,7 +11,10 @@ export const CRT_DISPLAY_UNIFORMS = [
 // Mask codes match crt-display.wgsl's maskType switch. `phosphor` (the CPU default /
 // vertical RGB triad) is distinct from `dot` (the radial dot grid), so it gets its own
 // code rather than collapsing onto dot the way the legacy WebGL2 shader did.
-const MASK_CODES: Record<string, number> = { none: 0, dot: 1, aperture: 2, slot: 3, shadowMask: 4, phosphor: 5 };
+const MASK_CODES: Record<string, number> = {
+  none: 0, dot: 1, aperture: 2, slot: 3, shadowMask: 4, phosphor: 5,
+  lcdStripeRGB: 6, oledPentile: 7, plasmaCell: 8,
+};
 const MONO_CODES: Record<string, number> = { none: 0, green: 1, amber: 2, blue: 3, white: 4 };
 const SCANLINE_PROFILE_CODES: Record<string, number> = { off: 0, soft: 1, hard: 2, triadAware: 3 };
 const SUBPIXEL_CODES: Record<string, number> = { none: 0, RGB: 1, BGR: 2, PenTile: 3 };

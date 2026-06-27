@@ -7,7 +7,10 @@ import { CRTRendererFull } from "./crt-renderer-full.js";
 import { WebGPUBackend } from "./effects-core/webgpu-backend";
 
 // Mask geometries the WGSL CRT/display shader implements (crt-display.wgsl).
-const WEBGPU_SUPPORTED_MASKS = new Set(["none", "phosphor", "dot", "aperture", "slot", "shadowMask"]);
+const WEBGPU_SUPPORTED_MASKS = new Set([
+  "none", "phosphor", "dot", "aperture", "slot", "shadowMask",
+  "lcdStripeRGB", "oledPentile", "plasmaCell",
+]);
 
 // Display-axis params the WGSL CRT/display shader reproduces at fidelity (< 6 mean-err
 // vs CPU on the sweep). maskScale is supported (mask + scanline scale by it); the three
