@@ -1,0 +1,35 @@
+/*
+ * OSD digital-era fonts (HYBRID font plan, bundled half).
+ * ------------------------------------------------------
+ * The analog/low-res eras (vhs, camcorder, cctv, led, filmSegmentThin) use the
+ * renderer's PROCEDURAL bitmap/segment glyphs and bundle nothing. These two faces
+ * cover the clean DIGITAL eras only:
+ *
+ *   - "LME Digital OSD"   = Share Tech Mono  (digicam / DSLR / phone-menu mono sans)
+ *   - "LME Broadcast OSD" = Saira Condensed  (broadcast condensed grotesque)
+ *
+ * Both are SIL Open Font License 1.1 (LME is a commercial product, so every
+ * bundled face must be license-clear):
+ *   - Share Tech Mono © 2012 Carrois Type Design — src/assets/fonts/ShareTechMono-OFL.txt
+ *   - Saira Condensed  © 2016 The Saira Project Authors — src/assets/fonts/SairaCondensed-OFL.txt
+ *
+ * Canvas fillText() does NOT wait for fonts to load — it silently substitutes a
+ * fallback. loadOSDFonts() (src/lib/osd-fonts.ts) awaits document.fonts before the
+ * first render and before each export so these faces are guaranteed resident.
+ */
+
+@font-face {
+  font-family: "LME Digital OSD";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/share-tech-mono-latin-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "LME Broadcast OSD";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../assets/fonts/saira-condensed-latin-400.woff2") format("woff2");
+}

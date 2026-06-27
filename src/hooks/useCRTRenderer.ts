@@ -10,6 +10,8 @@ import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
 import { computeExportSize } from "@/lib/export-size";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
+import { buildOSDRenderOptions } from "@/lib/osd-render-options";
+import { loadOSDFonts } from "@/lib/osd-fonts";
 import type { OSDOptions } from "@/components/OSDControls";
 import type { PreviewSettings } from "@/components/PreviewControls";
 
@@ -438,34 +440,9 @@ export function useCRTRenderer() {
     previewDirtyRef.current = true;
   }, []);
 
-  const buildOSDOpts = useCallback((elapsed: number, params: CRTParams) => {
-    const osd = osdOptionsRef.current;
-    if (!osd) return {};
-    const cc = osd.osdCornerConfig || {};
-    return {
-      osdStartDateTime: osd.osdStartDateTime || "1998-10-31T22:48:00",
-      osdElapsedSeconds: osd.osdCountWithExport ? elapsed : 0,
-      osdCountWithExport: osd.osdCountWithExport,
-      osdBloom: osd.osdBloom,
-      osdFontScale: osd.osdFontScale,
-      osdThickness: osd.osdThickness,
-      osdSeed: osd.osdSeed,
-      osdPrimaryColor: osd.osdPrimaryColor,
-      osdAccentColor: osd.osdAccentColor,
-      osdFontPreset: osd.osdFontPreset,
-      osdCornerTopLeftEnabled: cc.topLeft?.enabled,
-      osdCornerTopLeftText: cc.topLeft?.text,
-      osdCornerTopCenterEnabled: cc.topCenter?.enabled,
-      osdCornerTopCenterText: cc.topCenter?.text,
-      osdCornerTopRightEnabled: cc.topRight?.enabled,
-      osdCornerTopRightText: cc.topRight?.text,
-      osdCornerBottomLeftEnabled: cc.bottomLeft?.enabled,
-      osdCornerBottomLeftText: cc.bottomLeft?.text,
-      osdCornerBottomCenterEnabled: cc.bottomCenter?.enabled,
-      osdCornerBottomCenterText: cc.bottomCenter?.text,
-      osdCornerBottomRightEnabled: cc.bottomRight?.enabled,
-      osdCornerBottomRightText: cc.bottomRight?.text,
-    };
+  // Preview OSD options: clock driven by the preview `elapsed`.
+  const buildOSDOpts = useCallback((elapsed: number, _params: CRTParams) => {
+    return buildOSDRenderOptions(osdOptionsRef.current, { elapsed });
   }, []);
 
   // Preview zoom/pan are a pure viewport transform applied in CSS by
@@ -478,6 +455,19 @@ export function useCRTRenderer() {
     const formatProfile = formatPipelineRef.current ? formatProfileRef.current : null;
     return { ...osdOpts, formatProfile };
   }, [buildOSDOpts]);
+
+  // Export/offscreen render options: identical to preview EXCEPT the OSD clock is
+  // left to the renderer to derive per-frame from frameIndex/fps (so the burned
+  // timecode advances correctly and respects the trim in-point). This is what makes
+  // the exported OSD match the preview — historically exports passed formatProfile
+  // only, so the OSD silently fell back to defaults.
+  const buildExportRenderOpts = useCallback(() => {
+    const osdOpts = buildOSDRenderOptions(osdOptionsRef.current, { forExport: true });
+    const formatProfile = formatPipelineRef.current ? formatProfileRef.current : null;
+    return { ...osdOpts, formatProfile };
+  }, []);
+  const buildExportRenderOptsRef = useRef(buildExportRenderOpts);
+  buildExportRenderOptsRef.current = buildExportRenderOpts;
 
   const setFormatProfile = useCallback((profile: any) => {
     formatProfileRef.current = profile || null;
@@ -1290,6 +1280,11 @@ export function useCRTRenderer() {
     const prevPreferGPU = rendererRef.current.preferGPU;
     if (prevPreferGPU && rendererRef.current.setPreferGPU) rendererRef.current.setPreferGPU(false);
 
+    // Ensure the bundled digital-era OSD fonts are resident before any frame is
+    // rendered — canvas fillText() won't wait for fonts, so an export started
+    // before the face loaded would burn in the fallback font.
+    await loadOSDFonts();
+
     try {
       // Desktop native ffmpeg pipeline (H.264) — the primary path. ffmpeg writes
       // the file itself, so a native Save panel resolves the destination first.
@@ -1331,7 +1326,7 @@ export function useCRTRenderer() {
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
             targetWidth, targetHeight,
             frameMode: options?.aspectRatio && options.aspectRatio !== "original" ? options?.frameMode : undefined,
-            renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+            renderOptions: buildExportRenderOptsRef.current(),
             onProgress: (r) => setExportProgress(r),
             signal: controller.signal,
           });
@@ -1357,7 +1352,7 @@ export function useCRTRenderer() {
         resolution: options?.resolution ?? 0,
         aspectRatio: options?.aspectRatio,
         bitrate: (options?.quality || 1) * 8_000_000,
-        renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+        renderOptions: buildExportRenderOptsRef.current(),
         fileName: options?.fileName,
       };
       const wantsWebm = options?.format === "webm";
@@ -1383,7 +1378,7 @@ export function useCRTRenderer() {
           maxWidth: 480,
           videoElement: isVideoRef.current ? videoElementRef.current : undefined,
           sourceScale: previewSettingsRef.current.sourceScale,
-          renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+          renderOptions: buildExportRenderOptsRef.current(),
           signal: controller.signal,
         });
       }
@@ -1464,7 +1459,7 @@ export function useCRTRenderer() {
         evaluateParams,
         videoElement: isVideoRef.current ? videoElementRef.current : undefined,
         sourceScale: previewSettingsRef.current.sourceScale,
-        renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
+        renderOptions: buildExportRenderOptsRef.current(),
         fileName,
       });
     } catch (err: any) {
@@ -1515,8 +1510,11 @@ export function useCRTRenderer() {
       onProgress(ratio, frame, total, status);
     };
 
+    // Bundled digital-era OSD fonts must be resident before rendering frames.
+    await loadOSDFonts();
+
     try {
-      const renderOptions = { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null };
+      const renderOptions = buildExportRenderOptsRef.current();
       if (job.format === "gif") {
         await exportGif({
           canvas, renderer,
