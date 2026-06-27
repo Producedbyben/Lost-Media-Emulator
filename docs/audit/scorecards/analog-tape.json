@@ -1,0 +1,135 @@
+[
+  {
+    "id": "Off-Air Analog Broadcast",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Scored vs the VHS composite reference as a proxy (shared composite path). Scanlines + chroma bleed present; add antenna SNOW (random RF noise) and ghosting (multipath echo) which define off-air reception."
+  },
+  {
+    "id": "Public Access Archive",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Cheap composite + OSD reads plausibly for public-access tape. The OSD label renders garbled ('CTFID CHANNEL3') — verify the OSD glyph/label set (recurring across several presets)."
+  },
+  {
+    "id": "Cable Access Recorder (1984)",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Composite + timestamp OSD plausible for an '84 cable-access recording (VHS proxy). Same garbled OSD label as Public Access."
+  },
+  {
+    "id": "PAL Living Room TV (1970s)",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "Scored against an NTSC-composite reference as a proxy. PAL-specific traits are not distinct: finer 625-line scanlines, PAL's stable chroma (no NTSC hue error), and occasional Hanover bars. Needs a PAL reference."
+  },
+  {
+    "id": "PAL UHF Antenna (1978)",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "UHF antenna reception needs prominent SNOW + ghosting; currently reads as clean-ish composite. PAL-proxy (NTSC ref); needs a PAL/UHF reference."
+  },
+  {
+    "id": "Analog Cable Scrambled Signal",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 2, "parameterBehaviour": 3, "artifactCorrectness": 2, "defaults": 3, "eraFit": 3 },
+    "severity": "med",
+    "note": "Does NOT look scrambled — reads as normal composite. Real analog cable scrambling (sync-suppression / gated-sync) produces a horizontally TORN/rolling/jittering picture, suppressed/inverted luma, and colour distortion. The defining scrambling artifact is missing."
+  },
+  {
+    "id": "2-inch Quadruplex Broadcast (1960s)",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Shows the Quadruplex 'venetian-blind' horizontal head-banding — the correct signature artifact of 2\" quad. Strong. Consider a B&W default for a 1960s broadcast."
+  },
+  {
+    "id": "TV Tuner Card Capture (2007)",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Plausible analog-capture-card look (composite into a PC capture). VHS-composite proxy; fine."
+  },
+  {
+    "id": "LaserDisc Transfer 1990s",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Correctly cleaner and sharper than VHS with only mild composite artifacts — right for LaserDisc's high-quality analog composite. Good differentiation from tape."
+  },
+  {
+    "id": "Betacam SP ENG 1980s",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Betacam SP is broadcast-grade COMPONENT analog — should be markedly sharper/cleaner with better colour than the VHS-like composite look rendered here. Scored vs VHS proxy; needs a Betacam reference. OSD label garbled."
+  },
+  {
+    "id": "Hi8 Vacation Cam",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "8mm Hi8 has higher luma bandwidth than VHS and a different colour-under behaviour; currently a VHS-generic composite look. Proxy-scored; needs a Hi8 reference."
+  },
+  {
+    "id": "Video8 Handycam (1988)",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "8mm Video8 proxy-scored vs VHS; format-specific traits unverified. Camcorder OSD + composite look are plausible; needs a Video8 reference."
+  },
+  {
+    "id": "MiniDV Family Cam (2002)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "MiniDV is a DIGITAL (DV codec) format — should be clean and sharp with DV's intra-frame DCT texture on fine detail rather than analog scanlines. The OSD ('IMG_..._FINE 5M') reads as a still-camera, not a camcorder. Tighten toward DV behaviour."
+  },
+  {
+    "id": "MiniDV LP Mode (Dropout-Prone)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 3, "artifactCorrectness": 2, "defaults": 3, "eraFit": 3 },
+    "severity": "med",
+    "note": "Named 'Dropout-Prone' but the DV-specific dropout is not shown. DV error concealment produces SHARP rectangular block hits / frozen macroblocks / hold-last-good-block (often a single bright or mis-coloured DCT block), NOT analog horizontal streaks. Replace the analog-style dropout with DV block-error concealment."
+  },
+  {
+    "id": "HDV Camcorder 2005",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "HDV is MPEG-2 long-GOP on tape — should show MPEG-2 blocking/mosquito on motion and occasional GOP-drop stutter rather than an analog composite look. Re-anchor to the codec reference."
+  },
+  {
+    "id": "D-VHS HD Recording (2003)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Correctly clean HD (D-VHS carries an MPEG-2 transport stream — pristine unless there are errors). Good restraint."
+  },
+  {
+    "id": "Live NTSC Kinescope 1950s",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989", "vhs-static-cc0"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Good film-on-TV hybrid — film grain + TV scanlines + softness. Consider a stronger B&W default for a 1950s kinescope. The film-grain aspect should ultimately be confirmed against a real film reference (pending)."
+  },
+  {
+    "id": "Damaged Archive Recovery",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989", "vhs-static-cc0"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Severe, believable tape damage — heavy chroma bleed, warping, TBC OSD, dropouts. Inherits the dropout-shape caveat from advancedDropouts but the overall damaged read is convincing."
+  },
+  {
+    "id": "Restored Archive Master",
+    "kind": "preset", "medium": "analog", "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Reads as a cleaned-up transfer — reduced artifacts with residual grain/dust — which correctly represents archival restoration (surface noise reduced, not a pristine digital master)."
+  }
+]
