@@ -19,8 +19,16 @@
   (`maskX % 3`, no maskY term). The earlier "dot grid" read was a JPEG-scale aliasing false positive.
 - Both effect fixes stay byte-identical-deterministic — the Epic 1 parity sweep remains 455/455 clean.
 
-Remaining (this list): advancedQuantization (legacy-codec blur→block), CRT Plasma burn-in ghost,
-Analog Cable scrambling, MiniDV-LP DV-block dropout, + the LOW signature-deepening items below.
+- ✅ **advancedQuantization** — hard 8×8 DCT block-edge + mosquito ringing on low-bitrate digital (commit `436f011`).
+- ✅ **Analog Cable Scrambled Signal** — sync-suppression tearing/rolling + luma-inversion bands (`c240785`); verified strong.
+- ✅ **MiniDV LP Mode** — analog streaks → sharp DV block-error concealment (`d7d0295`); verified.
+- ✅ **LOW batch** (`46be5e8`): nitrate decay, Technicolor fringe, 35mm faded magenta, Kodachrome punch, Night-Vision IR hotspot, Polaroid crossover — all verified improved.
+- 🔶 **CRT Plasma Burn-In** (`9c9d2b2`) — landed, but the ghost currently echoes the live frame; REFINE to a distinct persistent burned-in image.
+- 🔶 **Aerochrome green→red** (in `46be5e8`) — overall magenta correct, but green→red mapping isn't strongly triggering on pure green; REFINE.
+- All Epic 3 fixes verified byte-identical-deterministic (Epic 1 parity intact); merged to main (`22c81e0`).
+
+Remaining refinements (post-OSD merge): CRT Plasma burn-in distinct-ghost, Aerochrome green→red strength.
+Remaining LOW (optional polish): drone-jello in-motion verification.
 
 ## Defects to fix
 
