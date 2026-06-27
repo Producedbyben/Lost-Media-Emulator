@@ -10,6 +10,10 @@ import { WebGPUBackend } from "./effects-core/webgpu-backend";
 const WEBGPU_SUPPORTED_MASKS = new Set([
   "none", "phosphor", "dot", "aperture", "slot", "shadowMask",
   "lcdStripeRGB", "oledPentile", "plasmaCell",
+  // Epic 6.3a exotic capture masks. irBloomSpeckle is EXCLUDED — its per-pixel speckle uses a
+  // non-integer noise coefficient that diverges on GPU (~7 mean-err), so it stays on CPU.
+  "filmSuper8", "film16mm", "instantDyeCloud", "cmosRollingColumn",
+  "lowBitrateBlockGrid", "fisheyeMicrolens",
 ]);
 
 // Display-axis params the WGSL CRT/display shader reproduces at fidelity (< 6 mean-err
@@ -48,6 +52,9 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
   "advancedFilmGrain", "grainSize", "grainChromaticity",
   // pointwise post-passes
   "advancedCctvMonochrome",
+  // Epic 6.3a: temporal/global modulations + ping-pong post-process filters.
+  "advancedExposurePump", "advancedWhiteBalanceDrift", "advancedFrameStutter",
+  "advancedGhosting", "advancedFocusBreathing",
 ]);
 
 // Grain is only perceptually faithful up to a moderate amplitude (measured: 0.3 → ~4.6,
