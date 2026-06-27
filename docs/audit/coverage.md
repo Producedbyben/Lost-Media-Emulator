@@ -1,6 +1,6 @@
 # Audit coverage
 
-Presets scored: **67 / 91** (73.6%)
+Presets scored: **68 / 91** (74.7%)
 
 ## Outstanding presets
 
@@ -23,7 +23,6 @@ Presets scored: **67 / 91** (73.6%)
 - [ ] Ring Doorbell Night IR
 - [ ] GoPro Hero3 Action Cam
 - [ ] Disposable Security IR Flood
-- [ ] ATSC Broadcast Transition (2009)
 - [ ] 35mm Faded Cinema Print
 - [ ] 8mm Kodachrome Home Movie
 - [ ] Drone Footage Jello

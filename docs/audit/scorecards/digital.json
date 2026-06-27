@@ -154,6 +154,13 @@
     "note": "Currently just clean. Early HDSLR video is defined by line-skipping moiré/aliasing on fine detail and rolling-shutter skew — neither is present. Add those rather than generic softness."
   },
   {
+    "id": "ATSC Broadcast Transition (2009)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Reads as clean digital broadcast. To sell the analog→digital transition era, add occasional MPEG-2 macroblock freeze/pixelation and the characteristic digital 'signal cliff' (sudden block-up then drop to black/no-signal) rather than a continuously clean picture."
+  },
+  {
     "id": "advancedMacroBlocking",
     "kind": "effect", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
     "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
