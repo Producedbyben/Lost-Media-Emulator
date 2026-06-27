@@ -95,7 +95,9 @@ export function buildSignalUniforms(
   // Display block (mirror buildUniforms).
   set("u_scan", n(params.scanlineStrength));
   set("u_mask", n(params.phosphorMask));
-  set("u_maskType", MASK_CODES[String(params.maskType ?? "none")] ?? 0);
+  // CPU defaults an UNSET maskType to "phosphor" (crt-renderer-full.js ~491), so match that
+  // (a string maskType uses its own code). gpuSignalOK defaults the same way.
+  set("u_maskType", MASK_CODES[typeof params.maskType === "string" ? params.maskType : "phosphor"] ?? 0);
   set("u_maskScale", n(params.maskScale, 1));
   set("u_barrel", n(params.barrelDistortion));
   set("u_vignette", n(params.vignette));

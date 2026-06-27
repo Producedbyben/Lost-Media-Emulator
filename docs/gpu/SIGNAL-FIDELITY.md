@@ -123,3 +123,30 @@ so the Epic 1 determinism sweep stays 455/455.
 **Routed set after fixes: 26** (was 21), `allowedFailing` still `[]` (worst 5.77 — CRT
 Viewfinder). The display family is now essentially complete on GPU; the remaining classics
 need the Epic 6.3 multi-pass tier.
+
+## Epic 6.3a — multi-pass post-process foundation (2026-06-27)
+
+Stood up the reusable **ping-pong post-process chain** (`T_optics → ghost → tPpA → focus →
+tPpB → bloom`, passthrough when filters off so 6.2 is unchanged) and ported the highest-ROI
+tractable effects: `frameStutter` (stuttered temporal frame, real frame kept for gate
+offsets), `exposurePump`, `whiteBalanceDrift`, **ghosting**, **focusBreathing**, and 6 exotic
+capture masks (`filmSuper8`, `film16mm`, `instantDyeCloud`, `cmosRollingColumn`,
+`lowBitrateBlockGrid`, `fisheyeMicrolens`). Bloom's GLOW still comes from `T_optics` (the CPU
+blurs the pre-chain workCanvas) while the composite BASE is `T_filtered`.
+
+Isolated verification: frameStutter 0.24, exposurePump 0.33, whiteBalanceDrift 0.14, ghosting
+0.13, focusBreathing 0.16–0.19, masks 0.01–2.84. **Routed set 26 → 34, `allowedFailing: []`**
+(worst 5.77). Live: Off-Air Analog Broadcast routes webgpu @3 ms vs 517 ms CPU (~172×); export
+bit-identical.
+
+Two notable fixes found via the sweep:
+- **`irBloomSpeckle`** stays CPU — its per-pixel speckle uses a non-integer noise coefficient
+  (×0.31) that diverges on GPU (~7 mean-err), the grain class of problem.
+- **maskType default** — an UNSET `maskType` defaults to `phosphor` on the CPU (not `none`);
+  `buildSignalUniforms` was defaulting to `none`, dropping the mask on GPU for classics like
+  Off-Air Analog Broadcast (11.25 → fixed). Now matches the CPU and the gate.
+
+**Deferred to 6.3b+** (the remaining ~25-effect tail, mostly back-loaded — see the blocker
+analysis): generationLoss, copyGeneration, macroBlocking, mediaAging, burnIn, restoration,
+quantization (DCT), OSD (the single biggest unlock, +29), NTSC/PAL format composite, and the
+long tail. datamosh/pixel-sort stay CPU forever.

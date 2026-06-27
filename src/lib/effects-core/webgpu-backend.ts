@@ -261,13 +261,15 @@ export class WebGPUBackend {
         { binding: 2, resource: this.tPpA.createView() },
       ],
     });
-    // Bloom blurs T_filtered (= tPpB, the post-process chain output) and composites it.
+    // Bloom GLOW comes from T_optics (the CPU blurs the pre-chain workCanvas), while the
+    // composite BASE is T_filtered (= tPpB, the post-process chain output). So blurH blurs
+    // T_optics; the composite samples T_h (blurred T_optics) over tPpB.
     this.bgBlurH = this.device.createBindGroup({
       layout: this.layout3,
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuf } },
         { binding: 1, resource: this.sampler },
-        { binding: 2, resource: this.tPpB.createView() },
+        { binding: 2, resource: this.tOptics.createView() },
       ],
     });
     this.bgComposite = this.device.createBindGroup({
