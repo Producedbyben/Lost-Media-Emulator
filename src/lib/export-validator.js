@@ -12,12 +12,12 @@
 //      differences are expected when the preview is running on the GPU; large
 //      ones indicate the export will not look like the preview.
 
-function readPixels(canvas) {
+export function readPixels(canvas) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 }
 
-function renderCpuFrame(renderer, width, height, seconds, params, frameIndex, fps, renderOptions) {
+export function renderCpuFrame(renderer, width, height, seconds, params, frameIndex, fps, renderOptions) {
   const off = document.createElement("canvas");
   off.width = Math.max(1, width);
   off.height = Math.max(1, height);
@@ -29,7 +29,7 @@ function renderCpuFrame(renderer, width, height, seconds, params, frameIndex, fp
   return off;
 }
 
-function comparePixels(a, b) {
+export function comparePixels(a, b) {
   const len = Math.min(a.length, b.length);
   let identical = a.length === b.length;
   let maxDiff = 0;
