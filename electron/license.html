@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+    <title>Activate Lost Media Emulator</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0a0b; --panel: #1e1c18; --raised: #292723; --border: #33312c;
+        --fg: #e9e5dd; --muted: #938c80; --dim: #6d675e;
+        --sel: #3a97e4; --signal: #4fd882; --danger: #e07070;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(120% 100% at 50% 0%, #15130f 0%, var(--bg) 70%);
+        color: var(--fg);
+        display: flex; align-items: center; justify-content: center;
+        -webkit-app-region: drag; /* let the frameless window move */
+      }
+      .card {
+        -webkit-app-region: no-drag;
+        width: 380px; padding: 32px 30px;
+        background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+        box-shadow: 0 24px 60px rgba(0,0,0,.5);
+      }
+      .brand {
+        font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+        color: var(--signal); font-family: var(--mono); margin-bottom: 18px;
+      }
+      h1 { font-size: 19px; font-weight: 700; margin: 0 0 6px; letter-spacing: -.01em; }
+      .sub { font-size: 12.5px; line-height: 1.5; color: var(--muted); margin: 0 0 20px; }
+      label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin-bottom: 6px; }
+      input {
+        width: 100%; padding: 11px 12px; font-family: var(--mono); font-size: 14px; letter-spacing: 1px;
+        text-transform: uppercase; color: var(--fg); background: var(--raised);
+        border: 1px solid var(--border); border-radius: 4px; outline: none;
+      }
+      input:focus { border-color: var(--sel); }
+      button {
+        margin-top: 14px; width: 100%; padding: 11px; font-size: 13px; font-weight: 600;
+        color: #07130a; background: var(--signal); border: 0; border-radius: 4px; cursor: pointer;
+      }
+      button:hover { filter: brightness(1.06); }
+      button:disabled { opacity: .55; cursor: default; }
+      #msg { min-height: 18px; margin-top: 12px; font-size: 12px; line-height: 1.4; }
+      #msg.err { color: var(--danger); }
+      #msg.ok { color: var(--signal); }
+      .foot { margin: 18px 0 0; font-size: 11.5px; color: var(--dim); }
+      .foot a { color: var(--muted); cursor: pointer; text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="brand">Lost Media Emulator</div>
+      <h1>Activate your license</h1>
+      <p class="sub">Enter the license key from your purchase email to unlock the app on this Mac.</p>
+      <label for="key">License key</label>
+      <input id="key" placeholder="LME-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" />
+      <button id="go">Activate</button>
+      <div id="msg"></div>
+      <p class="foot">Don't have a key? <a id="buy">Get one at lostmediaemulator.com</a></p>
+    </div>
+    <script>
+      var keyEl = document.getElementById("key");
+      var go = document.getElementById("go");
+      var msg = document.getElementById("msg");
+
+      function setMsg(t, cls) { msg.textContent = t; msg.className = cls || ""; }
+
+      function reasonText(reason) {
+        switch (reason) {
+          case "invalid": return "That key wasn't recognised. Check for typos.";
+          case "revoked": return "This license has been revoked. Contact support if this is unexpected.";
+          case "device_limit": return "This license is already active on the maximum number of devices. Deactivate another device first.";
+          case "rate_limited": return "Too many attempts. Wait a minute and try again.";
+          case "not_configured": return "Licensing is temporarily unavailable. Please try again later.";
+          case "network": return "Couldn't reach the license server. Check your connection and try again.";
+          case "bad_request": return "Please enter a license key.";
+          default: return "Activation failed. Please try again.";
+        }
+      }
+
+      async function activate() {
+        var key = keyEl.value.trim();
+        if (!key) { setMsg("Enter your license key.", "err"); keyEl.focus(); return; }
+        go.disabled = true; setMsg("Activating…", "");
+        try {
+          var r = await window.desktop.license.activate(key);
+          if (r && r.valid) { setMsg("Activated. Launching…", "ok"); }
+          else { setMsg(reasonText(r && r.reason), "err"); go.disabled = false; }
+        } catch (e) {
+          setMsg(reasonText("network"), "err"); go.disabled = false;
+        }
+      }
+
+      go.addEventListener("click", activate);
+      keyEl.addEventListener("keydown", function (e) { if (e.key === "Enter") activate(); });
+      document.getElementById("buy").addEventListener("click", function () {
+        window.open("https://lostmediaemulator.com");
+      });
+      keyEl.focus();
+    </script>
+  </body>
+</html>

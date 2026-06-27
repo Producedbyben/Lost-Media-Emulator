@@ -6,8 +6,16 @@ const path = require("path");
 const applyGpuFlags = require("./gpu-flags.cjs");
 const { locate } = require("./ffmpeg-locate.cjs");
 const { createSession } = require("./ffmpeg-session.cjs");
+const { getDeviceId, getDeviceName } = require("./license/identity.cjs");
+const licenseStore = require("./license/store.cjs");
+const licenseApi = require("./license/api.cjs");
+const { initAutoUpdate } = require("./updater.cjs");
 
 const isDev = !app.isPackaged;
+
+// Activation state, resolved before the window shows. The main process is the
+// only writer of the stored token, so the gate can't be bypassed from the page.
+let license = { activated: false, record: null };
 
 // Apple Silicon GPU config (Metal ANGLE). Must run before app-ready.
 applyGpuFlags(app);
@@ -45,15 +53,8 @@ function createWindow() {
   // Avoid a white flash before the dark UI paints.
   mainWindow.once("ready-to-show", () => mainWindow.show());
 
-  // BT_LOAD_DIST forces loading the production bundle even when unpackaged
-  // (used for verification without spinning up the Vite dev server).
-  const loadDist = !isDev || process.env.BT_LOAD_DIST === "1";
-  if (loadDist) {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
-  } else {
-    mainWindow.loadURL("http://localhost:8080");
-    mainWindow.webContents.openDevTools({ mode: "detach" });
-  }
+  // Show the studio if activated, otherwise the license gate.
+  routeWindow();
 
   // Load diagnostics (surface in the main-process console).
   mainWindow.webContents.on("did-finish-load", () => {
@@ -92,6 +93,131 @@ function createWindow() {
     });
   });
 }
+
+// --- License gate ----------------------------------------------------------
+
+function loadAppContent() {
+  // BT_LOAD_DIST forces the production bundle even when unpackaged (used for
+  // verification without spinning up the Vite dev server).
+  const loadDist = !isDev || process.env.BT_LOAD_DIST === "1";
+  if (loadDist) {
+    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+  } else {
+    mainWindow.loadURL("http://localhost:8080");
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
+}
+
+function loadGateContent() {
+  mainWindow.loadFile(path.join(__dirname, "license.html"));
+}
+
+function routeWindow() {
+  // Rebuild the menu so "Deactivate License…" reflects the current state.
+  if (mainWindow) buildMenu();
+  if (license.activated) loadAppContent();
+  else loadGateContent();
+}
+
+// Resolve activation before the window paints. A non-expired cached token lets
+// the app open offline; an expired one (or none) requires an online re-check.
+async function evaluateLicense() {
+  const deviceId = getDeviceId(app);
+  const record = licenseStore.read(app);
+
+  if (record && typeof record.exp === "number" && record.exp * 1000 > Date.now()) {
+    license = { activated: true, record };
+    // Best-effort online refresh; a revoke/invalid sends the window back to the gate.
+    refreshLicense(deviceId, record.key).catch(() => {});
+    return;
+  }
+
+  if (record && record.key) {
+    try {
+      const r = await licenseApi.validate({ key: record.key, deviceId });
+      if (r && r.valid) {
+        const next = persistRecord(record.key, deviceId, r);
+        license = { activated: true, record: next };
+        return;
+      }
+    } catch {
+      /* offline with an expired token → must re-activate */
+    }
+  }
+
+  license = { activated: false, record: null };
+}
+
+function persistRecord(key, deviceId, r) {
+  const record = {
+    key,
+    deviceId,
+    plan: r.plan,
+    productId: r.productId,
+    maxDevices: r.maxDevices,
+    token: r.token,
+    exp: r.exp,
+  };
+  licenseStore.write(app, record);
+  return record;
+}
+
+async function refreshLicense(deviceId, key) {
+  const r = await licenseApi.validate({ key, deviceId });
+  if (r && r.valid) {
+    license = { activated: true, record: persistRecord(key, deviceId, r) };
+  } else if (r && (r.reason === "revoked" || r.reason === "invalid")) {
+    licenseStore.clear(app);
+    license = { activated: false, record: null };
+    if (mainWindow) routeWindow();
+  }
+}
+
+async function deactivateLicense() {
+  const deviceId = getDeviceId(app);
+  const key = license.record && license.record.key;
+  if (key) {
+    try {
+      await licenseApi.deactivate({ key, deviceId });
+    } catch {
+      /* offline: still clear locally so this device stops opening */
+    }
+  }
+  licenseStore.clear(app);
+  license = { activated: false, record: null };
+  if (mainWindow) routeWindow();
+}
+
+ipcMain.handle("license:status", () => ({
+  activated: license.activated,
+  plan: license.record ? license.record.plan : null,
+  productId: license.record ? license.record.productId : null,
+  deviceName: getDeviceName(),
+}));
+
+ipcMain.handle("license:activate", async (_e, { key }) => {
+  const trimmed = (key || "").trim();
+  if (!trimmed) return { valid: false, reason: "bad_request" };
+  const deviceId = getDeviceId(app);
+  const deviceName = getDeviceName();
+  let r;
+  try {
+    r = await licenseApi.activate({ key: trimmed, deviceId, deviceName });
+  } catch {
+    return { valid: false, reason: "network" };
+  }
+  if (r && r.valid) {
+    license = { activated: true, record: persistRecord(trimmed, deviceId, r) };
+    routeWindow(); // swap the gate for the studio (and refresh the menu)
+    return { valid: true, plan: r.plan };
+  }
+  return r || { valid: false, reason: "unknown" };
+});
+
+ipcMain.handle("license:deactivate", async () => {
+  await deactivateLicense();
+  return { ok: true };
+});
 
 // --- Native ffmpeg export pipeline -----------------------------------------
 const ffmpegSessions = new Map();
@@ -168,6 +294,23 @@ function buildMenu() {
       submenu: [
         { role: "about", label: "About Lost Media Emulator" },
         { type: "separator" },
+        {
+          label: "Deactivate License…",
+          enabled: license.activated,
+          click: async () => {
+            const { response } = await dialog.showMessageBox(mainWindow, {
+              type: "warning",
+              buttons: ["Cancel", "Deactivate"],
+              defaultId: 0,
+              cancelId: 0,
+              message: "Deactivate this device?",
+              detail:
+                "This frees a seat on your license. You'll need to re-enter your key to use Lost Media Emulator on this Mac again.",
+            });
+            if (response === 1) await deactivateLicense();
+          },
+        },
+        { type: "separator" },
         { role: "hide" },
         { role: "hideOthers" },
         { role: "unhide" },
@@ -229,10 +372,12 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     nativeTheme.themeSource = "dark";
+    await evaluateLicense();
     buildMenu();
     createWindow();
+    initAutoUpdate(app, (...a) => console.log(...a));
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

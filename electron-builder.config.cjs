@@ -44,6 +44,23 @@ module.exports = {
     "electron/ffmpeg-locate.cjs",
     "electron/ffmpeg-args.cjs",
     "electron/ffmpeg-session.cjs",
+    "electron/updater.cjs",
+    "electron/license.html",
+    "electron/license/identity.cjs",
+    "electron/license/store.cjs",
+    "electron/license/api.cjs",
+  ],
+  // Auto-update feed: electron-updater generic provider → Cloudflare R2 served at
+  // /api/updates/mac (latest-mac.yml + the signed zip), generated on `npm run dist`.
+  // NOTE: macOS only APPLIES updates for Developer-ID-signed + notarized builds
+  // (see mac.notarize); unsigned builds publish a feed but won't self-apply until
+  // Apple signing is configured.
+  publish: [
+    {
+      provider: "generic",
+      url: "https://lostmediaemulator.com/api/updates/mac",
+      channel: "latest",
+    },
   ],
   // Native ffmpeg/ffprobe binaries (arm64) for the export pipeline — bundled only
   // when present (see hasFfmpeg). The afterSign hook ad-hoc signs them.
@@ -57,7 +74,11 @@ module.exports = {
       ]
     : [],
   mac: {
-    target: [{ target: "dmg", arch: "arm64" }],
+    // dmg = the shop download; zip = what electron-updater/Squirrel.Mac applies.
+    target: [
+      { target: "dmg", arch: "arm64" },
+      { target: "zip", arch: "arm64" },
+    ],
     category: "public.app-category.video",
     icon: "build/icon.icns",
     darkModeSupport: true,
