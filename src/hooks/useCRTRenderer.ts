@@ -12,6 +12,8 @@ import { computeExportSize } from "@/lib/export-size";
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import { buildOSDRenderOptions } from "@/lib/osd-render-options";
 import { loadOSDFonts } from "@/lib/osd-fonts";
+import { useAudioPreview, DEFAULT_AUDIO_PROFILE } from "@/hooks/useAudioPreview";
+import type { AudioProfile } from "@/lib/audio-degrade";
 import type { OSDOptions } from "@/components/OSDControls";
 import type { PreviewSettings } from "@/components/PreviewControls";
 
@@ -428,6 +430,13 @@ export function useCRTRenderer() {
   // Honest audio availability for the loaded source: true only on desktop when
   // ffprobe confirms the source file actually carries an audio track.
   const [sourceHasAudio, setSourceHasAudio] = useState(false);
+
+  // Epic 4 audio panel: per-clip degrade/level/fade profile, the current video
+  // element (as state so the audio monitor reacts to it), and a load counter.
+  const [audioProfile, setAudioProfile] = useState<AudioProfile>(DEFAULT_AUDIO_PROFILE);
+  const [audioVideoEl, setAudioVideoEl] = useState<HTMLVideoElement | null>(null);
+  const [sourceLoadId, setSourceLoadId] = useState(0);
+  const audioPreview = useAudioPreview({ videoEl: audioVideoEl, sourceKey: sourceLoadId, hasAudio: sourceHasAudio, profile: audioProfile });
 
   // Create renderer ONCE as a stable ref
   const rendererRef = useRef<any>(null);
@@ -1001,6 +1010,7 @@ export function useCRTRenderer() {
         videoElementRef.current.removeAttribute("src");
         videoElementRef.current.load();
         videoElementRef.current = null;
+        setAudioVideoEl(null);
       }
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
@@ -1039,6 +1049,8 @@ export function useCRTRenderer() {
         const detectedFPS = estimateVideoFPS(video);
 
         videoElementRef.current = video;
+        setAudioVideoEl(video);
+        setSourceLoadId((n) => n + 1);
         isVideoRef.current = true;
         videoPlayingRef.current = false;
         originalImageRef.current = null;
@@ -1701,6 +1713,9 @@ export function useCRTRenderer() {
     hasImage,
     isVideo,
     sourceHasAudio,
+    audioProfile,
+    setAudioProfile,
+    audioDecodedBuffer: audioPreview.decodedBuffer,
     videoDuration,
     videoCurrentTime,
     videoPlaying,
