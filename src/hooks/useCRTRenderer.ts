@@ -11,6 +11,7 @@ import { computeExportSize } from "@/lib/export-size";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import { buildOSDRenderOptions } from "@/lib/osd-render-options";
+import { loadOSDFonts } from "@/lib/osd-fonts";
 import type { OSDOptions } from "@/components/OSDControls";
 import type { PreviewSettings } from "@/components/PreviewControls";
 
@@ -1261,6 +1262,11 @@ export function useCRTRenderer() {
     const prevPreferGPU = rendererRef.current.preferGPU;
     if (prevPreferGPU && rendererRef.current.setPreferGPU) rendererRef.current.setPreferGPU(false);
 
+    // Ensure the bundled digital-era OSD fonts are resident before any frame is
+    // rendered — canvas fillText() won't wait for fonts, so an export started
+    // before the face loaded would burn in the fallback font.
+    await loadOSDFonts();
+
     try {
       // Desktop native ffmpeg pipeline (H.264) — the primary path. ffmpeg writes
       // the file itself, so a native Save panel resolves the destination first.
@@ -1485,6 +1491,9 @@ export function useCRTRenderer() {
       setExportProgress(ratio);
       onProgress(ratio, frame, total, status);
     };
+
+    // Bundled digital-era OSD fonts must be resident before rendering frames.
+    await loadOSDFonts();
 
     try {
       const renderOptions = buildExportRenderOptsRef.current();

@@ -38,7 +38,18 @@ export class CRTRendererFull {
     this.cachedOutImageWidth = 0;
     this.cachedOutImageHeight = 0;
     this.hasImage = false;
+    // Procedural bitmap-font presets (HYBRID font plan, analog/low-res eras).
+    // These render via getOSDPixelGlyph + drawPixelOSDText (5x7 cell grid) and are
+    // the MOST period-accurate option for sub-720p burn-ins — they also dodge the
+    // proprietary VCR-OSD/OCR-A/MS-Gothic licensing entirely. `stroke` ~ pen weight,
+    // `spacing` ~ inter-glyph gap.
     this.osdPixelFontPresets = {
+      // VHS VCR clock: chunky, heavy block caps with tight spacing.
+      vhs: { stroke: 1.25, spacing: 1, heightCells: 7, widthCells: 5 },
+      // Consumer camcorder (Sony/JVC): thinner pen, slightly looser tracking.
+      camcorder: { stroke: 0.95, spacing: 1.4, heightCells: 7, widthCells: 5 },
+      // Security/CCTV: even, OCR-ish monospace; medium weight, wide tracking.
+      cctv: { stroke: 1.0, spacing: 1.8, heightCells: 7, widthCells: 5 },
       hdzeroDefault: { stroke: 1, spacing: 1, heightCells: 7, widthCells: 5 },
       hdzeroConthrax: { stroke: 1.15, spacing: 1, heightCells: 7, widthCells: 5 },
       hdzeroVision: { stroke: 1, spacing: 2, heightCells: 7, widthCells: 5 },
@@ -92,6 +103,21 @@ export class CRTRendererFull {
       "●": ["00000","01110","11111","11111","11111","01110","00000"],
     };
     return glyphs[String(char || " ").toUpperCase()] || glyphs["?"] || glyphs[" "];
+  }
+
+  // Width of a procedural bitmap string, matching drawPixelOSDText's advance so
+  // right/centre-aligned OSD lines land correctly for every pixel-font preset.
+  getPixelOSDWidth(text, size, preset) {
+    const presetCfg = this.osdPixelFontPresets[preset];
+    if (!presetCfg) return 0;
+    const chars = String(text);
+    if (!chars.length) return 0;
+    const cellH = Math.max(1, size / presetCfg.heightCells);
+    const cellW = Math.max(1, cellH * 0.9);
+    const charW = presetCfg.widthCells * cellW;
+    const charStep = charW + Math.max(1, presetCfg.spacing * cellW * 0.45);
+    // n glyphs advance by charStep each; the last glyph still occupies charW.
+    return (chars.length - 1) * charStep + charW;
   }
 
   drawPixelOSDText(ctx, text, x, y, size, color, preset, thicknessScale = 1) {
@@ -1522,18 +1548,25 @@ export class CRTRendererFull {
       bottomCenter: { enabled: renderOptions.osdCornerBottomCenterEnabled === true, text: String(renderOptions.osdCornerBottomCenterText || "").trim() },
     };
 
+    // HYBRID font plan. Analog/low-res eras (vhs, camcorder, cctv, hdzero*) are
+    // drawn with PROCEDURAL bitmap glyphs (osdPixelFontPresets / drawPixelOSDText)
+    // and never reach these CSS stacks. led / filmSegmentThin use the 7-segment
+    // renderer. The digital eras use the two BUNDLED OFL faces:
+    //   "LME Digital OSD"   = Share Tech Mono  (digicam / DSLR / phone menus / lcd)
+    //   "LME Broadcast OSD" = Saira Condensed  (broadcast condensed grotesque)
+    // (loaded via loadOSDFonts() before the first render and before each export).
     const osdFontByPreset = {
-      vhs: '"VCR OSD Mono", "Lucida Console", "Courier New", monospace',
-      camcorder: '"MS Gothic", "Small Fonts", "Tahoma", sans-serif',
-      cctv: '"OCR A Std", "Consolas", "Lucida Console", monospace',
-      broadcast: '"Arial Narrow", "Arial", sans-serif',
-      hdzeroDefault: '"VCR OSD Mono", "Lucida Console", monospace',
-      hdzeroConthrax: '"VCR OSD Mono", "Lucida Console", monospace',
-      hdzeroVision: '"VCR OSD Mono", "Lucida Console", monospace',
-      led: '"Digital-7 Mono", "DS-Digital", "Consolas", monospace',
-      filmSegmentThin: '"Digital-7 Mono", "DS-Digital", "Consolas", monospace',
-      lcd: '"MS Sans Serif", "Geneva", "Tahoma", sans-serif',
-      modern: '"Inter", "Segoe UI", "Arial", sans-serif',
+      vhs: '"LME Digital OSD", "VCR OSD Mono", "Lucida Console", "Courier New", monospace',
+      camcorder: '"LME Digital OSD", "MS Gothic", "Small Fonts", "Tahoma", sans-serif',
+      cctv: '"LME Digital OSD", "OCR A Std", "Consolas", "Lucida Console", monospace',
+      broadcast: '"LME Broadcast OSD", "Arial Narrow", "Arial", sans-serif',
+      hdzeroDefault: '"LME Digital OSD", "VCR OSD Mono", "Lucida Console", monospace',
+      hdzeroConthrax: '"LME Digital OSD", "VCR OSD Mono", "Lucida Console", monospace',
+      hdzeroVision: '"LME Digital OSD", "VCR OSD Mono", "Lucida Console", monospace',
+      led: '"LME Digital OSD", "Digital-7 Mono", "DS-Digital", "Consolas", monospace',
+      filmSegmentThin: '"LME Digital OSD", "Digital-7 Mono", "DS-Digital", "Consolas", monospace',
+      lcd: '"LME Digital OSD", "MS Sans Serif", "Geneva", "Tahoma", sans-serif',
+      modern: '"LME Digital OSD", "Inter", "Segoe UI", "Arial", sans-serif',
     };
 
     // Compute date/time
@@ -1568,10 +1601,9 @@ export class CRTRendererFull {
     const fontFamily = osdFontByPreset[osdFontPreset] || osdFontByPreset.vhs;
     const hasPixelFont = Boolean(this.osdPixelFontPresets[osdFontPreset]);
     const hasSevenSegmentFont = osdFontPreset === "filmSegmentThin";
-    const pixelGlyphWidth = hasPixelFont ? Math.max(1, Math.round(baseSize * 0.64)) : 0;
-    
+
     const measureOsdWidth = (text) => {
-      if (hasPixelFont) return String(text).length * pixelGlyphWidth;
+      if (hasPixelFont) return this.getPixelOSDWidth(String(text), baseSize, osdFontPreset);
       if (hasSevenSegmentFont) return this.getSevenSegmentOSDWidth(String(text), baseSize, { gapScale: 0.18 });
       return outCtx.measureText(String(text)).width;
     };
