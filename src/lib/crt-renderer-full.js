@@ -560,7 +560,17 @@ export class CRTRendererFull {
         const warp = Math.max(0.35, 1 + barrel * warpCurve);
         const wobble = Math.sin((ny + temporalSeconds * 0.9) * Math.PI * 6) * timebaseWobble * 0.012;
         const perLineJitter = (seededNoise(y, temporalFrame * 0.07, 7) - 0.5) * lineJitter * 0.018;
-        const baseHeadSwitching = ny > 0.84 ? headSwitching * (ny - 0.84) * 0.14 : 0;
+        // Head-switching: a torn, noisy band at the very bottom few scanlines
+        // (the video heads change during the overrun of the vertical blanking).
+        // Per-line horizontal tear that grows toward the bottom; noise/darkening
+        // is added at the pixel level below so the band reads as disrupted signal,
+        // not a smooth skew.
+        const headBandTop = 1 - (0.06 + headSwitching * 0.10);
+        const inHeadBand = headSwitching > 0 && ny > headBandTop;
+        const headBandP = inHeadBand ? (ny - headBandTop) / (1 - headBandTop) : 0;
+        const baseHeadSwitching = inHeadBand
+          ? headSwitching * (0.05 + headBandP * 0.18) * (seededNoise(y, temporalFrame, 71) - 0.3)
+          : 0;
         const creaseCenter = seededNoise(Math.floor(temporalSeconds * 0.67), 19, 11);
         const creaseDistance = Math.abs(y / Math.max(1, height - 1) - creaseCenter);
         const creaseWarp = tapeCrease > 0 ? Math.max(0, 1 - creaseDistance / 0.045) * tapeCrease * (0.015 + seededNoise(temporalFrame, y, 41) * 0.02) : 0;
@@ -795,6 +805,12 @@ export class CRTRendererFull {
               else dropoutMul = 1 - dropouts * (0.55 + 0.4 * (1 - p));           // dark recovery, deepest at head
             }
           }
+        }
+        if (inHeadBand) {
+          // Disrupted signal in the head-switch band: heavy per-pixel noise +
+          // darkening that deepens toward the very bottom line.
+          const bn = seededNoise(x * 0.7, y * 3.1, temporalFrame * 0.5 + 13);
+          dropoutMul *= (1 - headSwitching * 0.30 * headBandP) * (0.65 + bn * 0.7);
         }
         const interlaceGate = interlacing > 0 ? 1 - interlacing * (((y + temporalFrame) & 1) ? 0.14 : 0.02) : 1;
         const level = scanlineGain * dropoutMul * interlaceGate;
