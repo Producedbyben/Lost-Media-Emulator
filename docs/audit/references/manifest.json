@@ -1,0 +1,18 @@
+[
+  {
+    "id": "vhs-static-cc0",
+    "medium": "vhs",
+    "source": "https://commons.wikimedia.org/wiki/File:FREE_real_VHS_static.webm",
+    "license": "CC0-1.0",
+    "redistribute": true,
+    "demonstrates": "analog VHS noise floor and snow — luma/chroma static, dropout speckle, and head-switching noise texture from a real tape with no input signal (640x480, ~6m21s, CC0 by Caleb Minear via Wikimedia Commons)"
+  },
+  {
+    "id": "vhs-palace-cartoons-1989",
+    "medium": "vhs",
+    "source": "https://archive.org/details/public-domain-cartoons-on-vhs-from-palace-video-uk",
+    "license": "Public Domain Mark 1.0",
+    "redistribute": true,
+    "demonstrates": "VHS artifacts over real picture content — chroma bleed, soft luma, tracking error, bottom-of-frame head-switching band, dropouts, and generational/composite loss from a 1989 Palace Video budget VHS rip of public-domain cartoons"
+  }
+]
