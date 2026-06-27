@@ -25,8 +25,8 @@ function createSession({ width, height, fps, tmpRoot }) {
       frameCount = Math.max(frameCount, index + 1);
     },
 
-    encode({ ffmpegPath, codec, outPath, onProgress, audioSourcePath }) {
-      const args = buildVideoArgs({ codec, fps, framePattern, outPath, totalFrames: frameCount, audioSourcePath });
+    encode({ ffmpegPath, codec, outPath, onProgress, audioSourcePath, inSec, outSec }) {
+      const args = buildVideoArgs({ codec, fps, framePattern, outPath, totalFrames: frameCount, audioSourcePath, inSec, outSec });
       return new Promise((resolve, reject) => {
         child = spawn(ffmpegPath, args);
         let stderrTail = "";

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX } from "lucide-react";
+import { useState, useEffect, type ReactNode } from "react";
+import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX, Scissors, ChevronDown, Settings2, Monitor, type LucideIcon } from "lucide-react";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
 import { ensureFilename } from "@/lib/save-file.js";
 import type { CRTParams } from "@/hooks/useCRTRenderer";
@@ -23,7 +23,7 @@ interface ExportPanelProps {
   isVideo?: boolean;
   // True only when the loaded source actually carries an audio track (desktop).
   sourceHasAudio?: boolean;
-  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string; audioMode?: "off" | "original"; codec?: "h264" | "hevc" | "prores422" | "prores4444" }) => void;
+  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string; audioMode?: "off" | "original"; codec?: "h264" | "hevc" | "prores422" | "prores4444"; inSec?: number; outSec?: number }) => void;
   onExportStill: (options?: { aspectRatio?: string; fileName?: string }) => void;
   onExportGif?: (fps: number, duration: number, fileName?: string) => void;
   onCancelExport?: () => void;
@@ -37,6 +37,8 @@ interface ExportPanelProps {
   videoDuration?: number;
   videoWidth?: number;
   videoHeight?: number;
+  // Live playhead position (source seconds) for "set in/out from playhead".
+  videoCurrentTime?: number;
   // Export queue
   lookName?: string;
   onEnqueueExport?: (job: NewExportJob) => void;
@@ -109,16 +111,72 @@ const DELIVERY_PRESETS: { value: string; label: string; codec: ExportCodec; reso
   { value: "gif", label: "GIF", codec: "gif", resolution: 0, aspectRatio: "original", desktopOnly: false, hint: "Quick share" },
 ];
 
+// Shared chip class — the small toggle buttons used throughout (preset, codec,
+// aspect, resolution…). `active` is the selected/highlight state.
+const chip = (active: boolean, disabled = false) =>
+  `px-2 py-0.5 text-[12px] rounded border transition-colors ${
+    active
+      ? "bg-primary/15 border-primary/30 text-primary"
+      : disabled
+        ? "bg-secondary/40 border-border/60 text-muted-foreground/40 cursor-not-allowed"
+        : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+  }`;
+
+// A collapsible settings group, styled like an NLE export panel section
+// (Premiere's disclosure groups): a header bar with a chevron over a body that
+// animates open/closed via a grid-rows transition.
+const Section = ({ title, icon: Icon, defaultOpen = true, hint, children }: {
+  title: string;
+  icon: LucideIcon;
+  defaultOpen?: boolean;
+  hint?: ReactNode;
+  children: ReactNode;
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="rounded-md border border-border bg-card/30 overflow-hidden">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 bg-secondary/50 hover:bg-secondary/70 transition-colors text-left">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/80">
+          <Icon className="w-3 h-3 text-primary" /> {title}
+        </span>
+        <span className="flex items-center gap-2">
+          {hint && <span className="text-[11px] font-mono text-muted-foreground/70">{hint}</span>}
+          <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${open ? "" : "-rotate-90"}`} />
+        </span>
+      </button>
+      <div className={`grid transition-[grid-template-rows] duration-200 ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="overflow-hidden">
+          <div className="p-2.5 space-y-2.5">{children}</div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// One label/value line in the left "Output" summary rail (reads like Premiere's
+// output summary block).
+const SummaryRow = ({ label, value, accent }: { label: string; value: ReactNode; accent?: boolean }) => (
+  <div className="flex items-baseline justify-between gap-2 py-1">
+    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 shrink-0">{label}</span>
+    <span className={`text-[12px] font-mono text-right leading-tight ${accent ? "text-primary" : "text-foreground"}`}>{value}</span>
+  </div>
+);
+
 const ExportPanel = ({
   hasImage, isVideo, sourceHasAudio, onExportMp4, onExportStill, onExportGif,
   onCancelExport, isExporting, exportProgress, currentParams,
   onValidateExport, validation,
-  videoFPS, videoDuration, videoWidth, videoHeight,
+  videoFPS, videoDuration, videoWidth, videoHeight, videoCurrentTime,
   lookName, onEnqueueExport, queueJobs, queueEtaMs, queueActiveCount,
   onCancelJob, onCancelAll, onClearFinished,
 }: ExportPanelProps) => {
   const [fps, setFps] = useState(30);
   const [duration, setDuration] = useState(4);
+  // Trim (in/out) window in source seconds. Video-only; default 0..duration.
+  // Only the native ffmpeg export honours these — the web fallback ignores them.
+  const [inPoint, setInPoint] = useState(0);
+  const [outPoint, setOutPoint] = useState(4);
   const [resolution, setResolution] = useState(0);
   const [quality, setQuality] = useState(1);
   const [codec, setCodec] = useState<ExportCodec>("h264");
@@ -128,7 +186,6 @@ const ExportPanel = ({
   const [audioOn, setAudioOn] = useState(true);
   const [aspectRatio, setAspectRatio] = useState("original");
   const [frameMode, setFrameMode] = useState("none");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [lutSize, setLutSize] = useState(33);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -170,6 +227,19 @@ const ExportPanel = ({
   const effectiveAudioOn = audioControllable && audioOn;
   const audioMode: "off" | "original" = effectiveAudioOn ? "original" : "off";
 
+  // Trim window, clamped and ordered. A trim is "active" only when it carves out
+  // a real sub-range — a full 0..duration window exports byte-identically.
+  const trimIn = Math.max(0, Math.min(inPoint, duration));
+  const trimOut = Math.max(trimIn + 1 / Math.max(1, fps), Math.min(outPoint, duration));
+  const trimDuration = trimOut - trimIn;
+  const isTrimmed = isVideo && (trimIn > 0.001 || trimOut < duration - 0.001);
+  const playhead = videoCurrentTime ?? 0;
+
+  // The actually-exported length: the trim window when trimming, else the whole
+  // duration. Drives the frame count, timecode range, and size estimate.
+  const exportSeconds = isTrimmed ? trimDuration : duration;
+  const exportFrames = Math.max(1, Math.floor(fps * exportSeconds));
+
   const runValidation = async () => {
     if (!onValidateExport) return;
     setValidating(true);
@@ -200,8 +270,6 @@ const ExportPanel = ({
     });
   };
 
-
-
   // Auto-populate export settings from video metadata when a video is loaded
   useEffect(() => {
     if (isVideo && videoFPS && videoFPS > 0 && videoDuration && videoDuration > 0) {
@@ -211,7 +279,10 @@ const ExportPanel = ({
         Math.abs(curr - videoFPS) < Math.abs(prev - videoFPS) ? curr : prev
       );
       setFps(Math.round(nearestFPS));
-      setDuration(Math.round(videoDuration * 100) / 100);
+      const dur = Math.round(videoDuration * 100) / 100;
+      setDuration(dur);
+      setInPoint(0);
+      setOutPoint(dur);
       setHasAutoPopulated(true);
     }
   }, [isVideo, videoFPS, videoDuration]);
@@ -223,8 +294,6 @@ const ExportPanel = ({
     }
   }, [isVideo]);
 
-  const totalFrames = Math.floor(fps * duration);
-
   const formatTimecode = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
@@ -232,274 +301,318 @@ const ExportPanel = ({
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
   };
 
-  const estimatedFileSizeMB = () => {
-    const bitsPerSecond = quality * 8_000_000;
-    return ((bitsPerSecond * duration) / 8 / 1_000_000).toFixed(1);
-  };
+  const estimatedFileSizeMB = () =>
+    ((quality * 8_000_000 * exportSeconds) / 8 / 1_000_000).toFixed(1);
+
+  // Left-rail "Output" summary values — the at-a-glance read of what will be
+  // written, the way an NLE export panel surfaces it.
+  const summaryFormat = isGif ? "GIF · .gif" : `${tier.label} · .${tier.ext}`;
+  const summaryRes = resolution > 0 ? `${resolution}p`
+    : (videoWidth && videoHeight ? `${videoWidth}×${videoHeight}` : "Source");
+  const summaryAspect = aspectRatio === "original"
+    ? "Original"
+    : `${aspectRatio}${frameMode !== "none" ? ` · ${frameMode}` : ""}`;
+  const summaryAudio = !isVideo ? "—"
+    : !audioControllable ? "n/a"
+      : audioOn ? (isProRes ? "PCM 16-bit" : "AAC 192 kbps") : "Muted";
+  const summarySize = isGif ? "—" : isProRes ? "Large (master)" : `~${estimatedFileSizeMB()} MB`;
+
+  // Disabled-state tooltip shown under the export/still buttons.
+  const NeedsImage = () => (
+    <span className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap bg-popover text-popover-foreground text-[12px] px-2 py-1 rounded border border-border shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+      Load an image first
+    </span>
+  );
 
   return (
     <div className="space-y-3">
-      <div>
-        <strong className="text-xs font-semibold text-foreground uppercase tracking-wide">Delivery</strong>
-        <p className="text-[12px] text-muted-foreground">Name it, set the render, then export.</p>
-      </div>
-
-      {/* Output name — the file is saved with this name; the destination is
-          chosen in the save dialog that opens on export. */}
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1">
-          <Type className="w-3 h-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">File name</span>
+      {/* Panel heading + "matched to source" status, NLE-style. */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <strong className="text-xs font-semibold text-foreground uppercase tracking-wide">Export Settings</strong>
+          <p className="text-[12px] text-muted-foreground">Set the format, then export.</p>
         </div>
-        <div className="flex items-stretch rounded-md border border-border bg-secondary focus-within:ring-1 focus-within:ring-primary/50 overflow-hidden">
-          <input
-            type="text"
-            value={fileName}
-            onChange={(e) => setFileName(e.target.value)}
-            placeholder={defaultBase}
-            spellCheck={false}
-            aria-label="Export file name"
-            className="flex-1 min-w-0 bg-transparent px-2.5 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
-          />
-          <span className="flex items-center px-2 text-[12px] font-mono text-muted-foreground border-l border-border select-none">.{videoExt}</span>
-        </div>
-        <p className="text-[11px] text-muted-foreground flex items-start gap-1">
-          <FolderOpen className="w-3 h-3 mt-px shrink-0" />
-          {isDesktop
-            ? "Pick the folder in the save dialog — the file reveals in Finder when it's done."
-            : "Choose where to save in your browser's save dialog (otherwise it goes to Downloads)."}
-        </p>
-      </div>
-
-      {/* Delivery presets — one tap sets codec + resolution + aspect. */}
-      <div className="space-y-1">
-        <span className="text-xs text-muted-foreground">Preset</span>
-        <div className="flex flex-wrap gap-1">
-          {DELIVERY_PRESETS.map((p) => {
-            const disabled = p.desktopOnly && !isDesktop;
-            const active = activePreset === p.value;
-            return (
-              <button key={p.value}
-                onClick={() => { if (disabled) return; setCodec(p.codec); setResolution(p.resolution); setAspectRatio(p.aspectRatio); }}
-                disabled={disabled}
-                title={disabled ? `${p.label} — desktop app only` : p.hint}
-                className={`px-2.5 py-0.5 text-[12px] rounded border transition-colors ${
-                  active
-                    ? "bg-primary/15 border-primary/30 text-primary"
-                    : disabled
-                      ? "bg-secondary/40 border-border/60 text-muted-foreground/40 cursor-not-allowed"
-                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-                }`}>
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Source info badge */}
-      {isVideo && videoWidth && videoHeight && (
-        <div className="flex items-center gap-2 px-2.5 py-1.5 bg-secondary/60 rounded-md border border-border">
-          <Info className="w-3 h-3 text-primary shrink-0" />
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] font-mono text-muted-foreground">
-            <span className="text-foreground font-semibold">Source</span>
-            <span>{videoWidth}×{videoHeight}</span>
-            <span>{videoFPS?.toFixed(2)} fps</span>
-            <span>{formatTimecode(videoDuration || 0)}</span>
-            <span>{totalFrames.toLocaleString()} frames</span>
-          </div>
-        </div>
-      )}
-
-      {hasAutoPopulated && (
-        <p className="text-[11px] text-primary/80 flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-          Export settings matched to source video
-        </p>
-      )}
-
-      {/* Social aspect ratio */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <Crop className="w-3 h-3 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Aspect ratio</span>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {ASPECT_RATIO_OPTIONS.map(({ label, value, icon }) => (
-            <button key={value} onClick={() => setAspectRatio(value)}
-              className={`flex items-center gap-1 px-2 py-0.5 text-[12px] rounded border transition-colors ${
-                aspectRatio === value
-                  ? "bg-primary/15 border-primary/30 text-primary"
-                  : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-              }`}>
-              <span>{icon}</span> <span>{label}</span>
-            </button>
-          ))}
-        </div>
-        {aspectRatio !== "original" && (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {FRAME_OPTIONS.map(({ label, value }) => (
-              <button key={value} onClick={() => setFrameMode(value)}
-                className={`px-2 py-0.5 text-[12px] rounded border transition-colors ${
-                  frameMode === value
-                    ? "bg-primary/15 border-primary/30 text-primary"
-                    : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        {aspectRatio !== "original" && (
-          <p className="text-[11px] text-muted-foreground">
-            {ASPECT_RATIO_OPTIONS.find(a => a.value === aspectRatio)?.desc}
-          </p>
+        {hasAutoPopulated && (
+          <span className="flex items-center gap-1 text-[11px] text-primary/90 bg-primary/10 border border-primary/20 rounded-full px-2 py-0.5 whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
+            Matched to source
+          </span>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">FPS</span>
-          <input type="number" value={fps} min={12} max={120}
-            onChange={(e) => setFps(Number(e.target.value))}
-            className="px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Duration (s)</span>
-          <input type="number" value={duration} min={0.5} max={300} step={0.5}
-            onChange={(e) => setDuration(Number(e.target.value))}
-            className="px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
-        </label>
-      </div>
+      {/* Two-pane: left "Output" summary monitor, right grouped settings —
+          stacks to one column below the sm breakpoint (mobile / narrow). */}
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,15rem)_1fr] gap-3 items-start">
 
-      {/* Codec tier — the deliverable. ProRes is the editorial master; HEVC/ProRes
-          need the native desktop engine and are disabled on the web build. */}
-      <div className="space-y-1">
-        <span className="text-xs text-muted-foreground">Codec</span>
-        <div className="flex flex-wrap gap-1">
-          {CODEC_TIERS.map((t) => {
-            const disabled = t.desktopOnly && !isDesktop;
-            const active = codec === t.value;
-            return (
-              <button key={t.value} onClick={() => !disabled && setCodec(t.value)} disabled={disabled}
-                title={disabled ? `${t.label} — desktop app only` : t.hint}
-                className={`px-2 py-0.5 text-[12px] rounded border transition-colors font-semibold ${
-                  active
-                    ? "bg-primary/15 border-primary/30 text-primary"
-                    : disabled
-                      ? "bg-secondary/40 border-border/60 text-muted-foreground/40 cursor-not-allowed"
-                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-                }`}>
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          {isGif ? "Max 480px wide · lower FPS recommended for file size" : `${tier.hint} · .${tier.ext}`}
-        </p>
-      </div>
-
-      {/* Audio — keep the source's original track. On desktop ffmpeg muxes it
-          straight from the source file; honest about when it can't. */}
-      {isVideo && (
-        <div className="space-y-1">
-          <div className="flex items-center gap-1">
-            <Volume2 className="w-3 h-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Audio</span>
+        {/* ── Left: Output summary + file name ─────────────────────────── */}
+        <aside className="space-y-2 min-w-0">
+          <div className="rounded-md border border-border bg-secondary/30 overflow-hidden">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-secondary/60 border-b border-border">
+              <Monitor className="w-3 h-3 text-primary" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/80">Output</span>
+            </div>
+            <div className="px-2.5 py-1 divide-y divide-border/50">
+              <SummaryRow label="Format" value={summaryFormat} accent />
+              <SummaryRow label="Resolution" value={summaryRes} />
+              <SummaryRow label="Frame rate" value={`${fps} fps`} />
+              <SummaryRow label="Aspect" value={summaryAspect} />
+              {isVideo && (
+                <SummaryRow label="Range"
+                  value={isTrimmed ? `${formatTimecode(trimIn)}–${formatTimecode(trimOut)}` : "Full clip"}
+                  accent={isTrimmed} />
+              )}
+              <SummaryRow label="Duration" value={`${exportSeconds.toFixed(2)}s · ${exportFrames.toLocaleString()}f`} />
+              {isVideo && <SummaryRow label="Audio" value={summaryAudio} />}
+              <SummaryRow label="Est. size" value={summarySize} />
+            </div>
           </div>
-          {audioControllable ? (
-            <>
-              <div className="flex gap-1">
-                {([["original", "Original", Volume2], ["off", "Muted", VolumeX]] as const).map(([val, label, Icon]) => {
-                  const active = (val === "original") === audioOn;
+
+          {/* Output name — saved with this name; the destination is chosen in the
+              save dialog that opens on export. */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Type className="w-3 h-3 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">File name</span>
+            </div>
+            <div className="flex items-stretch rounded-md border border-border bg-secondary focus-within:ring-1 focus-within:ring-primary/50 overflow-hidden">
+              <input
+                type="text"
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                placeholder={defaultBase}
+                spellCheck={false}
+                aria-label="Export file name"
+                className="flex-1 min-w-0 bg-transparent px-2.5 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+              />
+              <span className="flex items-center px-2 text-[12px] font-mono text-muted-foreground border-l border-border select-none">.{videoExt}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground flex items-start gap-1">
+              <FolderOpen className="w-3 h-3 mt-px shrink-0" />
+              {isDesktop
+                ? "Pick the folder in the save dialog — reveals in Finder when done."
+                : "Choose where to save in your browser's dialog (else it goes to Downloads)."}
+            </p>
+          </div>
+
+          {/* Source info badge (stacked under the summary) */}
+          {isVideo && videoWidth && videoHeight && (
+            <div className="flex items-start gap-2 px-2.5 py-1.5 bg-secondary/60 rounded-md border border-border">
+              <Info className="w-3 h-3 text-primary shrink-0 mt-0.5" />
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-mono text-muted-foreground">
+                <span className="text-foreground font-semibold">Source</span>
+                <span>{videoWidth}×{videoHeight}</span>
+                <span>{videoFPS?.toFixed(2)} fps</span>
+                <span>{formatTimecode(videoDuration || 0)}</span>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        {/* ── Right: grouped settings stack ────────────────────────────── */}
+        <div className="space-y-2.5 min-w-0">
+
+          {/* Format — preset + codec (Premiere puts Format/Preset up top). */}
+          <Section title="Format" icon={Film} hint={`.${tier.ext}`}>
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Preset</span>
+              <div className="flex flex-wrap gap-1">
+                {DELIVERY_PRESETS.map((p) => {
+                  const disabled = p.desktopOnly && !isDesktop;
+                  const active = activePreset === p.value;
                   return (
-                    <button key={val} onClick={() => setAudioOn(val === "original")}
-                      className={`flex items-center gap-1 px-2 py-0.5 text-[12px] rounded border transition-colors ${
-                        active
-                          ? "bg-primary/15 border-primary/30 text-primary"
-                          : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-                      }`}>
-                      <Icon className="w-3 h-3" /> {label}
+                    <button key={p.value}
+                      onClick={() => { if (disabled) return; setCodec(p.codec); setResolution(p.resolution); setAspectRatio(p.aspectRatio); }}
+                      disabled={disabled}
+                      title={disabled ? `${p.label} — desktop app only` : p.hint}
+                      className={chip(active, disabled)}>
+                      {p.label}
                     </button>
                   );
                 })}
               </div>
-              {audioOn && !isDesktop && (
-                <p className="text-[11px] text-muted-foreground">Muxed where the browser supports it — the desktop app guarantees it.</p>
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Codec</span>
+              <div className="flex flex-wrap gap-1">
+                {CODEC_TIERS.map((t) => {
+                  const disabled = t.desktopOnly && !isDesktop;
+                  const active = codec === t.value;
+                  return (
+                    <button key={t.value} onClick={() => !disabled && setCodec(t.value)} disabled={disabled}
+                      title={disabled ? `${t.label} — desktop app only` : t.hint}
+                      className={`${chip(active, disabled)} font-semibold`}>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {isGif ? "Max 480px wide · lower FPS recommended for file size" : `${tier.hint} · .${tier.ext}`}
+              </p>
+            </div>
+          </Section>
+
+          {/* Video — timing, framing, resolution. */}
+          <Section title="Video" icon={Video} hint={`${fps}fps`}>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">FPS</span>
+                <input type="number" value={fps} min={12} max={120}
+                  onChange={(e) => setFps(Number(e.target.value))}
+                  className="px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Duration (s)</span>
+                <input type="number" value={duration} min={0.5} max={300} step={0.5}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </label>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center gap-1">
+                <Crop className="w-3 h-3 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Aspect ratio</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {ASPECT_RATIO_OPTIONS.map(({ label, value, icon }) => (
+                  <button key={value} onClick={() => setAspectRatio(value)}
+                    className={`flex items-center gap-1 ${chip(aspectRatio === value)}`}>
+                    <span>{icon}</span> <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              {aspectRatio !== "original" && (
+                <>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {FRAME_OPTIONS.map(({ label, value }) => (
+                      <button key={value} onClick={() => setFrameMode(value)}
+                        className={chip(frameMode === value)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {ASPECT_RATIO_OPTIONS.find(a => a.value === aspectRatio)?.desc}
+                  </p>
+                </>
               )}
-            </>
-          ) : (
-            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-              <VolumeX className="w-3 h-3 shrink-0" /> {audioUnavailableReason}
-            </p>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Resolution</span>
+              <div className="flex flex-wrap gap-1">
+                {RESOLUTION_OPTIONS.map(({ label, value }) => (
+                  <button key={value} onClick={() => setResolution(value)}
+                    className={chip(resolution === value)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Section>
+
+          {/* Source · Trim — in/out points (native ffmpeg export only). */}
+          {isVideo && (
+            <Section title="Source · Trim" icon={Scissors}
+              hint={isTrimmed ? `${trimDuration.toFixed(2)}s` : "Full"}>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-muted-foreground">In (s)</span>
+                  <div className="flex gap-1">
+                    <input type="number" value={inPoint} min={0} max={duration} step={0.1}
+                      onChange={(e) => setInPoint(Math.max(0, Math.min(Number(e.target.value), outPoint - 1 / Math.max(1, fps))))}
+                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+                    <button title="Set in point from the current playhead"
+                      onClick={() => setInPoint(Math.max(0, Math.min(playhead, outPoint - 1 / Math.max(1, fps))))}
+                      className="px-2 py-0.5 text-[11px] rounded border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                      ⇤
+                    </button>
+                  </div>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-muted-foreground">Out (s)</span>
+                  <div className="flex gap-1">
+                    <input type="number" value={outPoint} min={0} max={duration} step={0.1}
+                      onChange={(e) => setOutPoint(Math.max(inPoint + 1 / Math.max(1, fps), Math.min(Number(e.target.value), duration)))}
+                      className="w-full px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+                    <button title="Set out point from the current playhead"
+                      onClick={() => setOutPoint(Math.max(inPoint + 1 / Math.max(1, fps), Math.min(playhead, duration)))}
+                      className="px-2 py-0.5 text-[11px] rounded border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                      ⇥
+                    </button>
+                  </div>
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-mono text-muted-foreground">
+                  {isTrimmed
+                    ? <>{formatTimecode(trimIn)} → {formatTimecode(trimOut)} · {trimDuration.toFixed(2)}s</>
+                    : <>Entire clip · {duration.toFixed(2)}s</>}
+                </p>
+                {isTrimmed && (
+                  <button onClick={() => { setInPoint(0); setOutPoint(duration); }}
+                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                    Reset
+                  </button>
+                )}
+              </div>
+            </Section>
           )}
-        </div>
-      )}
 
-      {/* Advanced toggle */}
-      <button onClick={() => setShowAdvanced(!showAdvanced)}
-        className="text-[12px] text-muted-foreground hover:text-foreground transition-colors underline">
-        {showAdvanced ? "Hide advanced" : "Show advanced options"}
-      </button>
+          {/* Audio — keep the source's original track (ffmpeg muxes it). */}
+          {isVideo && (
+            <Section title="Audio" icon={Volume2}
+              hint={audioControllable ? (audioOn ? "Original" : "Muted") : "n/a"}>
+              {audioControllable ? (
+                <>
+                  <div className="flex gap-1">
+                    {([["original", "Original", Volume2], ["off", "Muted", VolumeX]] as const).map(([val, label, Icon]) => {
+                      const active = (val === "original") === audioOn;
+                      return (
+                        <button key={val} onClick={() => setAudioOn(val === "original")}
+                          className={`flex items-center gap-1 ${chip(active)}`}>
+                          <Icon className="w-3 h-3" /> {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {audioOn && !isDesktop && (
+                    <p className="text-[11px] text-muted-foreground">Muxed where the browser supports it — the desktop app guarantees it.</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <VolumeX className="w-3 h-3 shrink-0" /> {audioUnavailableReason}
+                </p>
+              )}
+            </Section>
+          )}
 
-      {showAdvanced && (
-        <div className="space-y-2 pl-2 border-l-2 border-border">
-          <div className="space-y-1">
-            <span className="text-xs text-muted-foreground">Resolution</span>
-            <div className="flex flex-wrap gap-1">
-              {RESOLUTION_OPTIONS.map(({ label, value }) => (
-                <button key={value} onClick={() => setResolution(value)}
-                  className={`px-2 py-0.5 text-[12px] rounded border transition-colors ${
-                    resolution === value
-                      ? "bg-primary/15 border-primary/30 text-primary"
-                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-                  }`}>
-                  {label}
-                </button>
-              ))}
+          {/* Advanced — render fidelity controls. */}
+          <Section title="Advanced" icon={Settings2} defaultOpen={false}>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Quality multiplier</span>
+              <input type="number" value={quality} min={0.5} max={2.5} step={0.1}
+                onChange={(e) => setQuality(Number(e.target.value))}
+                className="px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            </label>
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Render mode</span>
+              <div className="flex flex-wrap gap-1">
+                {RENDER_QUALITY_OPTIONS.map(({ label, value }) => (
+                  <button key={value} onClick={() => setRenderQuality(value)}
+                    className={chip(renderQuality === value)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Quality multiplier</span>
-            <input type="number" value={quality} min={0.5} max={2.5} step={0.1}
-              onChange={(e) => setQuality(Number(e.target.value))}
-              className="px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
-          </label>
-
-          <div className="space-y-1">
-            <span className="text-xs text-muted-foreground">Render mode</span>
-            <div className="flex flex-wrap gap-1">
-              {RENDER_QUALITY_OPTIONS.map(({ label, value }) => (
-                <button key={value} onClick={() => setRenderQuality(value)}
-                  className={`px-2 py-0.5 text-[12px] rounded border transition-colors ${
-                    renderQuality === value
-                      ? "bg-primary/15 border-primary/30 text-primary"
-                      : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-                  }`}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
+          </Section>
         </div>
-      )}
-
-      {/* Export summary */}
-      <div className="px-2.5 py-1.5 bg-secondary/40 rounded-md border border-border space-y-0.5">
-        <p className="text-[12px] text-foreground font-mono font-medium">
-          {totalFrames.toLocaleString()} frames · {duration}s @ {fps}fps · {tier.label}
-          {resolution > 0 ? ` · ${resolution}p` : " · Source res"}
-          {aspectRatio !== "original" ? ` · ${aspectRatio}` : ""}
-        </p>
-        <p className="text-[11px] text-muted-foreground font-mono">
-          TC: {formatTimecode(0)} → {formatTimecode(duration)}
-          {!isGif && !isProRes && ` · ~${estimatedFileSizeMB()} MB est.`}
-        </p>
       </div>
 
+      {/* Render progress */}
       {isExporting && (
         <div className="space-y-1">
           <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -507,73 +620,65 @@ const ExportPanel = ({
               style={{ width: `${exportProgress * 100}%` }} />
           </div>
           <div className="flex justify-between text-[12px] text-muted-foreground font-mono">
-            <span>Frame {Math.round(exportProgress * totalFrames)}/{totalFrames}</span>
+            <span>Frame {Math.round(exportProgress * exportFrames)}/{exportFrames}</span>
             <span>{Math.round(exportProgress * 100)}%</span>
           </div>
         </div>
       )}
 
-      <div className="flex gap-2">
-        {isGif ? (
-          <div className="relative flex-1 group">
-            <button
-              onClick={() => onExportGif?.(fps, duration, ensureFilename(effectiveBase, "gif", "lme-export"))}
-              disabled={!hasImage || isExporting}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
-              <Film className="w-3.5 h-3.5" /> Export GIF
-            </button>
-            {!hasImage && (
-              <span className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap bg-popover text-popover-foreground text-[12px] px-2 py-1 rounded border border-border shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                Load an image first
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="relative flex-1 group">
-            <button
-              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: effectiveAudioOn ? true : undefined, format: "mp4", codec: codec as "h264" | "hevc" | "prores422" | "prores4444", audioMode, fileName: ensureFilename(effectiveBase, videoExt, "lme-export") })}
-              disabled={!hasImage || isExporting}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
-              {isProRes ? <Video className="w-3.5 h-3.5" /> : <Film className="w-3.5 h-3.5" />}
-              Export {tier.label}
-            </button>
-            {!hasImage && (
-              <span className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap bg-popover text-popover-foreground text-[12px] px-2 py-1 rounded border border-border shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                Load an image first
-              </span>
-            )}
-          </div>
+      {/* Action bar — secondary on the left, primary Export on the right
+          (Premiere anchors Export bottom-right). */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <div className="relative group">
+          <button onClick={() => onExportStill({ aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, fileName: ensureFilename(effectiveBase, stillExt, "lme-export") })} disabled={!hasImage || isExporting}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-border">
+            <ImageIcon className="w-3.5 h-3.5" /> Still
+          </button>
+          {!hasImage && <NeedsImage />}
+        </div>
+
+        {onEnqueueExport && (
+          <button
+            onClick={handleAddToQueue}
+            disabled={!hasImage || !queueable}
+            title={queueable ? undefined : "The queue supports H.264 and GIF — export ProRes/HEVC directly"}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-dashed border-border">
+            <ListPlus className="w-3.5 h-3.5" /> Add to queue
+          </button>
         )}
+
+        <div className="flex-1 min-w-[0.5rem]" />
+
         {isExporting && onCancelExport && (
           <button onClick={onCancelExport}
             className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors">
             <X className="w-3.5 h-3.5" /> Cancel
           </button>
         )}
-        <div className="relative group">
-          <button onClick={() => onExportStill({ aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, fileName: ensureFilename(effectiveBase, stillExt, "lme-export") })} disabled={!hasImage || isExporting}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-border">
-            <ImageIcon className="w-3.5 h-3.5" /> Still
-          </button>
-          {!hasImage && (
-            <span className="absolute top-full mt-1 left-1/2 -translate-x-1/2 whitespace-nowrap bg-popover text-popover-foreground text-[12px] px-2 py-1 rounded border border-border shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-              Load an image first
-            </span>
-          )}
-        </div>
-      </div>
 
-      {/* Add to queue — for managing long / multiple unattended renders. The
-          queue runs on the WebCodecs engine, so it accepts H.264 and GIF only. */}
-      {onEnqueueExport && (
-        <button
-          onClick={handleAddToQueue}
-          disabled={!hasImage || !queueable}
-          title={queueable ? undefined : "The queue supports H.264 and GIF — export ProRes/HEVC directly"}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-dashed border-border">
-          <ListPlus className="w-3.5 h-3.5" /> Add to export queue
-        </button>
-      )}
+        {isGif ? (
+          <div className="relative group">
+            <button
+              onClick={() => onExportGif?.(fps, duration, ensureFilename(effectiveBase, "gif", "lme-export"))}
+              disabled={!hasImage || isExporting}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
+              <Film className="w-3.5 h-3.5" /> Export GIF
+            </button>
+            {!hasImage && <NeedsImage />}
+          </div>
+        ) : (
+          <div className="relative group">
+            <button
+              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: effectiveAudioOn ? true : undefined, format: "mp4", codec: codec as "h264" | "hevc" | "prores422" | "prores4444", audioMode, fileName: ensureFilename(effectiveBase, videoExt, "lme-export"), ...(isTrimmed ? { inSec: trimIn, outSec: trimOut } : {}) })}
+              disabled={!hasImage || isExporting}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
+              {isProRes ? <Video className="w-3.5 h-3.5" /> : <Film className="w-3.5 h-3.5" />}
+              Export {tier.label}
+            </button>
+            {!hasImage && <NeedsImage />}
+          </div>
+        )}
+      </div>
 
       {/* Export queue */}
       {queueJobs && onCancelJob && onCancelAll && onClearFinished && (
@@ -586,8 +691,6 @@ const ExportPanel = ({
           onClearFinished={onClearFinished}
         />
       )}
-
-
 
       {/* Export validator */}
       {onValidateExport && (
@@ -636,8 +739,6 @@ const ExportPanel = ({
         </div>
       )}
 
-
-
       {/* LUT Export */}
       <div className="border-t border-border pt-3 mt-3 space-y-2">
         <div className="flex items-center gap-1">
@@ -647,11 +748,7 @@ const ExportPanel = ({
         <div className="flex flex-wrap gap-1">
           {LUT_SIZE_OPTIONS.map(({ label, value }) => (
             <button key={value} onClick={() => setLutSize(value)}
-              className={`px-2 py-0.5 text-[12px] rounded border transition-colors ${
-                lutSize === value
-                  ? "bg-primary/15 border-primary/30 text-primary"
-                  : "bg-secondary border-border text-muted-foreground hover:text-foreground"
-              }`}>
+              className={chip(lutSize === value)}>
               {label}
             </button>
           ))}

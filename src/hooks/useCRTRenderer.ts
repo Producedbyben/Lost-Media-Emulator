@@ -1254,6 +1254,9 @@ export function useCRTRenderer() {
     fileName?: string;
     audioMode?: "off" | "original" | "degrade";
     codec?: "h264" | "hevc" | "prores422" | "prores4444";
+    // Trim window in source seconds (ffmpeg path only). Omitted = full clip.
+    inSec?: number;
+    outSec?: number;
   }) => {
     const canvas = canvasRef.current;
     if (!canvas || !rendererRef.current) return;
@@ -1282,9 +1285,16 @@ export function useCRTRenderer() {
           const wantsAudio = options?.audioMode !== "off";
           const audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
             ? sourcePathRef.current : undefined;
+          // Trim window: clamp in/out to the clip and forward only when a real
+          // sub-range was requested (full clip → in/out omitted, byte-identical).
+          const full = Math.max(0.5, duration);
+          const trimIn = Math.max(0, Math.min(options?.inSec ?? 0, full));
+          const trimOut = Math.max(trimIn + 1 / Math.max(1, fps), Math.min(options?.outSec ?? full, full));
+          const isTrimmed = options?.inSec != null || options?.outSec != null;
           await exportViaFfmpeg({
             canvas, renderer: rendererRef.current,
-            params: paramsRef.current, fps: Math.max(1, fps), duration: Math.max(0.5, duration),
+            params: paramsRef.current, fps: Math.max(1, fps), duration: full,
+            ...(isTrimmed ? { inSec: trimIn, outSec: trimOut } : {}),
             codec: options?.codec || "h264", outPath, audioSourcePath,
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
             sourceScale: previewSettingsRef.current.sourceScale,

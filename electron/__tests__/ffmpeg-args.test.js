@@ -71,4 +71,36 @@ describe("buildVideoArgs", () => {
     const mp4 = buildVideoArgs({ ...base, codec: "h264", audioSourcePath: "/s.mov" }).join(" ");
     expect(mp4).toContain("-c:a aac");
   });
+
+  it("trims the muxed audio with -ss/-t placed before the audio input", () => {
+    const a = buildVideoArgs({ ...base, codec: "h264", audioSourcePath: "/src/clip.mov", inSec: 2, outSec: 5 });
+    const j = a.join(" ");
+    expect(j).toContain("-ss 2");                 // start at the in point
+    expect(j).toContain("-t 3");                  // duration = out − in
+    expect(j).toContain("-shortest");             // still clamp to rendered video
+    // -ss/-t must apply to the audio input → appear before "-i /src/clip.mov"
+    const ss = a.indexOf("-ss");
+    const audioIn = j.indexOf("-i /src/clip.mov");
+    expect(ss).toBeGreaterThanOrEqual(0);
+    expect(j.indexOf("-ss")).toBeLessThan(audioIn);
+    expect(j.indexOf("-t ")).toBeLessThan(audioIn);
+  });
+
+  it("omits -ss when the in point is 0 but still sets -t to the window length", () => {
+    const j = buildVideoArgs({ ...base, codec: "h264", audioSourcePath: "/s.mov", inSec: 0, outSec: 4 }).join(" ");
+    expect(j).not.toContain("-ss");
+    expect(j).toContain("-t 4");
+  });
+
+  it("never adds trim flags to a silent (no audioSourcePath) encode", () => {
+    const j = buildVideoArgs({ ...base, codec: "h264", inSec: 2, outSec: 5 }).join(" ");
+    expect(j).not.toContain("-ss");
+    expect(j).not.toContain("-t ");
+  });
+
+  it("adds no trim flags when in/out are absent (unchanged behaviour)", () => {
+    const j = buildVideoArgs({ ...base, codec: "h264", audioSourcePath: "/s.mov" }).join(" ");
+    expect(j).not.toContain("-ss");
+    expect(j).not.toContain("-t ");
+  });
 });

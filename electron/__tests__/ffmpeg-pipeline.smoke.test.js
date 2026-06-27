@@ -108,4 +108,36 @@ describe.skipIf(!ffmpeg || !ffprobe)("ffmpeg pipeline smoke", () => {
         fs.rmSync(src, { force: true });
       });
   }, 30000);
+
+  it("trims to an in/out window: encoded duration ≈ out − in", () => {
+    // 4s source with audio; we export only the [1s, 3s) window (2s).
+    const src = path.join(os.tmpdir(), "lme-smoke-trim-src.mp4");
+    execFileSync(ffmpeg, [
+      "-y",
+      "-f", "lavfi", "-i", "color=c=green:s=64x64:d=4",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=4",
+      "-c:v", "h264_videotoolbox", "-c:a", "aac", "-shortest", src,
+    ]);
+
+    const fps = 10, inSec = 1, outSec = 3, windowFrames = fps * (outSec - inSec); // 20
+    const session = createSession({ width: 64, height: 64, fps, tmpRoot: os.tmpdir() });
+    for (let i = 0; i < windowFrames; i++) session.writeFrame(i, FRAME);
+    const out = path.join(os.tmpdir(), "lme-smoke-trim.mp4");
+    return session.encode({ ffmpegPath: ffmpeg, codec: "h264", outPath: out, audioSourcePath: src, inSec, outSec })
+      .then(() => {
+        session.cleanup();
+        const probe = JSON.parse(execFileSync(ffprobe, [
+          "-v", "quiet", "-print_format", "json", "-show_streams", "-show_format", out,
+        ]).toString());
+        // The encoded clip should be ~2s (out − in), not the source's 4s.
+        expect(Number(probe.format.duration)).toBeGreaterThan(1.6);
+        expect(Number(probe.format.duration)).toBeLessThan(2.4);
+        // Audio came along and was trimmed to the window too.
+        const a = probe.streams.find((s) => s.codec_type === "audio");
+        expect(a).toBeTruthy();
+        expect(Number(a.duration)).toBeLessThan(2.4);
+        fs.rmSync(out, { force: true });
+        fs.rmSync(src, { force: true });
+      });
+  }, 30000);
 });

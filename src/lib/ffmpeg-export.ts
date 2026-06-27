@@ -13,7 +13,7 @@ interface FfmpegBridge {
   available: () => Promise<boolean>;
   begin: (o: { width: number; height: number; fps: number }) => Promise<{ sessionId: string }>;
   frame: (o: { sessionId: string; index: number; bytes: ArrayBuffer }) => Promise<{ ok: boolean }>;
-  encode: (o: { sessionId: string; codec: string; outPath: string; audioSourcePath?: string }) => Promise<{ ok: boolean; outPath: string }>;
+  encode: (o: { sessionId: string; codec: string; outPath: string; audioSourcePath?: string; inSec?: number; outSec?: number }) => Promise<{ ok: boolean; outPath: string }>;
   cancel: (o: { sessionId: string }) => Promise<void>;
   onProgress: (cb: (d: { sessionId: string; frame: number; totalFrames: number }) => void) => () => void;
 }
@@ -52,6 +52,11 @@ export async function exportViaFfmpeg(opts: {
   codec: "h264" | "hevc" | "prores422" | "prores4444";
   outPath: string;
   audioSourcePath?: string;
+  // Trim window in source seconds. When set, only [inSec, outSec) is rendered
+  // (frame t = inSec + frame/fps) and the muxed audio is trimmed to match.
+  // Default behaviour (omitted) renders [0, duration) exactly as before.
+  inSec?: number;
+  outSec?: number;
   videoElement?: HTMLVideoElement | null;
   sourceScale?: number;
   renderOptions?: unknown;
@@ -65,7 +70,16 @@ export async function exportViaFfmpeg(opts: {
   const sourceScale = opts.sourceScale ?? 1;
   const isVideoSource = opts.videoElement instanceof HTMLVideoElement;
   const { width, height } = evenSize(canvas.width, canvas.height);
-  const totalFrames = Math.max(1, Math.floor(fps * duration));
+
+  // Trim window in source seconds. When in/out aren't given, render [0, duration)
+  // exactly as before; otherwise render [inSec, outSec) and trim the audio mux
+  // to match. `trimmed` gates whether in/out are forwarded to the encode (so a
+  // full export keeps byte-identical ffmpeg args).
+  const trimmed = opts.inSec != null || opts.outSec != null;
+  const inSec = Math.max(0, opts.inSec ?? 0);
+  const outSec = Math.max(inSec + 1 / fps, opts.outSec ?? inSec + duration);
+  const windowDuration = outSec - inSec;
+  const totalFrames = Math.max(1, Math.floor(fps * windowDuration));
 
   const work = document.createElement("canvas");
   work.width = width; work.height = height;
@@ -80,7 +94,7 @@ export async function exportViaFfmpeg(opts: {
     renderer.reset?.();
     for (let frame = 0; frame < totalFrames; frame++) {
       if (opts.signal?.aborted) throw new DOMException("aborted", "AbortError");
-      const t = frame / fps;
+      const t = inSec + frame / fps;
       if (isVideoSource && opts.videoElement) {
         const seekTime = Math.min(t, (opts.videoElement.duration || duration) - 0.001);
         await seekVideo(opts.videoElement, seekTime);
@@ -91,7 +105,10 @@ export async function exportViaFfmpeg(opts: {
       await b.frame({ sessionId, index: frame, bytes });
       opts.onProgress?.((frame + 1) / totalFrames * 0.9); // reserve last 10% for encode
     }
-    const res = await b.encode({ sessionId, codec, outPath, audioSourcePath: opts.audioSourcePath });
+    const res = await b.encode({
+      sessionId, codec, outPath, audioSourcePath: opts.audioSourcePath,
+      ...(trimmed ? { inSec, outSec } : {}),
+    });
     opts.onProgress?.(1);
     return { outPath: res.outPath };
   } catch (err) {

@@ -16,8 +16,15 @@ to date is on branch `feat/exporter-ffmpeg-phase1` (unmerged).
 - **Codec tiers** — H.264 / HEVC / ProRes 422 HQ / ProRes 4444 / GIF.
 - **Delivery presets** — Web / Social / Master / GIF.
 - **Still export** — respects aspect ratio (centre-crop) + the shared Save dialog.
+- **Trim (in/out points)** — export only `[inSec, outSec)`. `ffmpeg-export.ts`
+  renders that window (`t = inSec + frame/fps`); `buildVideoArgs` adds `-ss`/`-t`
+  on the audio input so the muxed audio matches (keeps `-shortest`). UI: in/out
+  fields + "set from playhead" (`videoCurrentTime`) in `ExportPanel`, video-only.
+  Full clip exports stay byte-identical (in/out forwarded only when trimmed).
+  WebCodecs (web fallback) ignores trim.
 - All verified by an `ffprobe` smoke test (`electron/__tests__/ffmpeg-pipeline.smoke.test.js`)
-  doing real h264/hevc/ProRes encodes + an audio mux. 62 tests green.
+  doing real h264/hevc/ProRes encodes, an audio mux, and a trim (duration ≈ out−in).
+  67 tests green.
 
 **To run the real pipeline:** ffmpeg is installed in dev (`/opt/homebrew/bin`), so
 `npm run electron:dev` uses the native path live, and `npm test` runs the real
@@ -27,21 +34,6 @@ README) — `extraResources` bundles them only when present.
 ---
 
 ## Remaining features (pick up any of these)
-
-### 1. Trim (in / out points) — ~30–45k tokens
-**What:** export a section of a clip instead of always from t=0.
-**Why:** core "pro" capability; the only remaining item that adds real function.
-**Approach:**
-- Add `inSec` / `outSec` to the export request. Render loop in
-  `src/lib/ffmpeg-export.ts` iterates `[in, out)` instead of `[0, duration)`
-  (frame `t = inSec + frame/fps`).
-- Audio trim: `buildVideoArgs` adds `-ss <in> -t <out-in>` on the audio input
-  (input 1) so the muxed audio matches; keep `-shortest`.
-- UI: two numeric fields in `ExportPanel` + "set in/out from playhead" using the
-  existing `videoCurrentTime`. Default in=0, out=duration.
-**Files:** `ffmpeg-export.ts`, `ffmpeg-args.cjs` (+test), `useCRTRenderer.ts`
-(`handleExportMp4` threads in/out), `ExportPanel.tsx`.
-**Verify:** smoke test — encode with in/out, assert ffprobe duration ≈ out−in.
 
 ### 2. Degrade-audio-to-match — ~35–50k tokens
 **What:** the third audio mode — run the source audio through the look's analog
@@ -94,5 +86,5 @@ Output / Video / Audio sections, clearer hierarchy). Pure UI.
 
 ## Suggested order
 
-Trim (1) → queue-through-ffmpeg (3) → degrade audio (2) → cancel-during-encode (4)
+Trim ✅ → queue-through-ffmpeg (3) → degrade audio (2) → cancel-during-encode (4)
 → dialog polish (5). Or cherry-pick by need.

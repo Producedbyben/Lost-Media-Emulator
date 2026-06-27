@@ -237,14 +237,14 @@ ipcMain.handle("ffmpeg:frame", (_e, { sessionId, index, bytes }) => {
   return { ok: true };
 });
 
-ipcMain.handle("ffmpeg:encode", async (e, { sessionId, codec, outPath, audioSourcePath }) => {
+ipcMain.handle("ffmpeg:encode", async (e, { sessionId, codec, outPath, audioSourcePath, inSec, outSec }) => {
   const session = ffmpegSessions.get(sessionId);
   if (!session) throw new Error("unknown ffmpeg session");
   const { ffmpeg } = locate();
   if (!ffmpeg) throw new Error("ffmpeg binary not found");
   try {
     await session.encode({
-      ffmpegPath: ffmpeg, codec, outPath, audioSourcePath,
+      ffmpegPath: ffmpeg, codec, outPath, audioSourcePath, inSec, outSec,
       onProgress: (p) => e.sender.send("ffmpeg:progress", { sessionId, ...p }),
     });
     shell.showItemInFolder(outPath);

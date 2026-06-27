@@ -1,6 +1,6 @@
 // Pure ffmpeg argv builder for the export tiers: delivery H.264/HEVC (mp4) and
 // editorial ProRes 422 HQ / 4444 (mov), encoding a PNG sequence with optional
-// original-audio mux. Trim is added in a later phase.
+// original-audio mux and optional in/out trim of that audio.
 
 // Per-codec encode profile: video flags, pixel format, container, and the audio
 // codec the container conventionally carries (AAC for mp4, PCM for ProRes mov).
@@ -20,17 +20,26 @@ const CODECS = {
  *   framePattern:string,
  *   outPath:string,          // .mp4 for h264/hevc, .mov for ProRes
  *   totalFrames?:number,
- *   audioSourcePath?:string  // when set, mux its first audio track (if any)
+ *   audioSourcePath?:string, // when set, mux its first audio track (if any)
+ *   inSec?:number,           // trim: source second the muxed audio starts at
+ *   outSec?:number           // trim: source second the muxed audio ends at
  * }} req
  * @returns {string[]}
  */
-function buildVideoArgs({ codec, fps, framePattern, outPath, audioSourcePath, totalFrames: _totalFrames }) {
+function buildVideoArgs({ codec, fps, framePattern, outPath, audioSourcePath, inSec, outSec, totalFrames: _totalFrames }) {
   const spec = CODECS[codec];
   if (!spec) throw new Error(`unsupported codec: ${codec}`);
 
-  // Frame sequence is input 0; the audio source (when present) is input 1.
+  // Frame sequence is input 0; the audio source (when present) is input 1. The
+  // rendered frames already cover the trim window, so trim only the audio input:
+  // -ss/-t are input options and must precede the audio -i to apply to it.
   const input = ["-y", "-framerate", String(fps), "-i", framePattern];
-  if (audioSourcePath) input.push("-i", audioSourcePath);
+  if (audioSourcePath) {
+    const start = inSec || 0;
+    if (start > 0) input.push("-ss", String(start));
+    if (outSec != null) input.push("-t", String(outSec - start));
+    input.push("-i", audioSourcePath);
+  }
 
   const progress = ["-progress", "pipe:1", "-nostats"];
   const common = ["-pix_fmt", spec.pix, "-r", String(fps)];

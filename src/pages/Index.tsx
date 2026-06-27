@@ -1550,7 +1550,7 @@ const Index = () => {
       <EffectTour forceShow={showTour} onShowStep={handleJump} onComplete={() => setShowTour(false)} />
 
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Export Settings</DialogTitle>
           </DialogHeader>
@@ -1559,7 +1559,7 @@ const Index = () => {
             onCancelExport={handleCancelExport} isExporting={isExporting} exportProgress={exportProgress}
             currentParams={params}
             onValidateExport={validateExport} validation={validation}
-            videoFPS={videoFPS} videoDuration={videoDuration} videoWidth={videoWidth} videoHeight={videoHeight}
+            videoFPS={videoFPS} videoDuration={videoDuration} videoWidth={videoWidth} videoHeight={videoHeight} videoCurrentTime={videoCurrentTime}
             lookName={activePreset} onEnqueueExport={exportQueue.enqueue}
             queueJobs={exportQueue.jobs} queueEtaMs={exportQueue.etaMs} queueActiveCount={exportQueue.activeCount}
             onCancelJob={exportQueue.cancelJob} onCancelAll={exportQueue.cancelAll} onClearFinished={exportQueue.clearFinished} />
@@ -1877,7 +1877,7 @@ const Index = () => {
                 onCancelExport={handleCancelExport} isExporting={isExporting} exportProgress={exportProgress}
                 currentParams={params}
                 onValidateExport={validateExport} validation={validation}
-                videoFPS={videoFPS} videoDuration={videoDuration} videoWidth={videoWidth} videoHeight={videoHeight}
+                videoFPS={videoFPS} videoDuration={videoDuration} videoWidth={videoWidth} videoHeight={videoHeight} videoCurrentTime={videoCurrentTime}
                 lookName={activePreset} onEnqueueExport={exportQueue.enqueue}
                 queueJobs={exportQueue.jobs} queueEtaMs={exportQueue.etaMs} queueActiveCount={exportQueue.activeCount}
                 onCancelJob={exportQueue.cancelJob} onCancelAll={exportQueue.cancelAll} onClearFinished={exportQueue.clearFinished} />
