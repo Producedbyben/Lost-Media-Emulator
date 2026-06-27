@@ -775,10 +775,29 @@ export class CRTRendererFull {
           redSoft *= scratchBright; greenSoft *= scratchBright; blueSoft *= scratchBright;
         }
 
-        const dropoutNoise = seededNoise(x * 0.5, y + temporalFrame * 0.27, 31);
-        const dropoutGate = dropoutNoise > 0.988 - dropouts * 0.08 ? 1 - dropouts * (0.35 + seededNoise(y, temporalFrame, 59) * 0.5) : 1;
+        // Tape dropouts: brief HORIZONTAL streaks a few scanlines tall (~20–80px
+        // wide), irregularly clustered, with a bright flash at the head and a dark
+        // recovery — the real VHS signal-loss shape, not per-pixel speckle. Keyed
+        // on a 3-line band so each dropout spans 2–4 scanlines; a low-frequency
+        // term groups several bands so dropouts cluster rather than scatter.
+        let dropoutMul = 1;
+        if (dropouts > 0) {
+          const band = (y / 3) | 0;
+          const occur = seededNoise(band, temporalFrame * 0.37, 31) * 0.7
+                      + seededNoise((band / 6) | 0, temporalFrame * 0.21, 67) * 0.3;
+          if (occur > 0.93 - dropouts * 0.13) {
+            const streakW = 20 + seededNoise(band, temporalFrame, 17) * 60;
+            const streakX = seededNoise(band, temporalFrame * 1.7, 43) * width;
+            if (x >= streakX && x < streakX + streakW) {
+              const p = (x - streakX) / streakW; // 0 = head, 1 = tail
+              const bright = seededNoise(band, temporalFrame, 7) > 0.45;
+              if (bright && p < 0.18) dropoutMul = 1 + dropouts * 1.6;           // leading flash
+              else dropoutMul = 1 - dropouts * (0.55 + 0.4 * (1 - p));           // dark recovery, deepest at head
+            }
+          }
+        }
         const interlaceGate = interlacing > 0 ? 1 - interlacing * (((y + temporalFrame) & 1) ? 0.14 : 0.02) : 1;
-        const level = scanlineGain * dropoutGate * interlaceGate;
+        const level = scanlineGain * dropoutMul * interlaceGate;
 
         dstData[outIndex] = Math.min(255, Math.max(0, redSoft * level * rMask + dither));
         dstData[outIndex + 1] = Math.min(255, Math.max(0, greenSoft * level * gMask + dither));
