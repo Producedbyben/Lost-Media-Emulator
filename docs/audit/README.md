@@ -76,16 +76,35 @@ import { validateScorecard, validateReference } from "@/lib/audit/schema";
 import { readFileSync } from "fs";
 
 const cards = JSON.parse(readFileSync("docs/audit/scorecards/vhs.json", "utf8"));
-let ok = 0;
+const manifest = JSON.parse(readFileSync("docs/audit/references/manifest.json", "utf8"));
+const refIds = new Set(manifest.map((r) => r.id));
+
+const bad: string[] = [];
+// 1. References are well-formed.
+for (const r of manifest) {
+  const errs = validateReference(r);
+  if (errs.length) bad.push(`REF ${r.id}: ${errs.join("; ")}`);
+}
+// 2. Each scorecard is well-formed AND every referenceRef resolves to the manifest.
+//    (validateScorecard checks card SHAPE only — it does not read the manifest,
+//    so the membership cross-check below is what enforces the scoring gate.)
 for (const c of cards) {
   const errs = validateScorecard(c);
-  if (errs.length) console.error("INVALID", c.id, errs);
-  else ok++;
+  if (errs.length) bad.push(`${c.id}: ${errs.join("; ")}`);
+  for (const rr of c.referenceRefs ?? [])
+    if (!refIds.has(rr)) bad.push(`${c.id}: unknown referenceRef '${rr}'`);
 }
-console.log(`${ok}/${cards.length} valid`);
+
+if (bad.length) {
+  console.error("INVALID:\n" + bad.join("\n"));
+  process.exit(1);
+}
+console.log(`all ${cards.length} cards valid; all referenceRefs resolve to manifest`);
 ```
 
-Replace `vhs.json` with the medium you are validating. `validateReference` takes the same shape from `manifest.json` entries.
+Replace `vhs.json` with the medium you are validating. The membership cross-check
+is the loop's enforcement of the scoring gate (`validateScorecard` itself only
+checks card shape, including that `referenceRefs` is non-empty).
 
 ---
 

@@ -101,5 +101,19 @@ Before adding any entry to `manifest.json`, verify all of the following:
 
 **No medium may receive a rubric score until it has at least one
 `redistribute: true` reference entry in this manifest** that is relevant to the
-artifact being scored. Scorecards with `referenceRefs` pointing to IDs not
-present in this manifest will fail `validateScorecard` validation.
+artifact being scored.
+
+How this gate is enforced (be precise about what is and isn't automatic):
+
+- `validateScorecard` only enforces card *shape* — including that
+  `referenceRefs` is non-empty. It does **not** read this manifest, so it
+  cannot, on its own, reject a `referenceRef` that points to an unknown id.
+- Manifest-membership (every `referenceRef` resolving to a real entry here) is
+  enforced by the **validation step of the per-medium loop** — the audit
+  README's validate snippet cross-checks each card's `referenceRefs` against
+  the ids in this manifest and fails if any is missing. Run it before
+  committing scorecards.
+- The `redistribute: true` commercial gate is **human-enforced** by this
+  policy: `validateReference` only checks that `redistribute` is a boolean (a
+  `redistribute: false` URL-only entry is a legitimate manifest record), so the
+  reviewer must confirm any committed/bundled asset is genuinely cleared.
