@@ -1581,16 +1581,27 @@ export function useCRTRenderer() {
             aspectRatio: job.options?.aspectRatio,
           });
 
-          const wantsAudio = job.options?.includeAudio !== false;
-          const audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
+          const wantsAudio = job.options?.includeAudio !== false && job.options?.audioMode !== "off";
+          let audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
             ? sourcePathRef.current : undefined;
+          // Degrade-to-match — same one DSP as the single export (degraded buffer → temp WAV → mux),
+          // so queued exports sound like the preview too.
+          if (wantsAudio && job.options?.audioMode === "degrade" && audioDecodedRef.current) {
+            try {
+              const degraded = await degradeAudioBuffer(audioDecodedRef.current, audioProfileRef.current);
+              const wav = audioBufferToWav(degraded);
+              const dapi = (window as unknown as { desktop?: { writeTempAudio?: (b: ArrayBuffer) => Promise<{ path: string } | null> } }).desktop;
+              const res = await dapi?.writeTempAudio?.(wav);
+              if (res?.path) audioSourcePath = res.path;
+            } catch { /* fall back to muxing the original track */ }
+          }
 
           await exportViaFfmpeg({
             canvas, renderer,
             params: job.params,
             fps: Math.max(1, job.fps),
             duration: Math.max(0.5, job.duration),
-            codec: "h264",
+            codec: job.options?.codec || "h264",
             outPath,
             audioSourcePath,
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
