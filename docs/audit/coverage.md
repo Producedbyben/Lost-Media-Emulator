@@ -1,12 +1,10 @@
 # Audit coverage
 
-Presets scored: **11 / 91** (12.1%)
+Presets scored: **26 / 91** (28.6%)
 
 ## Outstanding presets
 
 - [ ] True Zero (Neutral)
-- [ ] PVM/BVM
-- [ ] Arcade
 - [ ] Hi8 Vacation Cam
 - [ ] MiniDV Family Cam (2002)
 - [ ] Off-Air Analog Broadcast
@@ -14,8 +12,6 @@ Presets scored: **11 / 91** (12.1%)
 - [ ] Early Web Rip (2006)
 - [ ] Security Camera Dump
 - [ ] Damaged Archive Recovery
-- [ ] Retro Pixel LCD
-- [ ] Cyberpunk OLED
 - [ ] Neon Sign Bloom (TikTok Style)
 - [ ] Streaming Compression
 - [ ] Digital Surveillance
@@ -34,7 +30,6 @@ Presets scored: **11 / 91** (12.1%)
 - [ ] 4K HDR Streaming 2020s
 - [ ] PAL Living Room TV (1970s)
 - [ ] Video CD Capture (1999)
-- [ ] CRT PC Monitor (1995)
 - [ ] Cable Access Recorder (1984)
 - [ ] Early Webcam (2008)
 - [ ] Polaroid SX-70 Instant
@@ -48,11 +43,6 @@ Presets scored: **11 / 91** (12.1%)
 - [ ] GoPro Hero3 Action Cam
 - [ ] Disposable Security IR Flood
 - [ ] ATSC Broadcast Transition (2009)
-- [ ] Sony Trinitron WEGA (2001)
-- [ ] Shadow Mask CRT Terminal (Amber)
-- [ ] IPS Office LCD (2013)
-- [ ] OLED Smartphone PenTile (2018)
-- [ ] Pioneer Plasma TV (2007)
 - [ ] 2-inch Quadruplex Broadcast (1960s)
 - [ ] RealPlayer 240p Stream (1999)
 - [ ] Pocket Digicam MJPEG (2004)
@@ -65,8 +55,6 @@ Presets scored: **11 / 91** (12.1%)
 - [ ] TV Tuner Card Capture (2007)
 - [ ] XviD AVI Fansub (2003)
 - [ ] Analog Cable Scrambled Signal
-- [ ] Rear-Projection CRT TV (2004)
-- [ ] LED Billboard Phone Capture
 - [ ] Zoom Call Recording (2020)
 - [ ] PAL UHF Antenna (1978)
 - [ ] 35mm Faded Cinema Print
@@ -75,9 +63,6 @@ Presets scored: **11 / 91** (12.1%)
 - [ ] MPEG-2 Satellite Glitch
 - [ ] iPhone 3G Vertical Video
 - [ ] Instagram Live 2024
-- [ ] CRT Plasma Burn-In
-- [ ] PenTile OLED Sunlight
-- [ ] Trinitron Warm Glow
 - [ ] Drone Footage Jello
 - [ ] Restored Archive Master
 - [ ] TikTok Screen Record Repost

@@ -14,5 +14,21 @@
     "license": "Public Domain Mark 1.0",
     "redistribute": true,
     "demonstrates": "VHS artifacts over real picture content — chroma bleed, soft luma, tracking error, bottom-of-frame head-switching band, dropouts, and generational/composite loss from a 1989 Palace Video budget VHS rip of public-domain cartoons"
+  },
+  {
+    "id": "display-crt-mask-macro",
+    "medium": "display",
+    "source": "https://commons.wikimedia.org/wiki/File:Shadow_mask_vs_aperture_grille.jpg",
+    "license": "CC-BY-SA-4.0",
+    "redistribute": false,
+    "demonstrates": "CRT mask/subpixel geometry ground truth — shadow-mask RGB phosphor triads (dot/slot grid) vs Trinitron aperture-grille continuous vertical RGB stripes. URL-cited only (CC-BY-SA share-alike → not bundled in the commercial product)."
+  },
+  {
+    "id": "digital-compression-derived",
+    "medium": "digital",
+    "source": "https://archive.org/details/CEP507",
+    "license": "Public Domain (CC PDM source)",
+    "redistribute": false,
+    "demonstrates": "real low-bitrate codec artifacts — 8x8 DCT block edges, mosquito/ringing noise around high-contrast edges, and quantization banding, produced by re-encoding the public-domain CEP507 clip at 90kbps MPEG-4 via ffmpeg. Derived internal reference (method reproducible from the PD source); not bundled."
   }
 ]

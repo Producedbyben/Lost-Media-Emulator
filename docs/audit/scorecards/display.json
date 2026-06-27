@@ -1,0 +1,146 @@
+[
+  {
+    "id": "PVM/BVM",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Sharp, fine mask + visible scanlines + clean saturated colour — reads as a pro broadcast aperture-grille monitor. Verify the mask is rendered as vertical-stripe aperture grille (PVM/BVM are Trinitron-based) rather than a shadow-mask dot grid, per display-crt-mask-macro."
+  },
+  {
+    "id": "Sony Trinitron WEGA (2001)",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Sharp and clean as a late Trinitron, but the mask reads as a dot/triad grid rather than Trinitron's DEFINING aperture-grille continuous vertical RGB stripes + 1–2 faint horizontal damper-wire shadows (per display-crt-mask-macro). Mask geometry should switch to aperture grille for Trinitron-named presets."
+  },
+  {
+    "id": "Shadow Mask CRT Terminal (Amber)",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Correct amber monochrome phosphor with a visible shadow-mask dot grid and scanlines — an authentic amber data terminal. Mask type (dot grid) matches the 'Shadow Mask' name."
+  },
+  {
+    "id": "Arcade",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Strong scanlines + slot/shadow mask + highlight bloom + saturated colour read as an arcade CRT. Plausible; could specify slot-mask geometry to distinguish from a TV shadow mask."
+  },
+  {
+    "id": "CRT PC Monitor (1995)",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Fine shadow-mask dot pitch with minimal scanline modulation — correctly differentiated from an interlaced TV (a progressive VGA monitor shows dot pitch, not strong scanlines). Good."
+  },
+  {
+    "id": "Trinitron Warm Glow",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Tasteful warm cast + glow, but same finding as WEGA: mask renders as a dot grid rather than Trinitron aperture-grille vertical stripes (display-crt-mask-macro)."
+  },
+  {
+    "id": "Rear-Projection CRT TV (2004)",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Correctly soft and low-detail with horizontal scanlines and mild convergence softness — distinct from a sharp direct-view CRT, which is right for a 2004 RPTV. Good."
+  },
+  {
+    "id": "Pioneer Plasma TV (2007)",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Correctly avoids CRT scanlines (a flat-panel must not show a raster). To sell it as plasma specifically, add the characteristic cell/pixel structure, dither/false-contour noise in gradients, and slight phosphor afterglow."
+  },
+  {
+    "id": "CRT Plasma Burn-In",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 3, "artifactCorrectness": 2, "defaults": 3, "eraFit": 3 },
+    "severity": "med",
+    "note": "Reads as a heavy mask grid but shows NO actual burn-in: the defining trait is a faint PERSISTENT retained ghost image (station logo / static UI) etched into the phosphor, independent of the live picture. Add a retained ghost layer. Also the name 'CRT Plasma' conflates two display types with different burn-in mechanisms."
+  },
+  {
+    "id": "Retro Pixel LCD",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Fine RGB vertical-stripe LCD subpixel + slight grid — reads as a blocky retro LCD. Subpixel geometry judged against display-crt-mask-macro as a panel-subpixel proxy (an LCD/OLED macro would tighten this)."
+  },
+  {
+    "id": "IPS Office LCD (2013)",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Clean, accurate colour, subtle subpixel — correct for IPS. Could add a faint off-angle IPS glow in the blacks. Panel-subpixel proxy reference (see display-crt-mask-macro note)."
+  },
+  {
+    "id": "Cyberpunk OLED",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Perfect blacks + strong saturated bloom on bright elements — genuine OLED character pushed to a stylised 'cyberpunk' intensity. Intentional look; physically consistent with OLED (per-pixel emissive, no backlight bleed)."
+  },
+  {
+    "id": "OLED Smartphone PenTile (2018)",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "Clean and saturated, but PenTile's DEFINING diamond (RGBG, fewer red/blue) subpixel layout and the resulting colour fringing on high-contrast text/edges are not evident — reads as a generic clean panel. Add the diamond subpixel + edge fringing."
+  },
+  {
+    "id": "PenTile OLED Sunlight",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 3 },
+    "severity": "low",
+    "note": "Sunlight washout (low contrast, elevated blacks, glare) is well represented and convincing. Subpixel reads as vertical stripe rather than the PenTile diamond — same subpixel gap as the sibling PenTile preset."
+  },
+  {
+    "id": "LED Billboard Phone Capture",
+    "kind": "preset",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Bloom + fine grid present, but the look depends on a COARSE LED pixel pitch (large discrete RGB modules) plus phone-capture moiré beating against that grid — both could be pushed coarser/stronger to sell 'phone filming a billboard'."
+  },
+  {
+    "id": "maskType",
+    "kind": "effect",
+    "medium": "display",
+    "referenceRefs": ["display-crt-mask-macro"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 3, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "med",
+    "note": "Across the Trinitron-named presets (WEGA, Trinitron Warm Glow, PVM/BVM) the mask renders as a dot/triad grid rather than aperture-grille vertical stripes. Per display-crt-mask-macro the two geometries are distinct (shadow/slotted = dot/slot grid; Trinitron/Diamondtron = continuous vertical RGB stripes + damper-wire shadows). The mask type should switch to match the CRT each preset claims."
+  }
+]
