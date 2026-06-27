@@ -14,6 +14,10 @@ describe("buildUniforms", () => {
     const u = buildUniforms({ maskType: "aperture" }, ctx);
     expect(u[CRT_DISPLAY_UNIFORMS.indexOf("u_maskType")]).toBe(2); // none0 dot1 aperture2 slot3 shadow4
   });
+  it("maps phosphor (the CPU triad) to its own code, distinct from dot", () => {
+    const u = buildUniforms({ maskType: "phosphor" }, ctx);
+    expect(u[CRT_DISPLAY_UNIFORMS.indexOf("u_maskType")]).toBe(5); // phosphor 5, NOT dot 1
+  });
   it("carries frame context", () => {
     const u = buildUniforms({}, ctx);
     expect(u[CRT_DISPLAY_UNIFORMS.indexOf("u_frameIndex")]).toBe(30);
