@@ -21,15 +21,10 @@ const TWO_PI_HI: f32 = 6.2831854820251465;
 const TWO_PI_LO: f32 = -1.7484555314695172e-7;
 
 fn twoProd(a: f32, b: f32) -> vec2<f32> {
+  // FMA form: err = fma(a,b,-p) is the EXACT rounding error of a*b, immune to GPU FMA
+  // contraction (which corrupts the Dekker-split ah*bh-p error term).
   let p = a * b;
-  let SPLIT: f32 = 4097.0; // 2^12 + 1
-  let ca = SPLIT * a;
-  let cb = SPLIT * b;
-  let ah = ca - (ca - a);
-  let al = a - ah;
-  let bh = cb - (cb - b);
-  let bl = b - bh;
-  let err = ((ah * bh - p) + ah * bl + al * bh) + al * bl;
+  let err = fma(a, b, -p);
   return vec2<f32>(p, err);
 }
 fn twoSum(a: f32, b: f32) -> vec2<f32> {

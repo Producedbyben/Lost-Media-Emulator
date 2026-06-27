@@ -113,15 +113,11 @@ const TWO_PI_HI: f32 = 6.2831854820251465;
 const TWO_PI_LO: f32 = -1.7484555314695172e-7;
 
 fn twoProd(a: f32, b: f32) -> vec2<f32> {
+  // Use the fused multiply-add form: err = fma(a, b, -p) is the EXACT rounding error of
+  // a*b. This is immune to GPU FMA contraction (which silently corrupts the Dekker-split
+  // form's ah*bh-p error term — the bug that made emulated-f64 noise diverge on GPU).
   let p = a * b;
-  let SPLIT: f32 = 4097.0;
-  let ca = SPLIT * a;
-  let cb = SPLIT * b;
-  let ah = ca - (ca - a);
-  let al = a - ah;
-  let bh = cb - (cb - b);
-  let bl = b - bh;
-  let err = ((ah * bh - p) + ah * bl + al * bh) + al * bl;
+  let err = fma(a, b, -p);
   return vec2<f32>(p, err);
 }
 fn twoSum(a: f32, b: f32) -> vec2<f32> {
@@ -140,9 +136,8 @@ fn termDD(v: f32, cHi: f32, cLo: f32) -> vec2<f32> {
   let lo = p.y + v * cLo;
   return twoSum(p.x, lo);
 }
-fn seededNoise(x: f32, y: f32, frame: f32) -> f32 {
-  var acc = addDD(termDD(x, C0_HI, C0_LO), termDD(y, C1_HI, C1_LO));
-  acc = addDD(acc, termDD(frame, C2_HI, C2_LO));
+fn reduceHash(acc0: vec2<f32>) -> f32 {
+  var acc = acc0;
   let k = round(acc.x / TWO_PI_HI);
   let kp = twoProd(k, TWO_PI_HI);
   acc = addDD(acc, vec2<f32>(-kp.x, -kp.y));
@@ -150,6 +145,11 @@ fn seededNoise(x: f32, y: f32, frame: f32) -> f32 {
   let reduced = acc.x + acc.y;
   let s = sin(reduced) * 43758.5453;
   return s - floor(s);
+}
+fn seededNoise(x: f32, y: f32, frame: f32) -> f32 {
+  var acc = addDD(termDD(x, C0_HI, C0_LO), termDD(y, C1_HI, C1_LO));
+  acc = addDD(acc, termDD(frame, C2_HI, C2_LO));
+  return reduceHash(acc);
 }
 
 // CPU sampleBilinear maps u in [0,1] to source x = u*(W-1) and interpolates between
@@ -162,12 +162,25 @@ fn samp(u: f32, v: f32) -> vec3<f32> {
   return textureSampleLevel(u_tex, u_samp, vec2<f32>(tcx(u), tcy(v)), 0.0).rgb;
 }
 
-// The full per-pixel display-optics chain (barrel resample, pixel quant, chroma
-// aberration, soft-tap bleed, phosphor mask, scanlines), matching crt-renderer-full.js
-// render() for display-axis params. Returns the "workCanvas" colour in 0..1.
+// 4x4 Bayer matrix for ordered dither (matches CPU BAYER_4X4 / 15).
+const BAYER: array<f32, 16> = array<f32, 16>(
+  0.0, 8.0, 2.0, 10.0,
+  12.0, 4.0, 14.0, 6.0,
+  3.0, 11.0, 1.0, 9.0,
+  15.0, 7.0, 13.0, 5.0,
+);
+
+// The full per-pixel signal-optics chain (barrel + temporal geometric warps, pixel quant,
+// chroma aberration + delay/cross-color, soft-tap bleed, halation, grain/dust/scratches,
+// phosphor mask, scanlines, dropouts, interlacing, dither), matching crt-renderer-full.js
+// render()'s fused loop. Returns the "workCanvas" colour in 0..1. (Noise is the emulated-f64
+// seededNoise; high-frequency per-pixel noise args still carry caller f32 rounding — those
+// presets are gated by the fidelity sweep.)
 fn optics(px: f32, py: f32) -> vec3<f32> {
   let W = U.u_resolutionX;
   let H = U.u_resolutionY;
+  let tFrame = U.u_frameIndex;
+  let tSec = U.u_frameIndex / U.u_fps;
 
   let nx = (px / (W - 1.0)) * 2.0 - 1.0;
   let ny = (py / (H - 1.0)) * 2.0 - 1.0;
@@ -178,48 +191,120 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
   let warp = max(0.35, 1.0 + barrel * warpCurve);
   let cornerWarp = max(0.35, 1.0 + barrel * (0.22 + 0.78 * 2.0));
   let overscan = select(1.0, cornerWarp, barrel < 0.0);
-  let srcNx = (nx / warp) * overscan;
-  let srcNy = (ny / warp) * overscan;
+
+  // Per-frame film-gate offsets (CPU computes these once per frame; same for every pixel).
+  let judderHit = U.u_shutterJudder > 0.0 && seededNoise(tFrame, 3.0, 51.0) < U.u_shutterJudder * 0.5;
+  let gateOffX = (seededNoise(tFrame, 11.0, 7.0) - 0.5) * U.u_gateJitterX * 0.03 + select(0.0, (seededNoise(tFrame, 5.0, 9.0) - 0.5) * 0.05, judderHit);
+  let gateOffY = (seededNoise(tFrame, 17.0, 13.0) - 0.5) * U.u_gateJitterY * 0.03 + select(0.0, (seededNoise(tFrame, 7.0, 3.0) - 0.5) * 0.06, judderHit);
+  let gateRot = (seededNoise(tFrame, 23.0, 19.0) - 0.5) * U.u_gateRotation * 0.05;
+
+  // Geometric warps added to the barrel-warped source coords.
+  let wobble = sin((ny + tSec * 0.9) * PI * 6.0) * U.u_timeWobble * 0.012;
+  let perLineJitter = (seededNoise(py, tFrame * 0.07, 7.0) - 0.5) * U.u_lineJitter * 0.018;
+  let headBandTop = 1.0 - (0.06 + U.u_headSwitching * 0.10);
+  let inHeadBand = U.u_headSwitching > 0.0 && ny > headBandTop;
+  let headBandP = select(0.0, (ny - headBandTop) / (1.0 - headBandTop), inHeadBand);
+  let baseHeadSwitching = select(0.0, U.u_headSwitching * (0.05 + headBandP * 0.18) * (seededNoise(py, tFrame, 71.0) - 0.3), inHeadBand);
+  let creaseCenter = seededNoise(floor(tSec * 0.67), 19.0, 11.0);
+  let creaseDistance = abs(py / max(1.0, H - 1.0) - creaseCenter);
+  let creaseWarp = select(0.0, max(0.0, 1.0 - creaseDistance / 0.045) * U.u_tapeCrease * (0.015 + seededNoise(tFrame, py, 41.0) * 0.02), U.u_tapeCrease > 0.0);
+  let weaveX = U.u_gateWeave * sin(tSec * 1.7 + py * 0.013) * 0.01;
+  let weaveY = U.u_gateWeave * cos(tSec * 1.9 + px * 0.009) * 0.008;
+  // RF interference horizontal band (matches the WebGL2 shader).
+  let rfBand = sin(py * 0.02 + tSec * 8.0) * sin(py * 0.07 - tSec * 3.0) * U.u_rfInterference * 0.003;
+
+  let srcNx = (nx / warp) * overscan + wobble + perLineJitter + baseHeadSwitching + creaseWarp + weaveX + gateOffX + ny * gateRot + rfBand;
+  let srcNy = (ny / warp) * overscan + weaveY + gateOffY - nx * gateRot;
   let u = clamp(srcNx * 0.5 + 0.5, 0.0, 1.0);
   let v = clamp(srcNy * 0.5 + 0.5, 0.0, 1.0);
 
-  // pixelSize is fixed at 1 for the CRT/display family this increment.
+  let pixelSize = max(1.0, U.u_pixelSize);
+  let pixelInfluence = 1.0 + (pixelSize - 1.0) * 0.22;
   let ca = U.u_ca;
-  let edgeShift = ca * (0.0012 + r2 * 0.0045) * 0.8;
-  let qx = floor(u * W) + 0.5;
-  let qy = floor(v * H) + 0.5;
+  let edgeShift = ca * (0.0012 + r2 * 0.0045) * (0.8 + (pixelSize - 1.0) * 0.22);
+  let qx = floor((u * W) / pixelSize) * pixelSize + pixelSize * 0.5;
+  let qy = floor((v * H) / pixelSize) * pixelSize + pixelSize * 0.5;
   let qu = clamp(qx / W, 0.0, 1.0);
   let qv = clamp(qy / H, 0.0, 1.0);
-  let ru = qu + edgeShift * (0.7 + abs(nx));
-  let bu = qu - edgeShift * (0.7 + abs(nx));
+  let delayShift = U.u_chromaDelay * 0.02 * (seededNoise(py, tSec * 1.3, 23.0) - 0.2);
+  let crossColorShift = U.u_crossColor * 0.012 * sin((py + tSec * 60.0) * 0.08);
+  let ru = qu + edgeShift * (0.7 + abs(nx)) + delayShift;
+  let gu = qu + crossColorShift * 0.45;
+  let bu = qu - edgeShift * (0.7 + abs(nx)) - delayShift;
 
   let red = samp(ru, qv).r;
-  let green = samp(qu, qv).g;
+  let green = samp(gu, qv).g;
   let blue = samp(bu, qv).b;
 
   let mask = U.u_mask;
   let bloomAmt = U.u_bloom;
   let maskScale = max(0.25, U.u_maskScale);
   let maskActive = mask > 0.0 && U.u_maskType > 0.5;
+  let needSoftTaps = bloomAmt > 0.0 || maskActive || U.u_filmHalation > 0.0;
 
-  var redSoft = red;
-  var greenSoft = green;
-  var blueSoft = blue;
-  if (bloomAmt > 0.0 || maskActive) {
-    let stepX = 1.0 / (W - 1.0);
-    let stepY = 1.0 / (H - 1.0);
-    let redH = samp(ru - stepX, qv).r * 0.5 + samp(ru + stepX, qv).r * 0.5;
-    let greenH = samp(qu - stepX, qv).g * 0.5 + samp(qu + stepX, qv).g * 0.5;
-    let blueH = samp(bu - stepX, qv).b * 0.5 + samp(bu + stepX, qv).b * 0.5;
-    let redV = samp(ru, qv - stepY).r * 0.5 + samp(ru, qv + stepY).r * 0.5;
-    let greenV = samp(qu, qv - stepY).g * 0.5 + samp(qu, qv + stepY).g * 0.5;
-    let blueV = samp(bu, qv - stepY).b * 0.5 + samp(bu, qv + stepY).b * 0.5;
-    let luminance = max(max(red, green), blue);
-    let bleed = (bloomAmt * 0.26 + mask * 0.08) * pow(luminance, 0.75);
-    let blend = min(0.45, bleed);
-    redSoft = red * (1.0 - blend) + (redH * 0.62 + redV * 0.38) * blend;
-    greenSoft = green * (1.0 - blend) + (greenH * 0.62 + greenV * 0.38) * blend;
-    blueSoft = blue * (1.0 - blend) + (blueH * 0.62 + blueV * 0.38) * blend;
+  let stepX = 1.0 / (W - 1.0);
+  let stepY = 1.0 / (H - 1.0);
+  var redH = red; var greenH = green; var blueH = blue;
+  var redV = red; var greenV = green; var blueV = blue;
+  if (needSoftTaps) {
+    redH = samp(ru - stepX, qv).r * 0.5 + samp(ru + stepX, qv).r * 0.5;
+    greenH = samp(gu - stepX, qv).g * 0.5 + samp(gu + stepX, qv).g * 0.5;
+    blueH = samp(bu - stepX, qv).b * 0.5 + samp(bu + stepX, qv).b * 0.5;
+    redV = samp(ru, qv - stepY).r * 0.5 + samp(ru, qv + stepY).r * 0.5;
+    greenV = samp(gu, qv - stepY).g * 0.5 + samp(gu, qv + stepY).g * 0.5;
+    blueV = samp(bu, qv - stepY).b * 0.5 + samp(bu, qv + stepY).b * 0.5;
+  }
+  let luminance = max(max(red, green), blue);
+  let bleed = (bloomAmt * 0.26 + mask * 0.08) * pixelInfluence * pow(luminance, 0.75);
+  let blend = min(0.45, bleed);
+  var redSoft = red * (1.0 - blend) + (redH * 0.62 + redV * 0.38) * blend;
+  var greenSoft = green * (1.0 - blend) + (greenH * 0.62 + greenV * 0.38) * blend;
+  var blueSoft = blue * (1.0 - blend) + (blueH * 0.62 + blueV * 0.38) * blend;
+
+  // Film halation soft-blend toward the horizontal taps.
+  if (U.u_filmHalation > 0.0) {
+    let haloMix = min(0.45, U.u_filmHalation * (0.12 + luminance * 0.5));
+    redSoft = redSoft * (1.0 - haloMix) + redH * haloMix;
+    greenSoft = greenSoft * (1.0 - haloMix) + greenH * haloMix;
+    blueSoft = blueSoft * (1.0 - haloMix) + blueH * haloMix;
+  }
+
+  // Film grain (CPU works in 0..255: (noise-0.5)*255*(grain*0.34) → in 0..1 the 255s cancel).
+  // NOTE: grain's per-pixel noise argument (x*gf) is large-magnitude and non-integer; the
+  // emulated-f64 hash does not reach bit-parity with the CPU f64 field at this magnitude on
+  // GPU float behaviour, so grain is perceptually-valid but not correlated. Low-amplitude
+  // grain still clears the < 6 gate; grain-heavy presets are gated to CPU (gpuSignalOK).
+  if (U.u_filmGrain > 0.0) {
+    let gf = 1.91 / (1.0 + U.u_grainSize * 2.2);
+    let gfy = 1.37 / (1.0 + U.u_grainSize * 2.2);
+    let grain = (seededNoise(px * gf, py * gfy, tFrame * 1.3) - 0.5) * (U.u_filmGrain * 0.34);
+    if (U.u_grainChromaticity > 0.001) {
+      let cAmt = U.u_filmGrain * U.u_grainChromaticity * 0.26;
+      redSoft = redSoft + grain + (seededNoise(px * gf + 3.3, py * gfy, tFrame * 1.7) - 0.5) * cAmt;
+      greenSoft = greenSoft + grain + (seededNoise(px * gf, py * gfy + 5.1, tFrame * 1.9) - 0.5) * cAmt;
+      blueSoft = blueSoft + grain + (seededNoise(px * gf + 7.7, py * gfy + 2.2, tFrame * 2.3) - 0.5) * cAmt;
+    } else {
+      redSoft = redSoft + grain;
+      greenSoft = greenSoft + grain;
+      blueSoft = blueSoft + grain;
+    }
+  }
+
+  // Film dust speckle.
+  let dustHit = seededNoise(px * 0.19 + tFrame * 0.03, py * 0.23, 83.0);
+  if (U.u_filmDust > 0.0 && dustHit > 0.995 - U.u_filmDust * 0.03) {
+    let dustShade = 1.0 - U.u_filmDust * (0.3 + seededNoise(px, py, tFrame) * 0.5);
+    redSoft = redSoft * dustShade;
+    greenSoft = greenSoft * dustShade;
+    blueSoft = blueSoft * dustShade;
+  }
+  // Film scratches.
+  let scratchSeed = seededNoise(floor(px * 0.07), tFrame * 0.11, 97.0);
+  if (U.u_filmScratches > 0.0 && scratchSeed > 0.982 - U.u_filmScratches * 0.045) {
+    let scratchBright = 1.0 + U.u_filmScratches * 0.6;
+    redSoft = redSoft * scratchBright;
+    greenSoft = greenSoft * scratchBright;
+    blueSoft = blueSoft * scratchBright;
   }
 
   // Phosphor mask — geometry matched to the CPU branches.
@@ -273,14 +358,52 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
     }
   }
 
+  // Ordered dither (only when noise requested). CPU adds it in 0..255; /255 here.
+  var dither = 0.0;
+  if (U.u_noise > 0.0) {
+    dither = (BAYER[(myi & 3) * 4 + (mxi & 3)] / 15.0 - 0.5) * (U.u_noise * 2.2) / 255.0;
+  }
+
+  // Tape dropouts — clustered horizontal streaks (bright flash head + dark recovery).
+  var dropoutMul = 1.0;
+  if (U.u_dropouts > 0.0) {
+    let band = floor(py / 3.0);
+    let occur = seededNoise(band, tFrame * 0.37, 31.0) * 0.7 + seededNoise(floor(band / 6.0), tFrame * 0.21, 67.0) * 0.3;
+    if (occur > 0.93 - U.u_dropouts * 0.13) {
+      let streakW = 20.0 + seededNoise(band, tFrame, 17.0) * 60.0;
+      let streakX = seededNoise(band, tFrame * 1.7, 43.0) * W;
+      if (px >= streakX && px < streakX + streakW) {
+        let pp = (px - streakX) / streakW;
+        let bright = seededNoise(band, tFrame, 7.0) > 0.45;
+        if (bright && pp < 0.18) {
+          dropoutMul = 1.0 + U.u_dropouts * 1.6;
+        } else {
+          dropoutMul = 1.0 - U.u_dropouts * (0.55 + 0.4 * (1.0 - pp));
+        }
+      }
+    }
+  }
+  // Head-switch band: heavy per-pixel noise + darkening toward the bottom line.
+  if (inHeadBand) {
+    let bn = seededNoise(px * 0.7, py * 3.1, tFrame * 0.5 + 13.0);
+    dropoutMul = dropoutMul * (1.0 - U.u_headSwitching * 0.30 * headBandP) * (0.65 + bn * 0.7);
+  }
+  // Interlacing line gate.
+  var interlaceGate = 1.0;
+  if (U.u_interlacing > 0.0) {
+    let odd = ((i32(py) + i32(tFrame)) & 1) == 1;
+    interlaceGate = 1.0 - U.u_interlacing * select(0.02, 0.14, odd);
+  }
+
   // Scanlines — phase from maskY (= floor(py/maskScale)), matching the CPU.
   let scanPhase = sin((floor(py / maskScale) + 0.5) * PI);
   let scanlineGain = 1.0 - U.u_scan * (0.35 + 0.65 * (0.5 + 0.5 * scanPhase));
+  let level = scanlineGain * dropoutMul * interlaceGate;
 
   return clamp(
-    vec3<f32>(redSoft * scanlineGain * rMask,
-              greenSoft * scanlineGain * gMask,
-              blueSoft * scanlineGain * bMask),
+    vec3<f32>(redSoft * level * rMask + dither,
+              greenSoft * level * gMask + dither,
+              blueSoft * level * bMask + dither),
     vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
