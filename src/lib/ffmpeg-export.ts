@@ -3,6 +3,7 @@
 // look frame-by-frame to an offscreen canvas, streams each frame as a PNG to the
 // main process, then asks ffmpeg to encode the sequence. Desktop-only; callers
 // must feature-detect with isFfmpegExportAvailable() and fall back to WebCodecs.
+import { computeContentRect } from "./export-size";
 type Renderer = {
   render: (ctx: CanvasRenderingContext2D, w: number, h: number, t: number, params: unknown, frame: number, fps: number, renderOptions: unknown) => void;
   setImage: (el: HTMLVideoElement | HTMLImageElement, scale: number) => void;
@@ -59,6 +60,14 @@ export async function exportViaFfmpeg(opts: {
   outSec?: number;
   videoElement?: HTMLVideoElement | null;
   sourceScale?: number;
+  // Target export dimensions (from computeExportSize). When omitted we fall back
+  // to the preview canvas size for back-compat — but callers SHOULD pass these so
+  // the export renders at the source/selected resolution, not the preview size.
+  targetWidth?: number;
+  targetHeight?: number;
+  // Letterbox / pillarbox pad the source into the target box (black bars). Any
+  // other value (crop / none / undefined) lets the renderer cover-crop to fill.
+  frameMode?: string;
   renderOptions?: unknown;
   onProgress?: (ratio: number) => void;
   signal?: AbortSignal;
@@ -67,9 +76,25 @@ export async function exportViaFfmpeg(opts: {
   if (!b) throw new Error("ffmpeg bridge unavailable");
 
   const { canvas, renderer, params, fps, duration, codec, outPath } = opts;
-  const sourceScale = opts.sourceScale ?? 1;
+  // Force full-resolution source during export — a preview proxy (sourceScale < 1)
+  // must never shrink the exported pixels.
+  const sourceScale = 1;
   const isVideoSource = opts.videoElement instanceof HTMLVideoElement;
-  const { width, height } = evenSize(canvas.width, canvas.height);
+  // Render at the explicit export target when given; otherwise the legacy
+  // preview-canvas size (kept only so older callers don't break).
+  const { width, height } = (opts.targetWidth && opts.targetHeight)
+    ? evenSize(opts.targetWidth, opts.targetHeight)
+    : evenSize(canvas.width, canvas.height);
+  // Padded reframe (letterbox / pillarbox): render the look into a contained
+  // content rect, then composite it centered onto a black target frame.
+  const padded = opts.frameMode === "letterbox" || opts.frameMode === "pillarbox";
+  const content = padded
+    ? computeContentRect({
+        sourceW: isVideoSource ? opts.videoElement!.videoWidth : width,
+        sourceH: isVideoSource ? opts.videoElement!.videoHeight : height,
+        targetW: width, targetH: height,
+      })
+    : null;
 
   // Trim window in source seconds. When in/out aren't given, render [0, duration)
   // exactly as before; otherwise render [inSec, outSec) and trim the audio mux
@@ -84,6 +109,12 @@ export async function exportViaFfmpeg(opts: {
   const work = document.createElement("canvas");
   work.width = width; work.height = height;
   const ctx = work.getContext("2d", { alpha: false })!;
+
+  // For padded reframes the look is rendered into this content canvas first, then
+  // blitted onto the (black) work frame, leaving the letterbox/pillarbox bars.
+  const contentCanvas = content ? document.createElement("canvas") : null;
+  if (contentCanvas && content) { contentCanvas.width = content.width; contentCanvas.height = content.height; }
+  const contentCtx = contentCanvas ? contentCanvas.getContext("2d", { alpha: false })! : null;
 
   const { sessionId } = await b.begin({ width, height, fps });
   const unsub = b.onProgress((d) => {
@@ -100,7 +131,17 @@ export async function exportViaFfmpeg(opts: {
         await seekVideo(opts.videoElement, seekTime);
         renderer.setImage(opts.videoElement, sourceScale);
       }
-      renderer.render(ctx, width, height, t, params, frame, fps, opts.renderOptions);
+      if (content && contentCtx) {
+        // Pad mode: render the look into the content rect (its own aspect → no
+        // crop), then composite centered onto a black target frame.
+        renderer.render(contentCtx, content.width, content.height, t, params, frame, fps, opts.renderOptions);
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(contentCanvas!, content.x, content.y);
+      } else {
+        // Cover mode: renderer fills the target frame (crop-to-fill / original).
+        renderer.render(ctx, width, height, t, params, frame, fps, opts.renderOptions);
+      }
       const bytes = await canvasToPng(work);
       await b.frame({ sessionId, index: frame, bytes });
       opts.onProgress?.((frame + 1) / totalFrames * 0.9); // reserve last 10% for encode

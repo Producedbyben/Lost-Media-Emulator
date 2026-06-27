@@ -7,6 +7,7 @@ import { exportMp4, exportWebm, getVideoExportCapabilities } from "@/lib/exporte
 import { exportGif } from "@/lib/gif-exporter.js";
 import { saveBlob, ensureFilename } from "@/lib/save-file.js";
 import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
+import { computeExportSize } from "@/lib/export-size";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import type { OSDOptions } from "@/components/OSDControls";
@@ -1250,6 +1251,7 @@ export function useCRTRenderer() {
     includeAudio?: boolean;
     degradeAudio?: boolean;
     aspectRatio?: string;
+    frameMode?: string;
     format?: "mp4" | "webm";
     fileName?: string;
     audioMode?: "off" | "original" | "degrade";
@@ -1291,13 +1293,26 @@ export function useCRTRenderer() {
           const trimIn = Math.max(0, Math.min(options?.inSec ?? 0, full));
           const trimOut = Math.max(trimIn + 1 / Math.max(1, fps), Math.min(options?.outSec ?? full, full));
           const isTrimmed = options?.inSec != null || options?.outSec != null;
+          // Size the export from the SOURCE dims + chosen resolution/aspect — never
+          // from the preview canvas (which is fit-to-container, DPR-capped and
+          // adaptively downscaled). Falls back to the canvas only if source dims
+          // are somehow unknown.
+          const srcDims = sourceDimsRef.current;
+          const sourceW = srcDims?.w && srcDims.w > 0 ? srcDims.w : canvas.width;
+          const sourceH = srcDims?.h && srcDims.h > 0 ? srcDims.h : canvas.height;
+          const { width: targetWidth, height: targetHeight } = computeExportSize({
+            sourceW, sourceH,
+            resolution: options?.resolution ?? 0,
+            aspectRatio: options?.aspectRatio,
+          });
           await exportViaFfmpeg({
             canvas, renderer: rendererRef.current,
             params: paramsRef.current, fps: Math.max(1, fps), duration: full,
             ...(isTrimmed ? { inSec: trimIn, outSec: trimOut } : {}),
             codec: options?.codec || "h264", outPath, audioSourcePath,
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
-            sourceScale: previewSettingsRef.current.sourceScale,
+            targetWidth, targetHeight,
+            frameMode: options?.aspectRatio && options.aspectRatio !== "original" ? options?.frameMode : undefined,
             renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
             onProgress: (r) => setExportProgress(r),
             signal: controller.signal,
@@ -1318,7 +1333,11 @@ export function useCRTRenderer() {
         onProgress: (value: number) => setExportProgress(value),
         signal: controller.signal,
         videoElement: isVideoRef.current ? videoElementRef.current : undefined,
-        sourceScale: previewSettingsRef.current.sourceScale,
+        // Full-res source for export — never the preview proxy — and size from
+        // the chosen resolution/aspect (computeExportSize, shared with ffmpeg).
+        sourceScale: 1,
+        resolution: options?.resolution ?? 0,
+        aspectRatio: options?.aspectRatio,
         bitrate: (options?.quality || 1) * 8_000_000,
         renderOptions: { formatProfile: formatPipelineRef.current ? formatProfileRef.current : null },
         fileName: options?.fileName,

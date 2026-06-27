@@ -9,6 +9,7 @@ import os from "os";
 import path from "path";
 import { createSession } from "../ffmpeg-session.cjs";
 import { resolveFfmpeg } from "../ffmpeg-locate.cjs";
+import { computeExportSize } from "../../src/lib/export-size";
 
 const { ffmpeg, ffprobe } = resolveFfmpeg({
   env: process.env, resourcesPath: "", isPackaged: false,
@@ -32,17 +33,18 @@ function pngChunk(type, data) {
   const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body) >>> 0);
   return Buffer.concat([len, body, crc]);
 }
-function makeSolidPng(size, [r, g, b]) {
+function makeSolidPngWH(w, h, [r, g, b]) {
   const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
   ihdr[8] = 8; ihdr[9] = 2; // 8-bit, colour type 2 (RGB)
-  const row = Buffer.alloc(1 + size * 3);
-  for (let x = 0; x < size; x++) { row[1 + x * 3] = r; row[2 + x * 3] = g; row[3 + x * 3] = b; }
-  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+  const row = Buffer.alloc(1 + w * 3);
+  for (let x = 0; x < w; x++) { row[1 + x * 3] = r; row[2 + x * 3] = g; row[3 + x * 3] = b; }
+  const raw = Buffer.concat(Array.from({ length: h }, () => row));
   const idat = zlib.deflateSync(raw);
   return Buffer.concat([sig, pngChunk("IHDR", ihdr), pngChunk("IDAT", idat), pngChunk("IEND", Buffer.alloc(0))]);
 }
+const makeSolidPng = (size, rgb) => makeSolidPngWH(size, size, rgb);
 
 const FRAME = makeSolidPng(64, [200, 40, 40]);
 
@@ -140,4 +142,34 @@ describe.skipIf(!ffmpeg || !ffprobe)("ffmpeg pipeline smoke", () => {
         fs.rmSync(src, { force: true });
       });
   }, 30000);
+
+  // The resolution-bug regression guard: the dimensions computeExportSize()
+  // resolves from the SOURCE + chosen resolution/aspect must survive verbatim
+  // into the encoded file (they used to be silently replaced by the preview
+  // canvas size). Drives the real frame-size math end-to-end through ffmpeg.
+  const DIM_CASES = [
+    { name: "Source keeps the source dims (1280x720)", in: { sourceW: 1280, sourceH: 720, resolution: 0, aspectRatio: "original" }, expect: { w: 1280, h: 720 } },
+    { name: "1080p downscales a 4K source to 1920x1080", in: { sourceW: 3840, sourceH: 2160, resolution: 1080, aspectRatio: "original" }, expect: { w: 1920, h: 1080 } },
+    { name: "9:16 crop of a 16:9 source at 1080p is 1080x1920", in: { sourceW: 1920, sourceH: 1080, resolution: 1080, aspectRatio: "9:16" }, expect: { w: 1080, h: 1920 } },
+  ];
+  for (const c of DIM_CASES) {
+    it(`encodes at the computed export size — ${c.name}`, async () => {
+      const { width, height } = computeExportSize(c.in);
+      expect({ w: width, h: height }).toEqual(c.expect);
+      const frame = makeSolidPngWH(width, height, [40, 120, 200]);
+      const session = createSession({ width, height, fps: 10, tmpRoot: os.tmpdir() });
+      for (let i = 0; i < 6; i++) session.writeFrame(i, frame);
+      const out = path.join(os.tmpdir(), `lme-smoke-dims-${width}x${height}.mp4`);
+      await session.encode({ ffmpegPath: ffmpeg, codec: "h264", outPath: out });
+      session.cleanup();
+
+      const probe = JSON.parse(execFileSync(ffprobe, [
+        "-v", "quiet", "-print_format", "json", "-show_streams", out,
+      ]).toString());
+      const v = probe.streams.find((s) => s.codec_type === "video");
+      expect(v.width).toBe(width);
+      expect(v.height).toBe(height);
+      fs.rmSync(out, { force: true });
+    }, 30000);
+  }
 });

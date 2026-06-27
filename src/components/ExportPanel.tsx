@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX, Scissors, ChevronDown, Settings2, Monitor, type LucideIcon } from "lucide-react";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
+import { computeExportSize } from "@/lib/export-size";
 import { ensureFilename } from "@/lib/save-file.js";
 import type { CRTParams } from "@/hooks/useCRTRenderer";
 import ExportQueue from "@/components/ExportQueue";
@@ -23,7 +24,7 @@ interface ExportPanelProps {
   isVideo?: boolean;
   // True only when the loaded source actually carries an audio track (desktop).
   sourceHasAudio?: boolean;
-  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string; audioMode?: "off" | "original"; codec?: "h264" | "hevc" | "prores422" | "prores4444"; inSec?: number; outSec?: number }) => void;
+  onExportMp4: (fps: number, duration: number, options?: { resolution?: number; quality?: number; aspectRatio?: string; frameMode?: string; includeAudio?: boolean; degradeAudio?: boolean; format?: "mp4" | "webm"; fileName?: string; audioMode?: "off" | "original"; codec?: "h264" | "hevc" | "prores422" | "prores4444"; inSec?: number; outSec?: number }) => void;
   onExportStill: (options?: { aspectRatio?: string; fileName?: string }) => void;
   onExportGif?: (fps: number, duration: number, fileName?: string) => void;
   onCancelExport?: () => void;
@@ -307,8 +308,18 @@ const ExportPanel = ({
   // Left-rail "Output" summary values — the at-a-glance read of what will be
   // written, the way an NLE export panel surfaces it.
   const summaryFormat = isGif ? "GIF · .gif" : `${tier.label} · .${tier.ext}`;
-  const summaryRes = resolution > 0 ? `${resolution}p`
-    : (videoWidth && videoHeight ? `${videoWidth}×${videoHeight}` : "Source");
+  // Show the TRUE exported dimensions (source + chosen resolution + aspect),
+  // not just the chosen option — so the preview summary can't mislead about
+  // what gets written. Falls back to the option label when source dims are unknown.
+  const summaryRes = (videoWidth && videoHeight)
+    ? (() => {
+        const s = computeExportSize({
+          sourceW: videoWidth, sourceH: videoHeight, resolution,
+          aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined,
+        });
+        return `${s.width}×${s.height}`;
+      })()
+    : resolution > 0 ? `${resolution}p` : "Source";
   const summaryAspect = aspectRatio === "original"
     ? "Original"
     : `${aspectRatio}${frameMode !== "none" ? ` · ${frameMode}` : ""}`;
@@ -669,7 +680,7 @@ const ExportPanel = ({
         ) : (
           <div className="relative group">
             <button
-              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, includeAudio: effectiveAudioOn ? true : undefined, format: "mp4", codec: codec as "h264" | "hevc" | "prores422" | "prores4444", audioMode, fileName: ensureFilename(effectiveBase, videoExt, "lme-export"), ...(isTrimmed ? { inSec: trimIn, outSec: trimOut } : {}) })}
+              onClick={() => onExportMp4(fps, duration, { resolution, quality, aspectRatio: aspectRatio !== "original" ? aspectRatio : undefined, frameMode: aspectRatio !== "original" && frameMode !== "none" ? frameMode : undefined, includeAudio: effectiveAudioOn ? true : undefined, format: "mp4", codec: codec as "h264" | "hevc" | "prores422" | "prores4444", audioMode, fileName: ensureFilename(effectiveBase, videoExt, "lme-export"), ...(isTrimmed ? { inSec: trimIn, outSec: trimOut } : {}) })}
               disabled={!hasImage || isExporting}
               className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors accent-glow">
               {isProRes ? <Video className="w-3.5 h-3.5" /> : <Film className="w-3.5 h-3.5" />}

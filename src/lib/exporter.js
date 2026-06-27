@@ -20,6 +20,7 @@
 import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from "mp4-muxer";
 import { Muxer as WebmMuxer, ArrayBufferTarget as WebmTarget } from "webm-muxer";
 import { saveBlob } from "./save-file.js";
+import { computeExportSize } from "./export-size";
 
 /**
  * Feature-detect the export encoders available in this runtime.
@@ -62,13 +63,6 @@ function downloadBlob(blob, filename) {
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-// H.264/AVC requires even dimensions (4:2:0 chroma).
-function getEvenFrameSize(width, height) {
-  const w = Math.max(2, Math.floor(width));
-  const h = Math.max(2, Math.floor(height));
-  return { width: w % 2 ? w + 1 : w, height: h % 2 ? h + 1 : h };
 }
 
 /**
@@ -259,11 +253,16 @@ async function encodeVideoFrames({
  * Common setup shared by the MP4 and WebM WebCodecs paths: resolves render
  * dimensions, builds the offscreen render canvas, and pauses the source video.
  */
-function prepareRender({ canvas, videoElement, duration, fps }) {
+function prepareRender({ canvas, videoElement, duration, fps, resolution = 0, aspectRatio }) {
   const isVideoSource = videoElement instanceof HTMLVideoElement;
-  const renderWidth = isVideoSource ? videoElement.videoWidth : canvas.width;
-  const renderHeight = isVideoSource ? videoElement.videoHeight : canvas.height;
-  const encodedSize = getEvenFrameSize(renderWidth, renderHeight);
+  // Size from the SOURCE dims + chosen resolution/aspect (shared with the native
+  // ffmpeg path via computeExportSize), so the Resolution dropdown and aspect
+  // crop work here too and both engines emit identical dimensions. The renderer
+  // cover-crops the source into a non-source aspect (crop-to-fill); letterbox/
+  // pillarbox padding is currently only applied on the native ffmpeg path.
+  const sourceW = isVideoSource ? videoElement.videoWidth : canvas.width;
+  const sourceH = isVideoSource ? videoElement.videoHeight : canvas.height;
+  const encodedSize = computeExportSize({ sourceW, sourceH, resolution, aspectRatio });
   const totalFrames = Math.max(1, Math.floor(duration * fps));
   const renderCanvas = document.createElement("canvas");
   renderCanvas.width = encodedSize.width;
@@ -282,13 +281,13 @@ export async function exportMp4({
   canvas, renderer, params, fps, duration, onProgress,
   videoElement, sourceScale = 1, bitrate = 8_000_000, signal,
   includeAudio = false, degradeAudio = false, audioProfile = null,
-  renderOptions = {}, fileName,
+  renderOptions = {}, fileName, resolution = 0, aspectRatio,
 }) {
   if (!("VideoEncoder" in window)) {
     throw new Error("WebCodecs VideoEncoder is unavailable in this context.");
   }
 
-  const prep = prepareRender({ canvas, videoElement, duration, fps });
+  const prep = prepareRender({ canvas, videoElement, duration, fps, resolution, aspectRatio });
   const { isVideoSource, encodedSize, totalFrames, renderCanvas, renderCtx, wasPlaying } = prep;
   const shouldMuxAudio = includeAudio && isVideoSource;
 
@@ -380,8 +379,9 @@ export async function exportWebm(args) {
 async function exportWebmWebCodecs({
   canvas, renderer, params, fps, duration, onProgress,
   videoElement, sourceScale = 1, bitrate = 8_000_000, signal, renderOptions = {}, fileName,
+  resolution = 0, aspectRatio,
 }) {
-  const prep = prepareRender({ canvas, videoElement, duration, fps });
+  const prep = prepareRender({ canvas, videoElement, duration, fps, resolution, aspectRatio });
   const { isVideoSource, encodedSize, totalFrames, renderCanvas, renderCtx, wasPlaying } = prep;
 
   const { config, hardware } = await pickSupportedConfig(
