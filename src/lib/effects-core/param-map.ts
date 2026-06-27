@@ -83,6 +83,8 @@ export const CRT_SIGNAL_UNIFORMS = [
   // (u_quantization already exists from 6.2 — deferred there, implemented in 6.3b.)
   "u_burnIn", "u_generationLoss", "u_copyGen", "u_mediaAge", "u_restoration",
   "u_macroBlocking",
+  // Resolution-reduction derived params (width-dependent block math, mirrors the CPU).
+  "u_mbLowW", "u_mbLowH", "u_mbAlpha", "u_qLowW", "u_qLowH", "u_qLevels", "u_qAlpha",
 ] as const;
 
 // Storage-condition severity factor (CPU crt-renderer-full.js ~535).
@@ -192,5 +194,23 @@ export function buildSignalUniforms(
   // mediaAge folds the storage severity into the CPU's ageNorm = mediaAgeYears/100 * severity.
   const severity = STORAGE_SEVERITY[String(params.storageCondition ?? "ideal")] ?? 0.45;
   set("u_mediaAge", (Math.max(0, Math.min(100, n(params.mediaAgeYears))) / 100) * severity);
+
+  // Resolution-reduction block math (CPU crt-renderer-full.js ~1115-1142). Width-dependent, so
+  // it is derived here; the shader's down/up passes consume the low-res dims directly.
+  const pixelCount = Math.max(1, ctx.width * ctx.height);
+  const perfBudget = Math.min(1, 921600 / pixelCount);
+  const resolutionPenalty = Math.min(1, 2073600 / pixelCount);
+  const mb = Math.max(0, Math.min(1, n(params.advancedMacroBlocking)));
+  const effectiveMacro = mb * (0.3 + perfBudget * 0.45 + resolutionPenalty * 0.25);
+  const blockSize = Math.max(6, Math.round(6 + effectiveMacro * 22 + (1 - resolutionPenalty) * 14));
+  set("u_mbLowW", Math.max(1, Math.floor(ctx.width / blockSize)));
+  set("u_mbLowH", Math.max(1, Math.floor(ctx.height / blockSize)));
+  set("u_mbAlpha", Math.min(0.72, 0.12 + effectiveMacro * 0.44));
+  const q = Math.max(0, Math.min(1, n(params.advancedQuantization)));
+  const sampleScale = Math.max(1, Math.round(1 + q * (2 + (1 - perfBudget) * 4)));
+  set("u_qLowW", Math.max(1, Math.floor(ctx.width / sampleScale)));
+  set("u_qLowH", Math.max(1, Math.floor(ctx.height / sampleScale)));
+  set("u_qLevels", Math.max(6, Math.round(72 - q * 60)));
+  set("u_qAlpha", Math.min(0.92, 0.35 + q * 0.55));
   return out;
 }

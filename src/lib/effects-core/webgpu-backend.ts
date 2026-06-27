@@ -26,6 +26,13 @@ const DUB_PARAM_FLOATS = 5;
 const DUB_STRIDE = 256; // ≥ minUniformBufferOffsetAlignment (spec default 256).
 const MAX_DUB_PASSES = 20;
 
+// Indices of the resolution-reduction low-res dims in the packed uniform array (used to set the
+// downscale-pass viewports without recomputing the block math the param-map already did).
+const I_MB_LOWW = CRT_SIGNAL_UNIFORMS.indexOf("u_mbLowW");
+const I_MB_LOWH = CRT_SIGNAL_UNIFORMS.indexOf("u_mbLowH");
+const I_Q_LOWW = CRT_SIGNAL_UNIFORMS.indexOf("u_qLowW");
+const I_Q_LOWH = CRT_SIGNAL_UNIFORMS.indexOf("u_qLowH");
+
 export class WebGPUBackend {
   private device: GPUDevice;
   private context: GPUCanvasContext;
@@ -44,6 +51,10 @@ export class WebGPUBackend {
   private restorePipeline: GPURenderPipeline;
   private blurHPipeline: GPURenderPipeline;
   private compositePipeline: GPURenderPipeline;
+  private mbDownPipeline: GPURenderPipeline;
+  private mbUpPipeline: GPURenderPipeline;
+  private qDownPipeline: GPURenderPipeline;
+  private qUpPipeline: GPURenderPipeline;
   private layout3: GPUBindGroupLayout;
   private layoutComposite: GPUBindGroupLayout;
   private layoutDub: GPUBindGroupLayout;
@@ -56,6 +67,12 @@ export class WebGPUBackend {
   private tPpA: GPUTexture | null = null;   // post-process ping-pong A
   private tPpB: GPUTexture | null = null;   // post-process ping-pong B (= T_filtered)
   private tH: GPUTexture | null = null;
+  // Resolution-reduction tail textures: composite → tFinal, macroBlocking → tMacro, with the
+  // two low-res box-downscale targets (rendered into a low-res viewport on a full-size texture).
+  private tFinal: GPUTexture | null = null;
+  private tMacro: GPUTexture | null = null;
+  private tLowMB: GPUTexture | null = null;
+  private tLowQ: GPUTexture | null = null;
   private bgGrade: GPUBindGroup | null = null;
   private bgOptics: GPUBindGroup | null = null;
   private bgGhost: GPUBindGroup | null = null;
@@ -69,6 +86,10 @@ export class WebGPUBackend {
   private bgDubReadB: GPUBindGroup | null = null;
   private bgBlurH: GPUBindGroup | null = null;
   private bgComposite: GPUBindGroup | null = null;
+  private bgMbDown: GPUBindGroup | null = null;
+  private bgMbUp: GPUBindGroup | null = null;
+  private bgQDown: GPUBindGroup | null = null;
+  private bgQUp: GPUBindGroup | null = null;
   private texW = 0;
   private texH = 0;
 
@@ -95,6 +116,10 @@ export class WebGPUBackend {
     restorePipeline: GPURenderPipeline;
     blurHPipeline: GPURenderPipeline;
     compositePipeline: GPURenderPipeline;
+    mbDownPipeline: GPURenderPipeline;
+    mbUpPipeline: GPURenderPipeline;
+    qDownPipeline: GPURenderPipeline;
+    qUpPipeline: GPURenderPipeline;
     layout3: GPUBindGroupLayout;
     layoutComposite: GPUBindGroupLayout;
     layoutDub: GPUBindGroupLayout;
@@ -116,6 +141,10 @@ export class WebGPUBackend {
     this.restorePipeline = parts.restorePipeline;
     this.blurHPipeline = parts.blurHPipeline;
     this.compositePipeline = parts.compositePipeline;
+    this.mbDownPipeline = parts.mbDownPipeline;
+    this.mbUpPipeline = parts.mbUpPipeline;
+    this.qDownPipeline = parts.qDownPipeline;
+    this.qUpPipeline = parts.qUpPipeline;
     this.layout3 = parts.layout3;
     this.layoutComposite = parts.layoutComposite;
     this.layoutDub = parts.layoutDub;
@@ -233,10 +262,37 @@ export class WebGPUBackend {
         fragment: { module, entryPoint: "fs_blurH", targets: [{ format: INTERMEDIATE_FORMAT }] },
         primitive: { topology: "triangle-list" },
       });
+      // Composite now writes the intermediate T_final; the resolution-reduction tail presents
+      // it to the canvas (fs_qUp), so the composite target is INTERMEDIATE_FORMAT.
       const compositePipeline = await device.createRenderPipelineAsync({
         layout: plComposite,
         vertex: { module, entryPoint: "vs_main" },
-        fragment: { module, entryPoint: "fs_composite", targets: [{ format }] },
+        fragment: { module, entryPoint: "fs_composite", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const mbDownPipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_mbDown", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const mbUpPipeline = await device.createRenderPipelineAsync({
+        layout: plComposite,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_mbUp", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const qDownPipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_qDown", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      // The final present: nearest-upscale quant + DCT grid → the swapchain canvas (its format).
+      const qUpPipeline = await device.createRenderPipelineAsync({
+        layout: plComposite,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_qUp", targets: [{ format }] },
         primitive: { topology: "triangle-list" },
       });
       const err = await device.popErrorScope();
@@ -260,8 +316,9 @@ export class WebGPUBackend {
       return new WebGPUBackend({
         device, context, canvas, format, sampler, uniformBuf, dubBuf,
         gradePipeline, opticsPipeline, ghostPipeline, burnInPipeline, focusPipeline,
-        dubPipeline, mediaAgePipeline, restorePipeline, blurHPipeline,
-        compositePipeline, layout3, layoutComposite, layoutDub,
+        dubPipeline, mediaAgePipeline, restorePipeline, blurHPipeline, compositePipeline,
+        mbDownPipeline, mbUpPipeline, qDownPipeline, qUpPipeline,
+        layout3, layoutComposite, layoutDub,
       });
     } catch {
       return null;
@@ -280,6 +337,10 @@ export class WebGPUBackend {
     this.tPpA?.destroy();
     this.tPpB?.destroy();
     this.tH?.destroy();
+    this.tFinal?.destroy();
+    this.tMacro?.destroy();
+    this.tLowMB?.destroy();
+    this.tLowQ?.destroy();
     this.srcTex = this.device.createTexture({
       size: [width, height],
       format: "rgba8unorm",
@@ -295,6 +356,10 @@ export class WebGPUBackend {
     this.tPpA = intermediate();
     this.tPpB = intermediate();
     this.tH = intermediate();
+    this.tFinal = intermediate();
+    this.tMacro = intermediate();
+    this.tLowMB = intermediate();
+    this.tLowQ = intermediate();
 
     // Grade pass samples the raw source; optics then samples the graded texture.
     this.bgGrade = this.device.createBindGroup({
@@ -397,6 +462,42 @@ export class WebGPUBackend {
         { binding: 1, resource: this.sampler },
         { binding: 2, resource: this.tH.createView() },
         { binding: 3, resource: this.tPpA.createView() },   // T_filtered = final chain texture (tPpA)
+      ],
+    });
+    // Resolution-reduction tail: composite → tFinal, mbDown(tFinal) → tLowMB, mbUp(tLowMB,
+    // tFinal) → tMacro, qDown(tMacro) → tLowQ, qUp(tLowQ, tMacro) → canvas.
+    this.bgMbDown = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tFinal.createView() },
+      ],
+    });
+    this.bgMbUp = this.device.createBindGroup({
+      layout: this.layoutComposite,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tLowMB.createView() },
+        { binding: 3, resource: this.tFinal.createView() },
+      ],
+    });
+    this.bgQDown = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tMacro.createView() },
+      ],
+    });
+    this.bgQUp = this.device.createBindGroup({
+      layout: this.layoutComposite,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tLowQ.createView() },
+        { binding: 3, resource: this.tMacro.createView() },
       ],
     });
     this.texW = width;
@@ -574,14 +675,54 @@ export class WebGPUBackend {
     blurPass.draw(3);
     blurPass.end();
 
-    const view = this.context.getCurrentTexture().createView();
+    // Composite → tFinal (intermediate). The resolution-reduction tail then presents it.
+    const clear = { r: 0, g: 0, b: 0, a: 1 };
     const composite = encoder.beginRenderPass({
-      colorAttachments: [{ view, loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+      colorAttachments: [{ view: this.tFinal!.createView(), loadOp: "clear", clearValue: clear, storeOp: "store" }],
     });
     composite.setPipeline(this.compositePipeline);
     composite.setBindGroup(0, this.bgComposite!);
     composite.draw(3);
     composite.end();
+
+    // macroBlocking: box-downscale tFinal into the tLowMB low-res region (viewport), then
+    // nearest-upscale composite → tMacro (passthrough-copies tFinal when off).
+    const mbDown = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tLowMB!.createView(), loadOp: "clear", clearValue: clear, storeOp: "store" }],
+    });
+    mbDown.setViewport(0, 0, u[I_MB_LOWW], u[I_MB_LOWH], 0, 1);
+    mbDown.setPipeline(this.mbDownPipeline);
+    mbDown.setBindGroup(0, this.bgMbDown!);
+    mbDown.draw(3);
+    mbDown.end();
+
+    const mbUp = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tMacro!.createView(), loadOp: "clear", clearValue: clear, storeOp: "store" }],
+    });
+    mbUp.setPipeline(this.mbUpPipeline);
+    mbUp.setBindGroup(0, this.bgMbUp!);
+    mbUp.draw(3);
+    mbUp.end();
+
+    // quantization: box-downscale + level-quantize tMacro → tLowQ (viewport), then nearest-
+    // upscale composite + DCT block grid → canvas (passthrough-copies tMacro when off).
+    const qDown = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tLowQ!.createView(), loadOp: "clear", clearValue: clear, storeOp: "store" }],
+    });
+    qDown.setViewport(0, 0, u[I_Q_LOWW], u[I_Q_LOWH], 0, 1);
+    qDown.setPipeline(this.qDownPipeline);
+    qDown.setBindGroup(0, this.bgQDown!);
+    qDown.draw(3);
+    qDown.end();
+
+    const view = this.context.getCurrentTexture().createView();
+    const qUp = encoder.beginRenderPass({
+      colorAttachments: [{ view, loadOp: "clear", clearValue: clear, storeOp: "store" }],
+    });
+    qUp.setPipeline(this.qUpPipeline);
+    qUp.setBindGroup(0, this.bgQUp!);
+    qUp.draw(3);
+    qUp.end();
 
     this.device.queue.submit([encoder.finish()]);
 
@@ -609,6 +750,10 @@ export class WebGPUBackend {
     this.tPpA?.destroy();
     this.tPpB?.destroy();
     this.tH?.destroy();
+    this.tFinal?.destroy();
+    this.tMacro?.destroy();
+    this.tLowMB?.destroy();
+    this.tLowQ?.destroy();
     this.uniformBuf?.destroy();
     this.dubBuf?.destroy();
     this.device?.destroy();

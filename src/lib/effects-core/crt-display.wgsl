@@ -107,6 +107,14 @@ struct Uniforms {
   u_mediaAge: f32,
   u_restoration: f32,
   u_macroBlocking: f32,
+  // Resolution-reduction derived params (width-dependent; computed in buildSignalUniforms).
+  u_mbLowW: f32,        // macroBlocking low-res width  (floor(W/blockSize))
+  u_mbLowH: f32,        // macroBlocking low-res height
+  u_mbAlpha: f32,       // macroBlocking upscale-composite alpha
+  u_qLowW: f32,         // quantization low-res width   (floor(W/sampleScale))
+  u_qLowH: f32,         // quantization low-res height
+  u_qLevels: f32,       // quantization level count
+  u_qAlpha: f32,        // quantization upscale-composite alpha
 };
 
 @group(0) @binding(0) var<uniform> U: Uniforms;
@@ -1058,5 +1066,96 @@ fn fs_composite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32>
     col = mix(col, sc, 0.2);
   }
 
+  return vec4<f32>(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+}
+
+// ============================================================================
+// Resolution-reduction tail (macroBlocking, quantization). These run on the FINAL composite
+// (CPU draws them last, after bloom/vignette/flicker), so the backend points fs_composite at
+// an intermediate texture (T_final) and runs: mbDown → tLowMB, mbUp → tMacro, qDown → tLowQ,
+// qUp → canvas. The down passes render at a low-res viewport (box-average ≈ the canvas
+// "low"-quality downscale); the up passes nearest-upscale + composite. Passthrough (byte-exact
+// copy) when the effect is off. CPU crt-renderer-full.js ~1115-1203.
+// ============================================================================
+
+// Box-average a source texture (u_tex) over the block each low-res output texel covers.
+fn boxDown(lx: i32, ly: i32, lowW: f32, lowH: f32) -> vec3<f32> {
+  let W = U.u_resolutionX;
+  let H = U.u_resolutionY;
+  let x0 = i32(floor(f32(lx) * W / lowW));
+  let x1 = max(x0 + 1, i32(floor(f32(lx + 1) * W / lowW)));
+  let y0 = i32(floor(f32(ly) * H / lowH));
+  let y1 = max(y0 + 1, i32(floor(f32(ly + 1) * H / lowH)));
+  let iW = i32(W);
+  let iH = i32(H);
+  var acc = vec3<f32>(0.0);
+  var cnt = 0.0;
+  for (var y = y0; y < y1; y = y + 1) {
+    for (var x = x0; x < x1; x = x + 1) {
+      acc = acc + textureLoad(u_tex, vec2<i32>(clamp(x, 0, iW - 1), clamp(y, 0, iH - 1)), 0).rgb;
+      cnt = cnt + 1.0;
+    }
+  }
+  return acc / max(cnt, 1.0);
+}
+
+// macroBlocking downscale — box-average T_final into the tLowMB low-res region.
+@fragment
+fn fs_mbDown(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  return vec4<f32>(boxDown(i32(floor(fragPos.x)), i32(floor(fragPos.y)), U.u_mbLowW, U.u_mbLowH), 1.0);
+}
+
+// macroBlocking upscale — nearest-upscale tLowMB (u_tex) composited over T_final (u_tex_sharp).
+@fragment
+fn fs_mbUp(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let base = textureLoad(u_tex_sharp, vec2<i32>(px, py), 0).rgb;
+  if (U.u_macroBlocking <= 0.01) { return vec4<f32>(base, 1.0); }
+  let lx = i32(floor(f32(px) * U.u_mbLowW / U.u_resolutionX));
+  let ly = i32(floor(f32(py) * U.u_mbLowH / U.u_resolutionY));
+  let block = textureLoad(u_tex, vec2<i32>(lx, ly), 0).rgb;
+  return vec4<f32>(mix(base, block, U.u_mbAlpha), 1.0);
+}
+
+// quantization downscale — box-average tMacro into tLowQ + per-channel level quantization.
+@fragment
+fn fs_qDown(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  var c = boxDown(i32(floor(fragPos.x)), i32(floor(fragPos.y)), U.u_qLowW, U.u_qLowH);
+  let lv = max(2.0, U.u_qLevels);
+  c = round(c * (lv - 1.0)) / (lv - 1.0);
+  return vec4<f32>(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+}
+
+// quantization upscale — nearest-upscale tLowQ (u_tex) over tMacro (u_tex_sharp), then the
+// 8×8 DCT block-edge grid + mosquito ringing (when quantization > 0.18). Writes the canvas.
+@fragment
+fn fs_qUp(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let base = textureLoad(u_tex_sharp, vec2<i32>(px, py), 0).rgb;
+  if (U.u_quantization <= 0.01) { return vec4<f32>(base, 1.0); }
+  let lx = i32(floor(f32(px) * U.u_qLowW / U.u_resolutionX));
+  let ly = i32(floor(f32(py) * U.u_qLowH / U.u_resolutionY));
+  let q = textureLoad(u_tex, vec2<i32>(lx, ly), 0).rgb;
+  var col = mix(base, q, U.u_qAlpha);
+
+  if (U.u_quantization > 0.18) {
+    let edgeAlpha = min(0.55, (U.u_quantization - 0.18) * 0.85);
+    let ringAmt = min(0.38, (U.u_quantization - 0.18) * 0.52);
+    let localX = px % 8;
+    let localY = py % 8;
+    let blockCol = px / 8;
+    let blockRow = py / 8;
+    if (localY == 0 || localX == 0) {
+      let blockNoise = seededNoise(f32(blockCol) * 0.41, f32(blockRow) * 0.37, 0.0);
+      col = col - col * (edgeAlpha * (0.6 + blockNoise * 0.4));
+    }
+    if (ringAmt > 0.01 && (localX == 1 || localX == 7 || localY == 1 || localY == 7)) {
+      let luma = 0.299 * col.r + 0.587 * col.g + 0.114 * col.b;
+      let ring = sin(f32(localX + localY) * PI * 0.25) * ringAmt * luma * (28.0 / 255.0);
+      col = col + vec3<f32>(ring);
+    }
+  }
   return vec4<f32>(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
