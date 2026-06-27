@@ -127,3 +127,57 @@ window.__crtSweep = async (opts = {}) => {
   console.log(`WebGPU-faithful display presets: ${ok}/${results.length}`);
   return results;
 };
+
+// ============================================================================
+// WebGPU SIGNAL fidelity sweep (Epic 6.2) — full 91-preset catalogue.
+//
+// Diffs the WGSL/WebGPU signal backend against the authoritative CPU render() for every
+// PRESET, paired with the hybrid's gpuSignalOK gate decision. The increment is sound when
+// every ROUTED (allowed) preset is < 6 mean-err (allowedFailing === []). Run live.
+//
+// window.__signalSweep(opts?) — opts: { size?: [w,h] }.
+// ============================================================================
+window.__signalSweep = async (opts = {}) => {
+  const [W, H] = opts.size || [640, 480];
+  const cpuMod = await import('/src/lib/crt-renderer-full.js');
+  const beMod = await import('/src/lib/effects-core/webgpu-backend.ts');
+  const hybMod = await import('/src/lib/crt-renderer-hybrid.js');
+  const presetsMod = await import('/src/lib/presets.js');
+  const PRESETS = presetsMod.PRESETS || {};
+
+  const img = document.createElement('canvas'); img.width = 480; img.height = 360;
+  const ig = img.getContext('2d');
+  const grd = ig.createLinearGradient(0, 0, 480, 360);
+  grd.addColorStop(0, '#e8e8e8'); grd.addColorStop(1, '#203050');
+  ig.fillStyle = grd; ig.fillRect(0, 0, 480, 360);
+  ig.fillStyle = '#d04030'; ig.fillRect(60, 60, 160, 120);
+  ig.fillStyle = '#30a060'; ig.fillRect(260, 180, 150, 120);
+  ig.fillStyle = '#fff'; ig.font = 'bold 54px sans-serif'; ig.fillText('LME', 180, 240);
+
+  const backend = await beMod.WebGPUBackend.create();
+  if (!backend) { console.error('WebGPU unavailable'); return { error: 'no-webgpu' }; }
+  const h = new hybMod.CRTRendererHybrid(false);
+  const cpu = new cpuMod.CRTRendererFull(); cpu.setImage(img, 1);
+  const oc = document.createElement('canvas'); oc.width = W; oc.height = H; const ox = oc.getContext('2d', { alpha: false });
+  const gc = document.createElement('canvas'); gc.width = W; gc.height = H; const gx = gc.getContext('2d', { alpha: false });
+  const px = (ctx) => ctx.getImageData(0, 0, W, H).data;
+  const meanErr = (a, b) => { let s = 0, n = 0; for (let i = 0; i < a.length; i += 4) { s += (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3; n++; } return +(s / n).toFixed(2); };
+
+  const rows = [];
+  for (const name of Object.keys(PRESETS)) {
+    const p = PRESETS[name].params || PRESETS[name];
+    if (typeof p !== 'object') continue;
+    const allowed = h.gpuSignalOK(p, {});
+    try {
+      cpu.reset && cpu.reset(); cpu.render(ox, W, H, 0, p, 0, 30, {});
+      backend.render(gx, img, W, H, 0, p, 0, 30); await backend.flush(); gx.drawImage(backend.outputCanvas, 0, 0, W, H);
+      const mean = meanErr(px(ox), px(gx));
+      rows.push({ name, allowed, mean, pass: mean < 6 });
+    } catch (e) { rows.push({ name, allowed, err: e.message }); }
+  }
+  const allowedFailing = rows.filter(r => r.allowed && !r.pass).map(r => r.name);
+  const routed = rows.filter(r => r.allowed && r.pass).length;
+  console.table(rows);
+  console.log(`WebGPU-routed presets: ${routed}; allowedFailing (must be empty): ${JSON.stringify(allowedFailing)}`);
+  return { rows, allowedFailing, routed };
+};

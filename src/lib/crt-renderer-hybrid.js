@@ -127,7 +127,7 @@ export class CRTRendererHybrid {
     // Every numeric param not in the supported set must be neutral — this routes grain,
     // quantization, and all multi-pass / inter-frame effects to CPU.
     for (const key in params) {
-      if (key === "maskType") continue;
+      if (key === "maskType" || key === "schemaVersion" || key === "__category") continue;
       const val = params[key];
       if (typeof val !== "number" || !Number.isFinite(val)) continue;
       if (WEBGPU_SIGNAL_SUPPORTED.has(key)) continue;
