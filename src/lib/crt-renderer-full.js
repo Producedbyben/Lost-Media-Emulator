@@ -474,6 +474,9 @@ export class CRTRendererFull {
     // Phosphor / plasma burn-in: faint retained ghost of the persistent image,
     // independent of the live picture. Driven by burnInGhost (0–1).
     const burnInGhost = Math.max(0, Math.min(1, Number(params.burnInGhost) || 0));
+    // Sync-suppression scrambling (cable de-scrambler required): horizontal
+    // tearing/rolling, suppressed/inverted luma bands. Driven by syncSuppression (0–1).
+    const syncSuppression = Math.max(0, Math.min(1, Number(params.syncSuppression) || 0));
     const brightness = Math.max(0.5, Math.min(1.5, Number(params.imageBrightness) || 1));
     const contrast = Math.max(0.5, Math.min(1.6, Number(params.imageContrast) || 1));
     const saturationRaw = Number(params.advancedSaturation);
@@ -1441,6 +1444,81 @@ export class CRTRendererFull {
         }
       }
       outCtx.putImageData(img, 0, 0);
+    }
+
+    // ---- Sync-suppression scrambling: real cable scrambling suppresses the
+    // horizontal sync pulse so the TV cannot lock; the picture tears and rolls.
+    // Three interlocking effects modelled here:
+    //   1. Horizontal tearing: seeded per-band random scanline horizontal shift
+    //      (different bands offset by different amounts, rapidly changing).
+    //   2. Rolling: the whole image scrolls vertically (sync pulse interval varies).
+    //   3. Luma suppression / inversion bands: some horizontal bands have their
+    //      luma crushed or partially inverted (suppressed-carrier artefact).
+    // All randomness via seededNoise keyed on temporalFrame + y — deterministic. ----
+    if (syncSuppression > 0.01) {
+      // --- Pass 1: horizontal tearing per-band ---
+      // Snapshot the current output, then re-draw each band with a horizontal offset.
+      this.ensureCanvasSize(this.tempCanvas, width, height);
+      const tearCtx = this.tempCtx;
+      tearCtx.clearRect(0, 0, width, height);
+      tearCtx.drawImage(outCtx.canvas, 0, 0);
+      // Rolling: the whole picture slides down by a time-varying fraction of height.
+      // In sync-suppressed TV the vertical sync is also lost, so the picture rolls.
+      const rollPx = Math.round(((temporalFrame * (0.3 + syncSuppression * 0.6)) % 1) * height);
+      outCtx.clearRect(0, 0, width, height);
+      // Draw wrapped roll: draw [rollPx..height] at top, then [0..rollPx] below.
+      if (rollPx > 0) {
+        outCtx.drawImage(this.tempCanvas, 0, rollPx, width, height - rollPx, 0, 0, width, height - rollPx);
+        outCtx.drawImage(this.tempCanvas, 0, 0, width, rollPx, 0, height - rollPx, width, rollPx);
+      } else {
+        outCtx.drawImage(this.tempCanvas, 0, 0);
+      }
+      // Horizontal band tearing: divide the image into seeded bands of ~8–20 lines
+      // and shift each band by a random horizontal offset.
+      const tearImg = outCtx.getImageData(0, 0, width, height);
+      const tData = tearImg.data;
+      const bandH = Math.max(6, Math.round(8 + (1 - syncSuppression) * 14));
+      for (let band = 0; band < Math.ceil(height / bandH); band++) {
+        const yStart = band * bandH;
+        const yEnd = Math.min(height, yStart + bandH);
+        // Per-band horizontal shift: higher syncSuppression → wider tears, faster.
+        const tearNoise = seededNoise(band * 0.53, temporalFrame * (0.5 + syncSuppression), 37);
+        const maxTear = Math.round(syncSuppression * width * 0.55);
+        const tearX = Math.round((tearNoise - 0.5) * 2 * maxTear);
+        if (tearX === 0) continue;
+        for (let y = yStart; y < yEnd; y++) {
+          const rowBase = y * width;
+          for (let x = 0; x < width; x++) {
+            const srcX = ((x - tearX) % width + width) % width;
+            const si = (rowBase + srcX) * 4;
+            const di = (rowBase + x) * 4;
+            tData[di]     = tData[si];
+            tData[di + 1] = tData[si + 1];
+            tData[di + 2] = tData[si + 2];
+          }
+        }
+      }
+      // Luma suppression bands: in sync-suppressed video the blanking pedestal is
+      // wrong, so some horizontal regions look crushed or partially inverted.
+      const suppressBands = Math.max(1, Math.round(syncSuppression * 5));
+      for (let sb = 0; sb < suppressBands; sb++) {
+        const bandPos = seededNoise(sb * 1.7, temporalFrame * 0.13 + sb, 53);
+        const bandTop = Math.floor(bandPos * height);
+        const bandThickness = Math.floor((0.04 + syncSuppression * 0.12) * height);
+        const invertStrength = syncSuppression * (0.4 + seededNoise(sb, temporalFrame * 0.07, 59) * 0.4);
+        for (let y = bandTop; y < Math.min(height, bandTop + bandThickness); y++) {
+          const rowBase = y * width;
+          for (let x = 0; x < width; x++) {
+            const i = (rowBase + x) * 4;
+            const luma = 0.299 * tData[i] + 0.587 * tData[i + 1] + 0.114 * tData[i + 2];
+            const invLuma = 255 - luma;
+            tData[i]     = Math.max(0, Math.min(255, luma * (1 - invertStrength) + invLuma * invertStrength * 0.4));
+            tData[i + 1] = Math.max(0, Math.min(255, luma * (1 - invertStrength) + invLuma * invertStrength * 0.4));
+            tData[i + 2] = Math.max(0, Math.min(255, luma * (1 - invertStrength) + invLuma * invertStrength * 0.4));
+          }
+        }
+      }
+      outCtx.putImageData(tearImg, 0, 0);
     }
 
     // OSD Overlay rendering (before grading, so it gets affected by color correction)

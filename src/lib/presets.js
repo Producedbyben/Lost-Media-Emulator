@@ -2224,6 +2224,8 @@ export const PRESETS = {
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
     advancedMacroBlocking: 0,
+    // Sync-suppression scrambling: horizontal tearing, rolling and luma inversion.
+    syncSuppression: 0.78,
     maskType: "dot",
   },
   "Rear-Projection CRT TV (2004)": {

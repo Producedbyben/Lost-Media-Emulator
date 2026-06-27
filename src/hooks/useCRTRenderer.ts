@@ -135,6 +135,8 @@ export interface CRTParams {
   restorationPassLevel: number;
   // Display retention — phosphor / plasma burn-in ghost layer.
   burnInGhost: number;
+  // Sync-suppression cable scrambling (horizontal tearing + rolling + luma inversion).
+  syncSuppression: number;
   [key: string]: number | string;
 }
 
@@ -256,6 +258,7 @@ export const DEFAULT_PARAMS: CRTParams = {
   copyGenerationCount: 0,
   restorationPassLevel: 0,
   burnInGhost: 0,
+  syncSuppression: 0,
 };
 
 /** Fit dimensions to maxPixels constraint, preserving aspect ratio */
