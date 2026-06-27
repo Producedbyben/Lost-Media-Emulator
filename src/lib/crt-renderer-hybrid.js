@@ -4,6 +4,20 @@
 // back to the CPU pipeline so results never regress.
 import { CRTRendererGPU } from "./crt-renderer-gpu.js";
 import { CRTRendererFull } from "./crt-renderer-full.js";
+import { WebGPUBackend } from "./effects-core/webgpu-backend";
+
+// Mask geometries the WGSL CRT/display shader implements (crt-display.wgsl).
+const WEBGPU_SUPPORTED_MASKS = new Set(["none", "phosphor", "dot", "aperture", "slot", "shadowMask"]);
+
+// Display-axis params the WGSL CRT/display shader reproduces at fidelity (< 6 mean-err
+// vs CPU on the sweep). maskScale is supported (mask + scanline scale by it); the three
+// phosphorPersistence/beamSpot/pixelResponseTime keys are display no-ops the CPU
+// renderer ignores, so they are safe at any value. Everything else must be neutral.
+const WEBGPU_DISPLAY_SUPPORTED = new Set([
+  "scanlineStrength", "phosphorMask", "maskScale", "barrelDistortion",
+  "chromaticAberration", "bloom", "flicker",
+  "phosphorPersistence", "beamSpotSizeX", "beamSpotSizeY", "pixelResponseTime",
+]);
 
 // Params the GPU fragment shader reproduces faithfully.
 const GPU_SUPPORTED = new Set([
@@ -42,9 +56,71 @@ export class CRTRendererHybrid {
     this._lastImg = null;
     this._lastSourceScale = 1;
 
+    // WebGPU is the PREFERRED backend (WebGPU → WebGL2 → CPU) when available and the
+    // look is in a fidelity-passed family. Created async; null until ready / on any
+    // failure (incl. non-WebGPU runtimes), so callers fall back transparently.
+    this.webgpuRenderer = null;
+    try {
+      WebGPUBackend.create()
+        .then((backend) => { this.webgpuRenderer = backend; })
+        .catch(() => { this.webgpuRenderer = null; });
+    } catch {
+      this.webgpuRenderer = null;
+    }
+
     if (preferGPU && this.gpuAvailable) {
       this.setPreferGPU(true);
     }
+  }
+
+  // Can the WGSL CRT/display shader reproduce this exact look at fidelity? True only for
+  // the CRT/display family this increment flips: a supported mask geometry, an active
+  // display effect, and NO capture / advanced / inter-frame / grade / OSD / categorical
+  // params (those keep running on the authoritative CPU path). grade is required neutral
+  // because the GPU shader's grade is identity and CPU render() grades the source first.
+  gpuFamilyOK(params, renderOptions) {
+    if (!params) return false;
+    const maskType = typeof params.maskType === "string" ? params.maskType : "phosphor";
+    if (!WEBGPU_SUPPORTED_MASKS.has(maskType)) return false;
+
+    // OSD / source view / format authenticity → CPU (parity with _gpuCanHandle).
+    if ((Number(params.advancedTimestampOSD) || 0) > 0.01) return false;
+    if (renderOptions && renderOptions.sourceView) return false;
+    if (renderOptions && renderOptions.formatProfile) {
+      const fp = renderOptions.formatProfile;
+      const needsRes = (fp.resScaleX ?? 1) < 0.995 || (fp.resScaleY ?? 1) < 0.995;
+      const needsComposite = (fp.system === "NTSC" || fp.system === "PAL") && (fp.composite ?? 0) > 0.001;
+      if (needsRes || needsComposite) return false;
+    }
+
+    // Categorical / string effects the shader doesn't implement.
+    if (params.scanlineProfile && params.scanlineProfile !== "off") return false;
+    if (params.subpixelLayoutOverride && params.subpixelLayoutOverride !== "none") return false;
+    if (params.chromaSubsamplingMode && params.chromaSubsamplingMode !== "444") return false;
+    if (params.monochromeTint && params.monochromeTint !== "none") return false;
+    if (params.storageCondition && params.storageCondition !== "ideal") return false;
+
+    // Every other numeric param must be at its neutral value (no capture/advanced/
+    // inter-frame/grade fx the shader can't carry — including pixelSize, fixed at 1).
+    for (const key in params) {
+      if (key === "maskType") continue;
+      const val = params[key];
+      if (typeof val !== "number" || !Number.isFinite(val)) continue;
+      if (WEBGPU_DISPLAY_SUPPORTED.has(key)) continue;
+      const neutral = NEUTRAL_ONE.has(key) ? 1 : 0;
+      if (Math.abs(val - neutral) > 1e-4) return false;
+    }
+
+    // Require at least one active display effect — otherwise there's nothing to
+    // accelerate (the CPU per-pixel loop is skipped anyway), so let it fall through.
+    return (
+      (Number(params.scanlineStrength) || 0) > 1e-4 ||
+      (Number(params.phosphorMask) || 0) > 1e-4 ||
+      (Number(params.bloom) || 0) > 1e-4 ||
+      Math.abs(Number(params.barrelDistortion) || 0) > 1e-4 ||
+      (Number(params.chromaticAberration) || 0) > 1e-4 ||
+      (Number(params.flicker) || 0) > 1e-4
+    );
   }
 
   _enableGPU() {
@@ -151,6 +227,17 @@ export class CRTRendererHybrid {
   }
 
   render(outCtx, width, height, seconds, params, frameIndex, fps, renderOptions) {
+    // Preferred path: WebGPU for fidelity-passed CRT/display looks. Any failure
+    // (device lost, unsupported) falls through to WebGL2 → CPU below.
+    if (this.preferGPU && this.webgpuRenderer && this._lastImg && this.gpuFamilyOK(params, renderOptions)) {
+      try {
+        this.webgpuRenderer.render(outCtx, this._lastImg, width, height, seconds, params, frameIndex, fps);
+        this.activeMode = "webgpu";
+        return;
+      } catch (e) {
+        console.warn("[CRT] WebGPU render failed, falling back:", e.message);
+      }
+    }
     if (this.preferGPU && this.gpuRenderer && this._gpuCanHandle(params, renderOptions)) {
       try {
         this.gpuRenderer.render(outCtx, width, height, seconds, params, frameIndex, fps, renderOptions);
@@ -167,6 +254,10 @@ export class CRTRendererHybrid {
   destroy() {
     if (this.gpuRenderer?.destroy) {
       this.gpuRenderer.destroy();
+    }
+    if (this.webgpuRenderer?.dispose) {
+      this.webgpuRenderer.dispose();
+      this.webgpuRenderer = null;
     }
   }
 }
