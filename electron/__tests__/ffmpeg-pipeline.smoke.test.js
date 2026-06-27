@@ -84,6 +84,31 @@ describe.skipIf(!ffmpeg || !ffprobe)("ffmpeg pipeline smoke", () => {
     fs.rmSync(out, { force: true });
   }, 30000);
 
+  it("encode is colour-faithful: a decoded frame matches the source within codec tolerance", async () => {
+    const W = 64, H = 64, RGB = [200, 40, 40];
+    const frame = makeSolidPngWH(W, H, RGB);
+    const session = createSession({ width: W, height: H, fps: 10, tmpRoot: os.tmpdir() });
+    for (let i = 0; i < 10; i++) session.writeFrame(i, frame);
+    const out = path.join(os.tmpdir(), "lme-smoke-fidelity.mp4");
+    await session.encode({ ffmpegPath: ffmpeg, codec: "h264", outPath: out });
+    session.cleanup();
+
+    // Decode the middle frame back to raw RGB and compare to the source colour.
+    const raw = execFileSync(ffmpeg, [
+      "-v", "error", "-i", out, "-vf", "select=eq(n\\,5)", "-frames:v", "1",
+      "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+    ], { maxBuffer: 1 << 24 });
+    expect(raw.length).toBe(W * H * 3);
+    let sum = 0;
+    for (let i = 0; i < raw.length; i += 3) {
+      sum += Math.abs(raw[i] - RGB[0]) + Math.abs(raw[i + 1] - RGB[1]) + Math.abs(raw[i + 2] - RGB[2]);
+    }
+    const meanDiff = sum / raw.length;
+    // h264 4:2:0 introduces a few levels of chroma error; a faithful encode stays well under this.
+    expect(meanDiff).toBeLessThan(10);
+    fs.rmSync(out, { force: true });
+  }, 30000);
+
   it("muxes the source's original audio track into the encoded mp4", () => {
     // A 1s source clip that actually carries an audio track (sine tone).
     const src = path.join(os.tmpdir(), "lme-smoke-src.mp4");
