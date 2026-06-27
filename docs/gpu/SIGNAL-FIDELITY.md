@@ -104,3 +104,22 @@ Driven through the real `CRTRendererHybrid` at 1280×720, look = the "Consumer T
 
 148 tests green, tsc + `vite build` clean. The CPU renderer and export path are untouched,
 so the Epic 1 determinism sweep stays 455/455.
+
+## Post-6.2 fixes (2026-06-27)
+
+- **Grain parity (commit `07f8a1b`).** The grain hash coefficients (`gf*12.9898`,
+  `gfy*78.233`) are now reduced **mod 2π on the CPU** — exact for integer pixel coords by
+  sine periodicity — collapsing the GPU argument magnitude ~67k → ~400 where the emulated-f64
+  hash works. Grain mean-err: 0.15 → 2.3, 0.35 → 5.4, chroma → 5.67 (was 4.3 / 10.0 / 9.2).
+  Not bit-exact (residual GPU double-f32 *addition* error the `fma` fix can't reach), so
+  `gpuSignalOK` caps grain at amplitude 0.3. **Unlocks 0 catalogue presets today** (grain
+  co-occurs with other CPU-gated effects), but fixes the grain effect for manual grain on
+  GPU-routed looks and is groundwork for Epic 6.3.
+- **LCD/OLED/plasma display masks (commit `b43615b`).** Ported `lcdStripeRGB` (6),
+  `oledPentile` (7), `plasmaCell` (8). Unlocks the 4 flat-panel display presets deferred
+  earlier: IPS Office LCD **5.69 → 0.82**, OLED PenTile 0.76, Cyberpunk OLED 1.89, Pioneer
+  Plasma 2.94.
+
+**Routed set after fixes: 26** (was 21), `allowedFailing` still `[]` (worst 5.77 — CRT
+Viewfinder). The display family is now essentially complete on GPU; the remaining classics
+need the Epic 6.3 multi-pass tier.
