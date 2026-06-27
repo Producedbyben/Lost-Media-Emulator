@@ -29,6 +29,7 @@ import MiniTimeline from "@/components/MiniTimeline";
 import EffectStack, { EFFECT_STAGES } from "@/components/EffectStack";
 import BatchProcessor from "@/components/BatchProcessor";
 import AudioReactivePanel from "@/components/AudioReactivePanel";
+import AudioPanel from "@/components/AudioPanel";
 import PresetMorphPad from "@/components/PresetMorphPad";
 import OSDTemplateEditor from "@/components/OSDTemplateEditor";
 import MaskPainter from "@/components/MaskPainter";
@@ -248,7 +249,7 @@ const TRANSITION_DURATION = 400; // ms
 
 const Index = () => {
   const {
-    canvasRef, containerRef, hasImage, isVideo, sourceHasAudio, videoDuration, videoCurrentTime,
+    canvasRef, containerRef, hasImage, isVideo, sourceHasAudio, audioProfile, setAudioProfile, audioDecodedBuffer, videoDuration, videoCurrentTime,
     videoPlaying, videoSpeed, videoLoop, videoFPS, videoWidth, videoHeight,
     loadImage, sourceInfo, setParams, setOSDOptions, setPreviewSettings,
     isExporting, exportProgress, handleExportMp4, handleExportStill, handleExportGif, handleCancelExport, runExportJob,
@@ -1258,6 +1259,11 @@ const Index = () => {
     { title: "Tape & Dropouts", section: "capture", items: [
       { key: "tape", enabled: tapeEnabled, node: (
         <div id="panel-tape"><TapePanel params={params as any} onChange={handleParamChange} enabled={tapeEnabled} onToggleEnabled={toggleTape} /></div>
+      ) },
+    ] },
+    { title: "Audio", section: "capture", items: [
+      { key: "audio", enabled: true, node: (
+        <div id="panel-audio"><AudioPanel profile={audioProfile} onChange={(patch) => setAudioProfile((p) => ({ ...p, ...patch }))} decodedBuffer={audioDecodedBuffer} hasAudio={sourceHasAudio} /></div>
       ) },
     ] },
     { title: "Film", section: "capture", items: [
