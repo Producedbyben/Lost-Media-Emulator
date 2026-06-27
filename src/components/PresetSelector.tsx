@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from "react";
-import { Search, Save, Trash2, Upload, Download, Link, Share2, Dice3, Grid3X3, List, Star, Clock, Tv, Film, Video, Eye, Radio, Monitor, Layers, Sparkles, Zap } from "lucide-react";
+import { Search, Save, Trash2, Upload, Download, Link, Share2, Dice3, Grid3X3, List, Star, Clock, Tv, Film, Video, Eye, Radio, Monitor, Layers, Sparkles, Zap, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 // @ts-ignore
@@ -357,7 +357,7 @@ const PresetSelector = ({
           <input readOnly value={shareUrl}
             className="flex-1 text-[12px] font-mono bg-transparent text-primary border-none outline-none"
             onFocus={(e) => e.target.select()} />
-          <button onClick={() => setShareUrl("")} className="text-[12px] text-primary hover:text-primary/80">✕</button>
+          <button onClick={() => setShareUrl("")} aria-label="Dismiss share link" className="text-primary hover:text-primary/80"><X className="w-3.5 h-3.5" /></button>
         </div>
       )}
 

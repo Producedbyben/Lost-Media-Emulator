@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX, Scissors, ChevronDown, Settings2, Monitor, type LucideIcon } from "lucide-react";
+import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX, Scissors, ChevronDown, Settings2, Monitor, Check, TriangleAlert, type LucideIcon } from "lucide-react";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
 import { computeExportSize } from "@/lib/export-size";
 import { ensureFilename } from "@/lib/save-file.js";
@@ -731,8 +731,10 @@ const ExportPanel = ({
                 <p>Error: {validation.error}</p>
               ) : (
                 <>
-                  <p className="font-semibold">
-                    {validation.ok ? "✓ Export verified" : "⚠ Differences detected"}
+                  <p className="font-semibold flex items-center gap-1.5">
+                    {validation.ok
+                      ? <><Check className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> Export verified</>
+                      : <><TriangleAlert className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> Differences detected</>}
                   </p>
                   <p>
                     Deterministic: {validation.determinism?.identical ? "yes (byte-identical)" : `no (Δmax ${validation.determinism?.maxDiff})`}

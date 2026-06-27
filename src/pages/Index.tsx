@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react";
-import { Monitor, Tv, Settings2, Download, Layers, Undo2, Redo2, Command, Keyboard, SplitSquareHorizontal, Eye, EyeOff, HelpCircle, Video, Circle, Square, Play, Zap, Cpu, Music, Activity, Hash, Clock, Film, Maximize, Gauge, Pin, GripVertical, RotateCcw, Sparkles } from "lucide-react";
+import { Monitor, Tv, Settings2, Download, Layers, Undo2, Redo2, Command, Keyboard, SplitSquareHorizontal, Eye, EyeOff, HelpCircle, Video, Circle, Square, Play, Zap, Cpu, Music, Activity, Hash, Clock, Film, Maximize, Gauge, Pin, GripVertical, RotateCcw, Sparkles, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -1926,7 +1926,7 @@ const Index = () => {
               <span className="text-border">|</span>
               <span className="flex items-center gap-1">
                 <Gauge className="w-3 h-3" />
-                {videoSpeed}× {videoLoop ? "🔁" : ""}
+                {videoSpeed}× {videoLoop && <Repeat className="w-3 h-3" aria-label="Looping" />}
               </span>
             </>
           )}

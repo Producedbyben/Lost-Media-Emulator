@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Sparkles } from "lucide-react";
+import { Sparkles, FolderOpen, Image, Undo2, Redo2, RotateCcw, SlidersHorizontal } from "lucide-react";
 // @ts-ignore
 import { PRESETS } from "@/lib/presets.js";
 import { DEFAULT_PARAMS } from "@/hooks/useCRTRenderer";
@@ -122,22 +122,27 @@ const CommandPalette = ({ onSelectPreset, onJump, onReset, onUndo, onRedo, onImp
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Actions">
           <CommandItem onSelect={() => handleSelect("import")}>
-            <span className="text-xs">📁 Import source file…</span>
+            <FolderOpen className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs">Import source file…</span>
             <span className="ml-auto text-[12px] text-muted-foreground font-mono">Ctrl+I</span>
           </CommandItem>
           <CommandItem onSelect={() => handleSelect("export-still")}>
-            <span className="text-xs">📸 Export still</span>
+            <Image className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs">Export still</span>
           </CommandItem>
           <CommandItem onSelect={() => handleSelect("undo")}>
-            <span className="text-xs">↩ Undo</span>
+            <Undo2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs">Undo</span>
             <span className="ml-auto text-[12px] text-muted-foreground font-mono">Ctrl+Z</span>
           </CommandItem>
           <CommandItem onSelect={() => handleSelect("redo")}>
-            <span className="text-xs">↪ Redo</span>
+            <Redo2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs">Redo</span>
             <span className="ml-auto text-[12px] text-muted-foreground font-mono">Ctrl+Shift+Z</span>
           </CommandItem>
           <CommandItem onSelect={() => handleSelect("reset")}>
-            <span className="text-xs">🔄 Reset all parameters</span>
+            <RotateCcw className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs">Reset all parameters</span>
           </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Parameters">
@@ -145,8 +150,9 @@ const CommandPalette = ({ onSelectPreset, onJump, onReset, onUndo, onRedo, onImp
             const isModified = value !== undefined && defaultValue !== undefined && Math.abs(value - defaultValue) > 0.001;
             return (
               <CommandItem key={key} onSelect={() => handleSelect(`reset-param:${key}`)}>
+                <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${isModified ? "text-primary" : "text-muted-foreground"}`} aria-hidden="true" />
                 <span className={`text-xs ${isModified ? "text-primary font-medium" : ""}`}>
-                  🎛️ {label}
+                  {label}
                 </span>
                 {value !== undefined && (
                   <span className={`ml-auto text-[12px] font-mono ${isModified ? "text-primary" : "text-muted-foreground"}`}>
