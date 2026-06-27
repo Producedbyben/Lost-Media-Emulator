@@ -2080,7 +2080,11 @@ export const PRESETS = {
     advancedHeadSwitching: 0,
     advancedChromaDelay: 0.1,
     advancedCrossColor: 0.04,
-    advancedDropouts: 0.22,
+    // DV dropouts are SHARP rectangular block/frozen-macroblock errors, not
+    // analog horizontal streaks. Set analog dropouts to near-zero and drive
+    // the DV-specific block concealment error instead.
+    advancedDropouts: 0.02,
+    dvBlockError: 0.52,
     advancedGhosting: 0.14,
     advancedInterlacing: 0.34,
     advancedFrameStutter: 0.21,

@@ -1307,6 +1307,74 @@ export class CRTRendererFull {
 
 
 
+    // ---- DV block-error concealment: DV dropouts manifest as SHARP rectangular
+    // macroblocks (DV uses 8×8 DCT blocks grouped into 5-block macroblocks) that
+    // are either frozen at a previous value, filled with a flat DC colour, or
+    // copied from an adjacent block (decoder error-concealment strategies).
+    // Unlike analog horizontal streaks, DV errors are always block-aligned and
+    // hard-edged. Driven by dvBlockError (0–1). ----
+    const dvBlockError = Math.max(0, Math.min(1, Number(params.dvBlockError) || 0));
+    if (dvBlockError > 0.005) {
+      const dvBlock = 16; // DV macroblock (4 × 8×8 luma macroblocks)
+      const errProb = dvBlockError * dvBlockError * 0.35; // quadratic: sparse at low values
+      const dvImg = outCtx.getImageData(0, 0, width, height);
+      const dvd = dvImg.data;
+      for (let by = 0; by < height; by += dvBlock) {
+        for (let bx = 0; bx < width; bx += dvBlock) {
+          // Probability gate — seeded on block position + frame so errors move
+          // frame to frame (LP mode errors are NOT sticky — they flicker).
+          if (seededNoise(bx * 0.31, by * 0.31, frameIndex * 0.5 + 7) > errProb) continue;
+          const bw = Math.min(dvBlock, width - bx);
+          const bh = Math.min(dvBlock, height - by);
+          // Error concealment mode: seeded per block+frame.
+          const errMode = seededNoise(bx, by, frameIndex + 13);
+          if (errMode < 0.45) {
+            // Frozen DC: fill with the average luma of the block (DC-only = no AC).
+            let rSum = 0, gSum = 0, bSum = 0, n = 0;
+            for (let yy = 0; yy < bh; yy++) {
+              const row = (by + yy) * width;
+              for (let xx = 0; xx < bw; xx++) {
+                const i = (row + bx + xx) * 4;
+                rSum += dvd[i]; gSum += dvd[i + 1]; bSum += dvd[i + 2]; n++;
+              }
+            }
+            const rDC = Math.round(rSum / n), gDC = Math.round(gSum / n), bDC = Math.round(bSum / n);
+            for (let yy = 0; yy < bh; yy++) {
+              const row = (by + yy) * width;
+              for (let xx = 0; xx < bw; xx++) {
+                const i = (row + bx + xx) * 4;
+                dvd[i] = rDC; dvd[i + 1] = gDC; dvd[i + 2] = bDC;
+              }
+            }
+          } else if (errMode < 0.80) {
+            // Adjacent-block copy: copy the block immediately above (or below if at top).
+            const srcBy = by > 0 ? by - dvBlock : by + dvBlock;
+            if (srcBy >= 0 && srcBy + bh <= height) {
+              for (let yy = 0; yy < bh; yy++) {
+                const srcRow = (srcBy + yy) * width;
+                const dstRow = (by + yy) * width;
+                for (let xx = 0; xx < bw; xx++) {
+                  const si = (srcRow + bx + xx) * 4;
+                  const di = (dstRow + bx + xx) * 4;
+                  dvd[di] = dvd[si]; dvd[di + 1] = dvd[si + 1]; dvd[di + 2] = dvd[si + 2];
+                }
+              }
+            }
+          } else {
+            // Full black error block (lost packet — decoder outputs silence/zero).
+            for (let yy = 0; yy < bh; yy++) {
+              const row = (by + yy) * width;
+              for (let xx = 0; xx < bw; xx++) {
+                const i = (row + bx + xx) * 4;
+                dvd[i] = 0; dvd[i + 1] = 0; dvd[i + 2] = 0;
+              }
+            }
+          }
+        }
+      }
+      outCtx.putImageData(dvImg, 0, 0);
+    }
+
     // ---- Chroma subsampling (4:4:4 / 4:2:2 / 4:2:0 / 4:1:1) ----
     // Box-averages the Cb/Cr planes over the mode's block size while keeping
     // full-resolution luma — the classic colour-bleed signature of broadcast,

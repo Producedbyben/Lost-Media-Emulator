@@ -137,6 +137,8 @@ export interface CRTParams {
   burnInGhost: number;
   // Sync-suppression cable scrambling (horizontal tearing + rolling + luma inversion).
   syncSuppression: number;
+  // DV/MiniDV block-error concealment (sharp rectangular macroblock errors, not analog streaks).
+  dvBlockError: number;
   [key: string]: number | string;
 }
 
@@ -259,6 +261,7 @@ export const DEFAULT_PARAMS: CRTParams = {
   restorationPassLevel: 0,
   burnInGhost: 0,
   syncSuppression: 0,
+  dvBlockError: 0,
 };
 
 /** Fit dimensions to maxPixels constraint, preserving aspect ratio */
