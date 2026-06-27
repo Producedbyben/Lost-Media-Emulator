@@ -10,6 +10,7 @@ import path from "path";
 import { createSession } from "../ffmpeg-session.cjs";
 import { resolveFfmpeg } from "../ffmpeg-locate.cjs";
 import { computeExportSize } from "../../src/lib/export-size";
+import { audioBufferToWav } from "../../src/lib/audio-wav";
 
 const { ffmpeg, ffprobe } = resolveFfmpeg({
   env: process.env, resourcesPath: "", isPackaged: false,
@@ -107,6 +108,25 @@ describe.skipIf(!ffmpeg || !ffprobe)("ffmpeg pipeline smoke", () => {
     // h264 4:2:0 introduces a few levels of chroma error; a faithful encode stays well under this.
     expect(meanDiff).toBeLessThan(10);
     fs.rmSync(out, { force: true });
+  }, 30000);
+
+  it("muxes a degraded-audio WAV produced by the export encoder (Epic 4 desktop degrade path)", async () => {
+    // Build a 0.5s mono WAV with the SAME encoder the export uses, then mux it.
+    const sr = 8000, n = 4000;
+    const wav = audioBufferToWav({ numberOfChannels: 1, sampleRate: sr, length: n, getChannelData: () => new Float32Array(n) });
+    const wavPath = path.join(os.tmpdir(), `lme-smoke-degraded-${Date.now()}.wav`);
+    fs.writeFileSync(wavPath, Buffer.from(wav));
+    const session = createSession({ width: 64, height: 64, fps: 10, tmpRoot: os.tmpdir() });
+    for (let i = 0; i < 10; i++) session.writeFrame(i, FRAME);
+    const out = path.join(os.tmpdir(), `lme-smoke-degraded-${Date.now()}.mp4`);
+    await session.encode({ ffmpegPath: ffmpeg, codec: "h264", outPath: out, audioSourcePath: wavPath });
+    session.cleanup();
+    const probe = JSON.parse(execFileSync(ffprobe, ["-v", "quiet", "-print_format", "json", "-show_streams", out]).toString());
+    const a = probe.streams.find((s) => s.codec_type === "audio");
+    expect(a).toBeTruthy();
+    expect(a.codec_name).toBe("aac");
+    fs.rmSync(out, { force: true });
+    fs.rmSync(wavPath, { force: true });
   }, 30000);
 
   it("muxes the source's original audio track into the encoded mp4", () => {

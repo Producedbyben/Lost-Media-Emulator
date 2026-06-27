@@ -13,7 +13,8 @@ import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import { buildOSDRenderOptions } from "@/lib/osd-render-options";
 import { loadOSDFonts } from "@/lib/osd-fonts";
 import { useAudioPreview, DEFAULT_AUDIO_PROFILE } from "@/hooks/useAudioPreview";
-import type { AudioProfile } from "@/lib/audio-degrade";
+import { degradeAudioBuffer, type AudioProfile } from "@/lib/audio-degrade";
+import { audioBufferToWav } from "@/lib/audio-wav";
 import type { OSDOptions } from "@/components/OSDControls";
 import type { PreviewSettings } from "@/components/PreviewControls";
 
@@ -437,6 +438,11 @@ export function useCRTRenderer() {
   const [audioVideoEl, setAudioVideoEl] = useState<HTMLVideoElement | null>(null);
   const [sourceLoadId, setSourceLoadId] = useState(0);
   const audioPreview = useAudioPreview({ videoEl: audioVideoEl, sourceKey: sourceLoadId, hasAudio: sourceHasAudio, profile: audioProfile });
+  // Refs so the (memoised) export handlers see the latest decoded audio + profile.
+  const audioDecodedRef = useRef<AudioBuffer | null>(null);
+  const audioProfileRef = useRef<AudioProfile>(audioProfile);
+  useEffect(() => { audioDecodedRef.current = audioPreview.decodedBuffer; }, [audioPreview.decodedBuffer]);
+  useEffect(() => { audioProfileRef.current = audioProfile; }, [audioProfile]);
 
   // Create renderer ONCE as a stable ref
   const rendererRef = useRef<any>(null);
@@ -1307,11 +1313,22 @@ export function useCRTRenderer() {
         const outPath = await desktopApi?.saveDialog?.({ defaultName: options?.fileName || "export.mp4" });
         if (outPath) {
           // Mux the source's original audio when the user kept audio on and the
-          // source is a video with a real path. (Degrade-to-match arrives in a
-          // later phase; until then it behaves as original.)
+          // source is a video with a real path.
           const wantsAudio = options?.audioMode !== "off";
-          const audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
+          let audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
             ? sourcePathRef.current : undefined;
+          // Degrade-to-match: render the source audio through the SAME degrade DSP
+          // the preview uses, write the result as a temp WAV, and mux THAT so the
+          // exported audio matches what was heard (one DSP = preview == export).
+          if (wantsAudio && options?.audioMode === "degrade" && audioDecodedRef.current) {
+            try {
+              const degraded = await degradeAudioBuffer(audioDecodedRef.current, audioProfileRef.current);
+              const wav = audioBufferToWav(degraded);
+              const dapi = (window as unknown as { desktop?: { writeTempAudio?: (b: ArrayBuffer) => Promise<{ path: string } | null> } }).desktop;
+              const res = await dapi?.writeTempAudio?.(wav);
+              if (res?.path) audioSourcePath = res.path;
+            } catch { /* fall back to muxing the original track */ }
+          }
           // Trim window: clamp in/out to the clip and forward only when a real
           // sub-range was requested (full clip → in/out omitted, byte-identical).
           const full = Math.max(0.5, duration);

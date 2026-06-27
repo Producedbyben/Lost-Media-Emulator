@@ -260,6 +260,15 @@ ipcMain.handle("ffmpeg:cancel", (_e, { sessionId }) => {
   if (session) { session.cancel(); session.cleanup(); ffmpegSessions.delete(sessionId); }
 });
 
+// Write a degraded-audio WAV to a temp file so ffmpeg can mux it (Epic 4 desktop
+// "degrade" export). Returns the absolute temp path; OS temp reclaims it later.
+ipcMain.handle("ffmpeg:write-temp-audio", (_e, { bytes }) => {
+  const fs = require("fs");
+  const file = path.join(app.getPath("temp"), `lme-degraded-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`);
+  fs.writeFileSync(file, Buffer.from(bytes));
+  return { path: file };
+});
+
 // ffmpeg writes the file itself, so the renderer needs a real destination path
 // before encoding. Return the chosen absolute path (or null if cancelled).
 ipcMain.handle("ffmpeg:save-dialog", async (_e, { defaultName }) => {

@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld("desktop", {
   saveDialog: (opts) => ipcRenderer.invoke("ffmpeg:save-dialog", opts),
   // Whether a source file carries an audio track (honest "Original audio" state).
   probeAudio: (opts) => ipcRenderer.invoke("ffmpeg:probe-audio", opts),
+  // Write a degraded-audio WAV to a temp file; returns { path } for ffmpeg to mux.
+  writeTempAudio: (bytes) => ipcRenderer.invoke("ffmpeg:write-temp-audio", { bytes }),
   // License activation. The main process owns the token + device id and does the
   // server calls; the renderer can only ask for status, activate, or deactivate.
   license: {
