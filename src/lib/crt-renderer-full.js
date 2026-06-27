@@ -453,7 +453,23 @@ export class CRTRendererFull {
       this.applyFormatPrePass(fitCtx, width, height, renderOptions.formatProfile, frameIndex);
     }
 
+    // ============================================================
+    // STAGE A — CAPTURE SIGNAL: grade (colour/tone) then burn in the OSD, LAST,
+    // into the signal buffer (fitCtx). Doing this BEFORE the per-pixel display loop
+    // (Stage B) below means the display optics — barrel/curvature resample,
+    // scanlines, shadow/aperture/slot mask, bloom — naturally ride OVER the OSD,
+    // exactly like watching a tape that already had the timestamp burned in. The
+    // OSD also sits AFTER the grade, so the scene grade does not colour-shift the
+    // OSD's own phosphor colour (handoff defect #4). The grade math is unchanged;
+    // only WHERE it runs moved (it used to run last on the output canvas).
+    // ============================================================
+    this.renderGrade(fitCtx, width, height, params);
+    this.renderOSD(fitCtx, width, height, seconds, params, frameIndex, fps, renderOptions);
 
+    // ============================================================
+    // STAGE B — DISPLAY OPTICS: the fused warp loop + post passes below resample
+    // and modulate the captured signal buffer (fitCtx) into the output.
+    // ============================================================
     this.ensureCanvasSize(this.workCanvas, width, height);
     const wctx = this.workCtx;
     const srcPixels = fitCtx.getImageData(0, 0, width, height);
@@ -497,14 +513,7 @@ export class CRTRendererFull {
     const focusBreathing = Math.max(0, Math.min(1, Number(params.advancedFocusBreathing) || 0));
     const tapeCrease = Math.max(0, Math.min(1, Number(params.advancedTapeCrease) || 0));
     const cctvMonochrome = Math.max(0, Math.min(1, Number(params.advancedCctvMonochrome) || 0));
-    const brightness = Math.max(0.5, Math.min(1.5, Number(params.imageBrightness) || 1));
-    const contrast = Math.max(0.5, Math.min(1.6, Number(params.imageContrast) || 1));
-    const saturationRaw = Number(params.advancedSaturation);
-    // Allow full range: 0 = true monochrome, 1 = neutral, up to 3 = heavily over-pushed colour.
-    const saturation = Math.max(0, Math.min(3, Number.isFinite(saturationRaw) ? saturationRaw : 1));
-    const gamma = Math.max(0.6, Math.min(1.8, Number(params.imageGamma) || 1));
-    const temperature = Math.max(-1, Math.min(1, Number(params.imageTemperature) || 0));
-    const tint = Math.max(-1, Math.min(1, Number(params.imageTint) || 0));
+    // brightness/contrast/saturation/gamma/temperature/tint moved to renderGrade().
     const quantization = Math.max(0, Math.min(1, Number(params.advancedQuantization) || 0));
     const generationLoss = Math.max(0, Math.min(1, Number(params.advancedGenerationLoss) || 0));
     const macroBlocking = Math.max(0, Math.min(1, Number(params.advancedMacroBlocking) || 0));
@@ -533,14 +542,11 @@ export class CRTRendererFull {
     const gateJitterY = c01(params.gateJitterY);
     const gateRotation = c01(params.gateRotation);
     const shutterJudder = c01(params.shutterJudder);
-    const printFadeCyan = c01(params.printFadeCyan);
-    const printFadeMagenta = c01(params.printFadeMagenta);
-    const printFadeYellow = c01(params.printFadeYellow);
-    const blackLevelCrush = c01(params.blackLevelCrush);
-    const highlightRollOff = c01(params.highlightRollOff);
-    const haze = c01(params.haze);
+    // NOTE: the colour-grade params (printFade*, blackLevelCrush, highlightRollOff,
+    // haze, infraredFalseColor, saturation, gamma, temperature, tint, brightness,
+    // contrast, monochromeTint) moved into renderGrade() (Stage A), which reads them
+    // from `params` directly — so they are no longer extracted here.
     const vignetteAmt = c01(params.vignette);
-    const infraredFalseColor = c01(params.infraredFalseColor);
     const bandingHorizontal = c01(params.bandingHorizontal);
     const hanoverBars = c01(params.hanoverBars);
     // Per-frame film-gate displacement (random translation + small rotation +
@@ -1391,9 +1397,31 @@ export class CRTRendererFull {
       }
       outCtx.putImageData(img, 0, 0);
     }
+  }
 
-    // OSD Overlay rendering (before grading, so it gets affected by color correction)
-    this.renderOSD(outCtx, width, height, seconds, params, frameIndex, fps, renderOptions);
+  // Scene grade / colour pass (Stage A — capture signal). Operates on the given
+  // context in place: brightness/contrast → film & sensor colour/tone → saturation/
+  // gamma/temperature/tint → monochrome phosphor tint. The math is identical to the
+  // historical inline grade; it was lifted into a method so the grade can run on the
+  // SIGNAL buffer BEFORE the display optics (and before the OSD burn-in) rather than
+  // last on the output — see render()'s two-stage structure. Reads params directly so
+  // it has no dependency on render()'s local consts.
+  renderGrade(outCtx, width, height, params) {
+    const brightness = Math.max(0.5, Math.min(1.5, Number(params.imageBrightness) || 1));
+    const contrast = Math.max(0.5, Math.min(1.6, Number(params.imageContrast) || 1));
+    const saturationRaw = Number(params.advancedSaturation);
+    const saturation = Math.max(0, Math.min(3, Number.isFinite(saturationRaw) ? saturationRaw : 1));
+    const gamma = Math.max(0.6, Math.min(1.8, Number(params.imageGamma) || 1));
+    const temperature = Math.max(-1, Math.min(1, Number(params.imageTemperature) || 0));
+    const tint = Math.max(-1, Math.min(1, Number(params.imageTint) || 0));
+    const c01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+    const infraredFalseColor = c01(params.infraredFalseColor);
+    const printFadeCyan = c01(params.printFadeCyan);
+    const printFadeMagenta = c01(params.printFadeMagenta);
+    const printFadeYellow = c01(params.printFadeYellow);
+    const blackLevelCrush = c01(params.blackLevelCrush);
+    const highlightRollOff = c01(params.highlightRollOff);
+    const haze = c01(params.haze);
 
     // Image grading — brightness & contrast via the fast canvas filter.
     if (Math.abs(brightness - 1) > 0.001 || Math.abs(contrast - 1) > 0.001) {
@@ -1411,44 +1439,33 @@ export class CRTRendererFull {
       const data = image.data;
       for (let i = 0; i < data.length; i += 4) {
         let r = data[i], g = data[i + 1], b = data[i + 2];
-        // Aerochrome IR false-colour: vegetation (green-reflective in normal RGB,
-        // strongly IR-reflective) remaps to red/magenta; reds shift to green; sky
-        // stays cool. Approximated as a partial channel rotation + magenta lift.
         if (infraredFalseColor > 0.001) {
           const r0 = r, g0 = g, b0 = b;
-          // Skyness vs vegetation-ness gate the remap so blue sky stays cool while
-          // green/IR-reflective foliage swings to magenta/red.
           const sky = Math.max(0, (b0 - Math.max(r0, g0)) / 255);
           const veg = Math.max(0, (g0 - Math.max(r0, b0)) / 255);
           const t = infraredFalseColor * (1 - sky * 0.8);
-          const nr = g0;                  // foliage green -> red
-          const ng = r0 * 0.5 + b0 * 0.2; // original red  -> green
+          const nr = g0;
+          const ng = r0 * 0.5 + b0 * 0.2;
           const nb = b0 * 0.85 + r0 * 0.1;
           r = r0 * (1 - t) + nr * t + veg * infraredFalseColor * 40;
           g = g0 * (1 - t) + ng * t;
           b = b0 * (1 - t) + nb * t + veg * infraredFalseColor * 26 + sky * infraredFalseColor * 16;
         }
         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        // Atmospheric / screen haze: lift toward a mid grey, washing contrast out.
         if (haze > 0.001) {
           const lift = haze * 0.28;
           r += (185 - r) * lift; g += (185 - g) * lift; b += (188 - b) * lift;
         }
-        // Print dye-fade: each fading dye lets its complementary light through,
-        // weighted to the shadows (milky lifted blacks) — cyan→red, magenta→green,
-        // yellow→blue. Faded prints drift pink/magenta as cyan fades fastest.
         if (printFadeCyan > 0.001 || printFadeMagenta > 0.001 || printFadeYellow > 0.001) {
-          const sh = Math.pow(1 - Math.min(1, luma / 255), 0.7); // shadow weight
+          const sh = Math.pow(1 - Math.min(1, luma / 255), 0.7);
           r += printFadeCyan * (16 + sh * 26);
           g += printFadeMagenta * (12 + sh * 20);
           b += printFadeYellow * (16 + sh * 26);
         }
-        // Black-level crush: deepen the darkest tones (adds shadow contrast).
         if (blackLevelCrush > 0.001) {
           const k = blackLevelCrush * 0.55 * Math.max(0, 1 - luma / 95);
           r -= r * k; g -= g * k; b -= b * k;
         }
-        // Highlight roll-off: soft-shoulder compression above a knee (film-like).
         if (highlightRollOff > 0.001) {
           const knee = 205, soft = 1 + highlightRollOff * 2.2;
           if (r > knee) r = knee + (r - knee) / soft;
@@ -1463,8 +1480,6 @@ export class CRTRendererFull {
     }
 
     // Saturation, gamma, temperature and tint as an authoritative per-pixel pass.
-    // Saturation is a luma-mix (Rec.709) rather than a CSS `saturate()` filter so
-    // that 0 produces a TRUE monochrome image and values >1 cleanly over-push colour.
     if (Math.abs(saturation - 1) > 0.001 || Math.abs(gamma - 1) > 0.001 || Math.abs(temperature) > 0.001 || Math.abs(tint) > 0.001) {
       const image = outCtx.getImageData(0, 0, width, height);
       const data = image.data; const invGamma = 1 / gamma;
@@ -1491,16 +1506,12 @@ export class CRTRendererFull {
     }
 
     // ---- Monochrome phosphor tint (night-vision green, amber terminal, etc.) ----
-    // Maps each pixel's luma onto a phosphor colour ramp — the only way to get a
-    // strong, clean single-colour cast (additive temperature/tint can't suppress
-    // the off-channels enough). Default "none" leaves every other look untouched.
-    // The source should already be desaturated (advancedSaturation:0) for purity.
     const monoTint = String(params.monochromeTint || "none");
     if (monoTint !== "none") {
       const TINTS = {
-        green: [0.42, 1.0, 0.30],  // P43 yellow-green image-intensifier phosphor
-        amber: [1.0, 0.72, 0.16],  // P3 amber monochrome terminal
-        blue: [0.38, 0.6, 1.0],    // blue CRT / NVG P45-ish
+        green: [0.42, 1.0, 0.30],
+        amber: [1.0, 0.72, 0.16],
+        blue: [0.38, 0.6, 1.0],
         white: [1.0, 1.0, 1.0],
       };
       const col = TINTS[monoTint];
