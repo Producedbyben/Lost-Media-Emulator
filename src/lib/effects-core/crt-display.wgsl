@@ -17,12 +17,16 @@
 // backend, so uv 0..1 maps 1:1 to the framed picture (matches CPU fitCanvas).
 //
 // Uniform field order is the single source of truth in param-map.ts
-// (CRT_DISPLAY_UNIFORMS) — keep this struct field-for-field aligned with it and with the
+// (CRT_SIGNAL_UNIFORMS — the 6.1 CRT_DISPLAY_UNIFORMS prefix + the Epic 6.2 grade /
+// per-pixel / post fields). Keep this struct field-for-field aligned with it and with the
 // buffer write in webgpu-backend.ts.
-//   maskType codes: none 0 / dot 1 / aperture 2 / slot 3 / shadowMask 4 / phosphor 5
-//   monoTint codes: none 0 / green 1 / amber 2 / blue 3
+//   maskType codes:        none 0 / dot 1 / aperture 2 / slot 3 / shadowMask 4 / phosphor 5
+//   monoTint codes:        none 0 / green 1 / amber 2 / blue 3 / white 4
+//   scanlineProfile codes: off 0 / soft 1 / hard 2 / triadAware 3
+//   subpixelLayout codes:  none 0 / RGB 1 / BGR 2 / PenTile 3
 
 struct Uniforms {
+  // --- display (6.1) prefix ---
   u_scan: f32,
   u_mask: f32,
   u_maskType: f32,
@@ -44,6 +48,46 @@ struct Uniforms {
   u_fps: f32,
   u_resolutionX: f32,
   u_resolutionY: f32,
+  // --- grade stage (6.2) ---
+  u_irFalseColor: f32,
+  u_printFadeC: f32,
+  u_printFadeM: f32,
+  u_printFadeY: f32,
+  u_blackCrush: f32,
+  u_highlightRolloff: f32,
+  u_haze: f32,
+  u_polaroidCrossover: f32,
+  u_monoTintStrength: f32,
+  u_irHotspot: f32,
+  // --- per-pixel geometric / chroma / level (6.2) ---
+  u_pixelSize: f32,
+  u_lineJitter: f32,
+  u_timeWobble: f32,
+  u_headSwitching: f32,
+  u_chromaDelay: f32,
+  u_crossColor: f32,
+  u_dropouts: f32,
+  u_interlacing: f32,
+  u_tapeCrease: f32,
+  u_gateWeave: f32,
+  u_gateJitterX: f32,
+  u_gateJitterY: f32,
+  u_gateRotation: f32,
+  u_shutterJudder: f32,
+  u_rfInterference: f32,
+  // --- per-pixel colour artifacts (6.2) ---
+  u_filmGrain: f32,
+  u_grainSize: f32,
+  u_grainChromaticity: f32,
+  u_filmDust: f32,
+  u_filmScratches: f32,
+  u_filmHalation: f32,
+  u_noise: f32,
+  u_quantization: f32,
+  // --- pointwise post-passes (6.2) ---
+  u_scanlineProfile: f32,
+  u_subpixelLayout: f32,
+  u_cctvMono: f32,
 };
 
 @group(0) @binding(0) var<uniform> U: Uniforms;
@@ -55,11 +99,57 @@ struct Uniforms {
 const PI: f32 = 3.14159265358979;
 const BLUR_RADIUS: i32 = 18;
 
-// Twin of CPU seededNoise (crt-renderer-full.js) + noise.wgsl. Kept here verbatim
-// because WGSL has no #include; if you change one, change all three.
+// Emulated-f64 seededNoise — verbatim twin of noise.wgsl / seeded-noise-f32.ts (WGSL has
+// no #include). Naive f32 scrambles the hash (the ~8000 argument loses low bits before
+// sin(), and the f64 coefficients round as f32 literals), so both the argument and the
+// coefficients are carried as double-f32 (hi+lo) pairs. Keep all four files in sync.
+const C0_HI: f32 = 12.9898;
+const C0_LO: f32 = -4.531860327006143e-7;
+const C1_HI: f32 = 78.233;
+const C1_LO: f32 = -0.0000017089844277506927;
+const C2_HI: f32 = 19.17;
+const C2_LO: f32 = -7.629394360719743e-8;
+const TWO_PI_HI: f32 = 6.2831854820251465;
+const TWO_PI_LO: f32 = -1.7484555314695172e-7;
+
+fn twoProd(a: f32, b: f32) -> vec2<f32> {
+  let p = a * b;
+  let SPLIT: f32 = 4097.0;
+  let ca = SPLIT * a;
+  let cb = SPLIT * b;
+  let ah = ca - (ca - a);
+  let al = a - ah;
+  let bh = cb - (cb - b);
+  let bl = b - bh;
+  let err = ((ah * bh - p) + ah * bl + al * bh) + al * bl;
+  return vec2<f32>(p, err);
+}
+fn twoSum(a: f32, b: f32) -> vec2<f32> {
+  let s = a + b;
+  let bb = s - a;
+  let err = (a - (s - bb)) + (b - bb);
+  return vec2<f32>(s, err);
+}
+fn addDD(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+  let s = twoSum(a.x, b.x);
+  let lo = s.y + (a.y + b.y);
+  return twoSum(s.x, lo);
+}
+fn termDD(v: f32, cHi: f32, cLo: f32) -> vec2<f32> {
+  let p = twoProd(v, cHi);
+  let lo = p.y + v * cLo;
+  return twoSum(p.x, lo);
+}
 fn seededNoise(x: f32, y: f32, frame: f32) -> f32 {
-  let v: f32 = sin(x * 12.9898 + y * 78.233 + frame * 19.17) * 43758.5453;
-  return v - floor(v);
+  var acc = addDD(termDD(x, C0_HI, C0_LO), termDD(y, C1_HI, C1_LO));
+  acc = addDD(acc, termDD(frame, C2_HI, C2_LO));
+  let k = round(acc.x / TWO_PI_HI);
+  let kp = twoProd(k, TWO_PI_HI);
+  acc = addDD(acc, vec2<f32>(-kp.x, -kp.y));
+  acc = addDD(acc, vec2<f32>(-(k * TWO_PI_LO), 0.0));
+  let reduced = acc.x + acc.y;
+  let s = sin(reduced) * 43758.5453;
+  return s - floor(s);
 }
 
 // CPU sampleBilinear maps u in [0,1] to source x = u*(W-1) and interpolates between
@@ -194,21 +284,7 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
     vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
-// Colour grade — identity for the display family (params default to neutral). Kept so
-// the shader is a complete CRT/display shader; gpuFamilyOK guarantees neutral grade on
-// the GPU path so this never diverges from the CPU render() reference.
-fn applyGrade(c0: vec3<f32>) -> vec3<f32> {
-  var c = c0 * U.u_brightness;
-  c = (c - vec3<f32>(0.5)) * U.u_contrast + vec3<f32>(0.5);
-  let luma = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
-  c = mix(vec3<f32>(luma), c, U.u_saturation);
-  let invGamma = 1.0 / max(0.1, U.u_gamma);
-  c = pow(max(c, vec3<f32>(0.0)), vec3<f32>(invGamma));
-  c.r = c.r + U.u_temperature * 0.05;
-  c.b = c.b - U.u_temperature * 0.05;
-  c.g = c.g + U.u_tint * 0.04;
-  return c;
-}
+const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -225,6 +301,122 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VSOut {
   var o: VSOut;
   o.pos = vec4<f32>(verts[vid], 0.0, 1.0);
   return o;
+}
+
+// Pass 0 — the grade stage (CPU renderGrade, Stage A): a pointwise colour/tone transform
+// of the source → T_graded, which the optics then resample. Ported in 0..1 (CPU works in
+// 0..255; additive constants are /255). Identity when grade params are neutral. nitrate
+// decay + technicolor fringe are screen-space → deferred to Epic 6.3 (gated to CPU).
+@fragment
+fn fs_grade(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let ipx = i32(floor(fragPos.x));
+  let ipy = i32(floor(fragPos.y));
+  var c = textureLoad(u_tex, vec2<i32>(ipx, ipy), 0).rgb;
+
+  // 1. brightness, contrast (canvas filter, clamps).
+  c = c * U.u_brightness;
+  c = (c - vec3<f32>(0.5)) * U.u_contrast + vec3<f32>(0.5);
+  c = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
+
+  // 2. film/sensor colour pass.
+  if (U.u_irFalseColor > 0.001) {                 // Aerochrome IR false-colour
+    let r0 = c.r; let g0 = c.g; let b0 = c.b;
+    let sky = max(0.0, b0 - max(r0, g0));
+    let veg = max(0.0, g0 - max(r0, b0));
+    let t = U.u_irFalseColor * (1.0 - sky * 0.75);
+    let nr = g0 * 1.1 + veg * U.u_irFalseColor * (80.0 / 255.0);
+    let ng = r0 * 0.45 + b0 * 0.15;
+    let nb = b0 * 0.82 + r0 * 0.08;
+    c.r = r0 * (1.0 - t) + nr * t;
+    c.g = g0 * (1.0 - t) + ng * t;
+    c.b = b0 * (1.0 - t) + nb * t - veg * U.u_irFalseColor * (30.0 / 255.0) + sky * U.u_irFalseColor * (14.0 / 255.0);
+  }
+  let luma1 = dot(c, LUMA);
+  if (U.u_haze > 0.001) {
+    let lift = U.u_haze * 0.28;
+    c.r = c.r + (185.0 / 255.0 - c.r) * lift;
+    c.g = c.g + (185.0 / 255.0 - c.g) * lift;
+    c.b = c.b + (188.0 / 255.0 - c.b) * lift;
+  }
+  if (U.u_printFadeC > 0.001 || U.u_printFadeM > 0.001 || U.u_printFadeY > 0.001) {
+    let sh = pow(1.0 - min(1.0, luma1), 0.7);
+    c.r = c.r + U.u_printFadeC * (16.0 + sh * 26.0) / 255.0;
+    c.g = c.g + U.u_printFadeM * (12.0 + sh * 20.0) / 255.0;
+    c.b = c.b + U.u_printFadeY * (16.0 + sh * 26.0) / 255.0;
+  }
+  if (U.u_blackCrush > 0.001) {
+    let k = U.u_blackCrush * 0.55 * max(0.0, 1.0 - luma1 / (95.0 / 255.0));
+    c = c - c * k;
+  }
+  if (U.u_highlightRolloff > 0.001) {
+    let knee = 205.0 / 255.0;
+    let soft = 1.0 + U.u_highlightRolloff * 2.2;
+    if (c.r > knee) { c.r = knee + (c.r - knee) / soft; }
+    if (c.g > knee) { c.g = knee + (c.g - knee) / soft; }
+    if (c.b > knee) { c.b = knee + (c.b - knee) / soft; }
+  }
+  if (U.u_polaroidCrossover > 0.001) {
+    let lf = min(1.0, luma1);
+    let sw = max(0.0, 1.0 - lf / 0.45);
+    let hw = max(0.0, (lf - 0.6) / 0.4);
+    let p = U.u_polaroidCrossover;
+    c.r = c.r + (sw * p * (-8.0) + hw * p * 18.0) / 255.0;
+    c.g = c.g + (sw * p * 14.0 + hw * p * (-4.0)) / 255.0;
+    c.b = c.b + (sw * p * (-18.0) + hw * p * (-10.0)) / 255.0;
+  }
+  c = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
+
+  // 3. saturation, gamma, temperature, tint.
+  if (abs(U.u_saturation - 1.0) > 0.001) {
+    let lu = dot(c, LUMA);
+    c = vec3<f32>(lu) + (c - vec3<f32>(lu)) * U.u_saturation;
+  }
+  if (abs(U.u_gamma - 1.0) > 0.001) {
+    c = pow(max(c, vec3<f32>(0.0)), vec3<f32>(1.0 / U.u_gamma));
+  }
+  let tempShift = U.u_temperature * 28.0 / 255.0;
+  let tintShift = U.u_tint * 24.0 / 255.0;
+  c.r = c.r + tempShift + tintShift * 0.33;
+  c.g = c.g - tintShift;
+  c.b = c.b - tempShift - tintShift * 0.33;
+  c = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
+
+  // 4. monochrome tint (with strength).
+  if (U.u_monoTint > 0.5) {
+    let strength = clamp(U.u_monoTintStrength, 0.0, 1.0);
+    let lu = dot(c, LUMA);
+    var tcol = vec3<f32>(0.42, 1.0, 0.30);                 // green 1
+    if (U.u_monoTint > 3.5) { tcol = vec3<f32>(1.0, 1.0, 1.0); }       // white 4
+    else if (U.u_monoTint > 2.5) { tcol = vec3<f32>(0.38, 0.6, 1.0); } // blue 3
+    else if (U.u_monoTint > 1.5) { tcol = vec3<f32>(1.0, 0.72, 0.16); }// amber 2
+    c = c * (1.0 - strength) + lu * tcol * strength;
+  }
+
+  // 5. IR illuminator central hotspot — radial screen-blend (pointwise).
+  if (U.u_irHotspot > 0.001) {
+    let mn = min(U.u_resolutionX, U.u_resolutionY);
+    let r0 = mn * (0.08 + U.u_irHotspot * 0.10);
+    let r1 = mn * (0.35 + U.u_irHotspot * 0.20);
+    let d = length(vec2<f32>(f32(ipx) - U.u_resolutionX * 0.5, f32(ipy) - U.u_resolutionY * 0.5));
+    let tg = clamp((d - r0) / (r1 - r0), 0.0, 1.0);
+    let a0 = min(0.85, U.u_irHotspot * 0.9);
+    let a1 = min(0.45, U.u_irHotspot * 0.5);
+    var gRGB = vec3<f32>(1.0);
+    var gA = 0.0;
+    if (tg < 0.4) {
+      let fr2 = tg / 0.4;
+      gRGB = mix(vec3<f32>(1.0), vec3<f32>(240.0, 245.0, 255.0) / 255.0, fr2);
+      gA = mix(a0, a1, fr2);
+    } else {
+      let fr2 = (tg - 0.4) / 0.6;
+      gRGB = mix(vec3<f32>(240.0, 245.0, 255.0) / 255.0, vec3<f32>(200.0, 210.0, 230.0) / 255.0, fr2);
+      gA = mix(a1, 0.0, fr2);
+    }
+    let screened = vec3<f32>(1.0) - (vec3<f32>(1.0) - c) * (vec3<f32>(1.0) - gRGB);
+    c = mix(c, screened, gA);
+  }
+
+  return vec4<f32>(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
 
 // Pass 1 — the display optics into T_optics.
@@ -297,15 +489,7 @@ fn fs_composite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32>
     col = min(col + blurred * (lighterAlpha * 2.0), vec3<f32>(1.0));
   }
 
-  // Grade + monoTint (identity for the display family).
-  col = applyGrade(col);
-  if (U.u_monoTint > 0.5) {
-    let lm = dot(col, vec3<f32>(0.2126, 0.7152, 0.0722));
-    var tcol = vec3<f32>(0.42, 1.0, 0.30);
-    if (U.u_monoTint > 2.5) { tcol = vec3<f32>(0.38, 0.6, 1.0); }
-    else if (U.u_monoTint > 1.5) { tcol = vec3<f32>(1.0, 0.72, 0.16); }
-    col = lm * tcol;
-  }
+  // (Grade + monoTint now run in fs_grade, the Stage-A pre-pass, before optics.)
 
   // Tube-curvature vignette (radial), then lens vignette (u_vignette; 0 for display).
   let cx = W * 0.5;

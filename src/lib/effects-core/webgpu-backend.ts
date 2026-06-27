@@ -12,11 +12,11 @@
 // build, so callers fall back to WebGL2/CPU without a broken frame. Export is never
 // routed here — this accelerates PREVIEW only.
 import shaderCode from "./crt-display.wgsl?raw";
-import { CRT_DISPLAY_UNIFORMS, buildUniforms } from "./param-map";
+import { CRT_SIGNAL_UNIFORMS, buildSignalUniforms } from "./param-map";
 
 // Uniform buffer rounded up to a 16-byte multiple (WGSL uniform layout); the packed
-// Float32Array (21 f32 = 84 bytes) writes into the first part.
-const UNIFORM_BYTES = Math.ceil((CRT_DISPLAY_UNIFORMS.length * 4) / 16) * 16;
+// Float32Array writes into the first part.
+const UNIFORM_BYTES = Math.ceil((CRT_SIGNAL_UNIFORMS.length * 4) / 16) * 16;
 const INTERMEDIATE_FORMAT: GPUTextureFormat = "rgba8unorm";
 
 export class WebGPUBackend {
@@ -27,6 +27,7 @@ export class WebGPUBackend {
   private sampler: GPUSampler;
   private uniformBuf: GPUBuffer;
 
+  private gradePipeline: GPURenderPipeline;
   private opticsPipeline: GPURenderPipeline;
   private blurHPipeline: GPURenderPipeline;
   private compositePipeline: GPURenderPipeline;
@@ -35,8 +36,10 @@ export class WebGPUBackend {
 
   // Per-size resources.
   private srcTex: GPUTexture | null = null;
+  private tGraded: GPUTexture | null = null;
   private tOptics: GPUTexture | null = null;
   private tH: GPUTexture | null = null;
+  private bgGrade: GPUBindGroup | null = null;
   private bgOptics: GPUBindGroup | null = null;
   private bgBlurH: GPUBindGroup | null = null;
   private bgComposite: GPUBindGroup | null = null;
@@ -56,6 +59,7 @@ export class WebGPUBackend {
     format: GPUTextureFormat;
     sampler: GPUSampler;
     uniformBuf: GPUBuffer;
+    gradePipeline: GPURenderPipeline;
     opticsPipeline: GPURenderPipeline;
     blurHPipeline: GPURenderPipeline;
     compositePipeline: GPURenderPipeline;
@@ -68,6 +72,7 @@ export class WebGPUBackend {
     this.format = parts.format;
     this.sampler = parts.sampler;
     this.uniformBuf = parts.uniformBuf;
+    this.gradePipeline = parts.gradePipeline;
     this.opticsPipeline = parts.opticsPipeline;
     this.blurHPipeline = parts.blurHPipeline;
     this.compositePipeline = parts.compositePipeline;
@@ -122,6 +127,12 @@ export class WebGPUBackend {
       const plComposite = device.createPipelineLayout({ bindGroupLayouts: [layoutComposite] });
 
       device.pushErrorScope("validation");
+      const gradePipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_grade", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
       const opticsPipeline = await device.createRenderPipelineAsync({
         layout: pl3,
         vertex: { module, entryPoint: "vs_main" },
@@ -156,7 +167,7 @@ export class WebGPUBackend {
 
       return new WebGPUBackend({
         device, context, canvas, format, sampler, uniformBuf,
-        opticsPipeline, blurHPipeline, compositePipeline, layout3, layoutComposite,
+        gradePipeline, opticsPipeline, blurHPipeline, compositePipeline, layout3, layoutComposite,
       });
     } catch {
       return null;
@@ -170,6 +181,7 @@ export class WebGPUBackend {
     this.context.configure({ device: this.device, format: this.format, alphaMode: "opaque" });
 
     this.srcTex?.destroy();
+    this.tGraded?.destroy();
     this.tOptics?.destroy();
     this.tH?.destroy();
     this.srcTex = this.device.createTexture({
@@ -182,15 +194,25 @@ export class WebGPUBackend {
       format: INTERMEDIATE_FORMAT,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    this.tGraded = intermediate();
     this.tOptics = intermediate();
     this.tH = intermediate();
 
-    this.bgOptics = this.device.createBindGroup({
+    // Grade pass samples the raw source; optics then samples the graded texture.
+    this.bgGrade = this.device.createBindGroup({
       layout: this.layout3,
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuf } },
         { binding: 1, resource: this.sampler },
         { binding: 2, resource: this.srcTex.createView() },
+      ],
+    });
+    this.bgOptics = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tGraded.createView() },
       ],
     });
     this.bgBlurH = this.device.createBindGroup({
@@ -260,10 +282,18 @@ export class WebGPUBackend {
       [width, height],
     );
 
-    const u = buildUniforms(params, { width, height, seconds, frameIndex, fps });
+    const u = buildSignalUniforms(params, { width, height, seconds, frameIndex, fps });
     this.device.queue.writeBuffer(this.uniformBuf, 0, u.buffer, u.byteOffset, u.byteLength);
 
     const encoder = this.device.createCommandEncoder();
+    const gradePass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tGraded!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    gradePass.setPipeline(this.gradePipeline);
+    gradePass.setBindGroup(0, this.bgGrade!);
+    gradePass.draw(3);
+    gradePass.end();
+
     const opticsPass = encoder.beginRenderPass({
       colorAttachments: [{ view: this.tOptics!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
     });
@@ -310,6 +340,7 @@ export class WebGPUBackend {
   dispose(): void {
     this.dead = true;
     this.srcTex?.destroy();
+    this.tGraded?.destroy();
     this.tOptics?.destroy();
     this.tH?.destroy();
     this.uniformBuf?.destroy();
