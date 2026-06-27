@@ -29,6 +29,8 @@ export class WebGPUBackend {
 
   private gradePipeline: GPURenderPipeline;
   private opticsPipeline: GPURenderPipeline;
+  private ghostPipeline: GPURenderPipeline;
+  private focusPipeline: GPURenderPipeline;
   private blurHPipeline: GPURenderPipeline;
   private compositePipeline: GPURenderPipeline;
   private layout3: GPUBindGroupLayout;
@@ -38,9 +40,13 @@ export class WebGPUBackend {
   private srcTex: GPUTexture | null = null;
   private tGraded: GPUTexture | null = null;
   private tOptics: GPUTexture | null = null;
+  private tPpA: GPUTexture | null = null;   // post-process ping-pong A
+  private tPpB: GPUTexture | null = null;   // post-process ping-pong B (= T_filtered)
   private tH: GPUTexture | null = null;
   private bgGrade: GPUBindGroup | null = null;
   private bgOptics: GPUBindGroup | null = null;
+  private bgGhost: GPUBindGroup | null = null;
+  private bgFocus: GPUBindGroup | null = null;
   private bgBlurH: GPUBindGroup | null = null;
   private bgComposite: GPUBindGroup | null = null;
   private texW = 0;
@@ -61,6 +67,8 @@ export class WebGPUBackend {
     uniformBuf: GPUBuffer;
     gradePipeline: GPURenderPipeline;
     opticsPipeline: GPURenderPipeline;
+    ghostPipeline: GPURenderPipeline;
+    focusPipeline: GPURenderPipeline;
     blurHPipeline: GPURenderPipeline;
     compositePipeline: GPURenderPipeline;
     layout3: GPUBindGroupLayout;
@@ -74,6 +82,8 @@ export class WebGPUBackend {
     this.uniformBuf = parts.uniformBuf;
     this.gradePipeline = parts.gradePipeline;
     this.opticsPipeline = parts.opticsPipeline;
+    this.ghostPipeline = parts.ghostPipeline;
+    this.focusPipeline = parts.focusPipeline;
     this.blurHPipeline = parts.blurHPipeline;
     this.compositePipeline = parts.compositePipeline;
     this.layout3 = parts.layout3;
@@ -139,6 +149,18 @@ export class WebGPUBackend {
         fragment: { module, entryPoint: "fs_optics", targets: [{ format: INTERMEDIATE_FORMAT }] },
         primitive: { topology: "triangle-list" },
       });
+      const ghostPipeline = await device.createRenderPipelineAsync({
+        layout: plComposite,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_ghost", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const focusPipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_focus", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
       const blurHPipeline = await device.createRenderPipelineAsync({
         layout: pl3,
         vertex: { module, entryPoint: "vs_main" },
@@ -167,7 +189,8 @@ export class WebGPUBackend {
 
       return new WebGPUBackend({
         device, context, canvas, format, sampler, uniformBuf,
-        gradePipeline, opticsPipeline, blurHPipeline, compositePipeline, layout3, layoutComposite,
+        gradePipeline, opticsPipeline, ghostPipeline, focusPipeline, blurHPipeline, compositePipeline,
+        layout3, layoutComposite,
       });
     } catch {
       return null;
@@ -183,6 +206,8 @@ export class WebGPUBackend {
     this.srcTex?.destroy();
     this.tGraded?.destroy();
     this.tOptics?.destroy();
+    this.tPpA?.destroy();
+    this.tPpB?.destroy();
     this.tH?.destroy();
     this.srcTex = this.device.createTexture({
       size: [width, height],
@@ -196,6 +221,8 @@ export class WebGPUBackend {
     });
     this.tGraded = intermediate();
     this.tOptics = intermediate();
+    this.tPpA = intermediate();
+    this.tPpB = intermediate();
     this.tH = intermediate();
 
     // Grade pass samples the raw source; optics then samples the graded texture.
@@ -215,12 +242,32 @@ export class WebGPUBackend {
         { binding: 2, resource: this.tGraded.createView() },
       ],
     });
+    // Post-process chain: ghost (T_optics → tPpA, also reads T_optics as the ghost source),
+    // then focus (tPpA → tPpB = T_filtered). Passthrough in-shader when inactive.
+    this.bgGhost = this.device.createBindGroup({
+      layout: this.layoutComposite,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tOptics.createView() },
+        { binding: 3, resource: this.tOptics.createView() },
+      ],
+    });
+    this.bgFocus = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tPpA.createView() },
+      ],
+    });
+    // Bloom blurs T_filtered (= tPpB, the post-process chain output) and composites it.
     this.bgBlurH = this.device.createBindGroup({
       layout: this.layout3,
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuf } },
         { binding: 1, resource: this.sampler },
-        { binding: 2, resource: this.tOptics.createView() },
+        { binding: 2, resource: this.tPpB.createView() },
       ],
     });
     this.bgComposite = this.device.createBindGroup({
@@ -229,7 +276,7 @@ export class WebGPUBackend {
         { binding: 0, resource: { buffer: this.uniformBuf } },
         { binding: 1, resource: this.sampler },
         { binding: 2, resource: this.tH.createView() },
-        { binding: 3, resource: this.tOptics.createView() },
+        { binding: 3, resource: this.tPpB.createView() },
       ],
     });
     this.texW = width;
@@ -302,6 +349,24 @@ export class WebGPUBackend {
     opticsPass.draw(3);
     opticsPass.end();
 
+    // Post-process chain (passthrough in-shader when the filters are off): T_optics → ghost
+    // → tPpA → focus → tPpB (= T_filtered, fed to bloom below).
+    const ghostPass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tPpA!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    ghostPass.setPipeline(this.ghostPipeline);
+    ghostPass.setBindGroup(0, this.bgGhost!);
+    ghostPass.draw(3);
+    ghostPass.end();
+
+    const focusPass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tPpB!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    focusPass.setPipeline(this.focusPipeline);
+    focusPass.setBindGroup(0, this.bgFocus!);
+    focusPass.draw(3);
+    focusPass.end();
+
     const blurPass = encoder.beginRenderPass({
       colorAttachments: [{ view: this.tH!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
     });
@@ -342,6 +407,8 @@ export class WebGPUBackend {
     this.srcTex?.destroy();
     this.tGraded?.destroy();
     this.tOptics?.destroy();
+    this.tPpA?.destroy();
+    this.tPpB?.destroy();
     this.tH?.destroy();
     this.uniformBuf?.destroy();
     this.device?.destroy();

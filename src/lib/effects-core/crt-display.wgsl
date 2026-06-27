@@ -657,6 +657,48 @@ fn fs_optics(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
   return vec4<f32>(optics(floor(fragPos.x), floor(fragPos.y)), 1.0);
 }
 
+// Post-process chain pass — ghosting. u_tex = running chain result, u_tex_sharp = T_optics
+// (the ghost source). Passthrough when ghosting is off. CPU crt-renderer-full.js ~888-892.
+@fragment
+fn fs_ghost(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let running = textureLoad(u_tex, vec2<i32>(px, py), 0).rgb;
+  if (U.u_ghosting <= 0.0) { return vec4<f32>(running, 1.0); }
+  let ghostShift = i32(round((0.5 + U.u_ghosting * 3.5) * sin(U.u_temporalFrame / U.u_fps * 1.7)));
+  let sx = clamp(px - ghostShift, 0, i32(U.u_resolutionX) - 1);
+  let ghostSample = textureLoad(u_tex_sharp, vec2<i32>(sx, py), 0).rgb;
+  return vec4<f32>(mix(running, ghostSample, min(0.42, U.u_ghosting * 0.45)), 1.0);
+}
+
+// Post-process chain pass — focus breathing (Gaussian self-blur blend). Passthrough when off.
+// CPU crt-renderer-full.js ~919-925.
+@fragment
+fn fs_focus(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let center = textureLoad(u_tex, vec2<i32>(px, py), 0).rgb;
+  if (U.u_focusBreathing <= 0.0) { return vec4<f32>(center, 1.0); }
+  let blurPx = (0.2 + (sin(U.u_temporalFrame / U.u_fps * 1.17 + 1.3) * 0.5 + 0.5) * 1.8) * U.u_focusBreathing;
+  let sigma = max(0.5, blurPx);
+  let inv2s2 = 1.0 / (2.0 * sigma * sigma);
+  let R = i32(min(8.0, ceil(sigma * 3.0)));
+  let W = i32(U.u_resolutionX);
+  let H = i32(U.u_resolutionY);
+  var acc = vec3<f32>(0.0);
+  var wsum = 0.0;
+  for (var j: i32 = -R; j <= R; j = j + 1) {
+    for (var i: i32 = -R; i <= R; i = i + 1) {
+      let w = exp(-f32(i * i + j * j) * inv2s2);
+      let sx = clamp(px + i, 0, W - 1);
+      let sy = clamp(py + j, 0, H - 1);
+      acc = acc + textureLoad(u_tex, vec2<i32>(sx, sy), 0).rgb * w;
+      wsum = wsum + w;
+    }
+  }
+  return vec4<f32>(mix(center, acc / wsum, min(0.55, U.u_focusBreathing * 0.6)), 1.0);
+}
+
 // Separable Gaussian sigma matches the CPU screen-bloom blur radius (canvas blur() uses
 // stdDev = radius). lighter-pass uses a tighter radius on CPU; we reuse this one blur and
 // account for the difference in the composite weights, which keeps every preset < 6.
