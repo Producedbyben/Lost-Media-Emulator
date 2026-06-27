@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:8080 && electron .\"",
     "electron:preview": "npm run build && electron .",
-    "dist": "npm run build && electron-builder --mac --arm64 --config electron-builder.config.cjs"
+    "dist": "npm run build && electron-builder --mac --arm64 --config electron-builder.config.cjs",
+    "dist:signed": "tools/release-signed.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

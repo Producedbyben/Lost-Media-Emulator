@@ -33,3 +33,6 @@ release
 # Bundled ffmpeg binaries (drop-in, not committed)
 build/vendor/ffmpeg
 build/vendor/ffprobe
+
+# Local signing credentials (never commit)
+.env.signing
