@@ -7,6 +7,21 @@
 
 ---
 
+## Epic 3 progress (effect quality fixes landing against this list)
+
+- ✅ **advancedDropouts** (was HIGH) — reworked from per-pixel speckle to horizontal clustered streaks
+  with bright-flash head + dark recovery (commit `27f9a39`). Also improves the aging presets
+  (VHS Mold Damage, Betamax Humid Garage) that inherit the dropout primitive.
+- ✅ **advancedHeadSwitching** (was MED) — reworked from a weak smooth skew to a torn, noisy,
+  darkened bottom band (commit `f96af22`).
+- ✓ **Trinitron maskType** (was MED) — NOT a defect on inspection: WEGA / Trinitron Warm Glow / PVM-BVM
+  already set `maskType: "aperture"`, and the renderer's `aperture` branch draws vertical RGB stripes
+  (`maskX % 3`, no maskY term). The earlier "dot grid" read was a JPEG-scale aliasing false positive.
+- Both effect fixes stay byte-identical-deterministic — the Epic 1 parity sweep remains 455/455 clean.
+
+Remaining (this list): advancedQuantization (legacy-codec blur→block), CRT Plasma burn-in ghost,
+Analog Cable scrambling, MiniDV-LP DV-block dropout, + the LOW signature-deepening items below.
+
 ## Defects to fix
 
 | Effect / Preset | Medium | Problem (vs reference) | Severity | Est. effort | Fix lane |
