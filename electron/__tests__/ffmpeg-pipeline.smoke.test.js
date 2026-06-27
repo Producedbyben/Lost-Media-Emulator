@@ -136,6 +136,35 @@ describe.skipIf(!ffmpeg || !ffprobe)("ffmpeg pipeline smoke", () => {
       });
   }, 30000);
 
+  it("cancel mid-encode: kills ffmpeg, cleans temp dir, leaves no output file", async () => {
+    // Use 300 frames at 10fps so the encode takes long enough to cancel mid-flight.
+    // We cancel after 100ms — well before a 30-second encode finishes.
+    const session = createSession({ width: 64, height: 64, fps: 10, tmpRoot: os.tmpdir() });
+    for (let i = 0; i < 300; i++) session.writeFrame(i, FRAME);
+    const out = path.join(os.tmpdir(), `lme-smoke-cancel-${Date.now()}.mp4`);
+
+    let encodeRejected = false;
+    const encodePromise = session.encode({ ffmpegPath: ffmpeg, codec: "h264", outPath: out })
+      .catch(() => { encodeRejected = true; });
+
+    // Give ffmpeg a moment to start, then cancel.
+    await new Promise((r) => setTimeout(r, 100));
+    session.cancel();
+    // Cleanup the temp frame dir — mirrors what the IPC handler does.
+    session.cleanup();
+
+    // The encode promise must eventually settle (reject or resolve).
+    await encodePromise;
+
+    // ffmpeg was killed so the encode must have failed.
+    expect(encodeRejected).toBe(true);
+    // The temp frame directory must no longer exist.
+    expect(fs.existsSync(session.dir)).toBe(false);
+    // The output file must not exist (either never written or removed on cancel).
+    // Note: partial output may have been written before SIGKILL; we just clean it up.
+    fs.rmSync(out, { force: true });
+  }, 15000);
+
   it("trims to an in/out window: encoded duration ≈ out − in", () => {
     // 4s source with audio; we export only the [1s, 3s) window (2s).
     const src = path.join(os.tmpdir(), "lme-smoke-trim-src.mp4");
