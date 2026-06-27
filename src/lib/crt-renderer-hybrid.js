@@ -55,6 +55,8 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
   // Epic 6.3a: temporal/global modulations + ping-pong post-process filters.
   "advancedExposurePump", "advancedWhiteBalanceDrift", "advancedFrameStutter",
   "advancedGhosting", "advancedFocusBreathing",
+  // Epic 6.3b: screen-space self-composite filters (added as each clears the < 6 gate).
+  "burnInGhost",
 ]);
 
 // Grain is only perceptually faithful up to a moderate amplitude (measured: 0.3 → ~4.6,

@@ -80,8 +80,9 @@ export const CRT_SIGNAL_UNIFORMS = [
   // real frame — u_frameIndex stays the real one for gate offsets).
   "u_exposurePump", "u_whiteBalanceDrift", "u_ghosting", "u_focusBreathing", "u_temporalFrame",
   // Epic 6.3b: screen-space self-composite filters + resolution-reduction effects.
+  // (u_quantization already exists from 6.2 — deferred there, implemented in 6.3b.)
   "u_burnIn", "u_generationLoss", "u_copyGen", "u_mediaAge", "u_restoration",
-  "u_macroBlocking", "u_quantization",
+  "u_macroBlocking",
 ] as const;
 
 // Storage-condition severity factor (CPU crt-renderer-full.js ~535).
@@ -187,7 +188,7 @@ export function buildSignalUniforms(
   set("u_copyGen", Math.max(0, Math.min(20, Math.round(n(params.copyGenerationCount)))));
   set("u_restoration", n(params.restorationPassLevel));
   set("u_macroBlocking", n(params.advancedMacroBlocking));
-  set("u_quantization", n(params.advancedQuantization));
+  // u_quantization is already set above (6.2 colour-artifacts block).
   // mediaAge folds the storage severity into the CPU's ageNorm = mediaAgeYears/100 * severity.
   const severity = STORAGE_SEVERITY[String(params.storageCondition ?? "ideal")] ?? 0.45;
   set("u_mediaAge", (Math.max(0, Math.min(100, n(params.mediaAgeYears))) / 100) * severity);

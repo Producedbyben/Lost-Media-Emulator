@@ -99,6 +99,14 @@ struct Uniforms {
   u_ghosting: f32,
   u_focusBreathing: f32,
   u_temporalFrame: f32,   // stuttered frame (real frame is u_frameIndex)
+  // --- 6.3b screen-space + resolution-reduction effects ---
+  // (u_quantization already declared above in the 6.2 colour-artifacts block.)
+  u_burnIn: f32,
+  u_generationLoss: f32,
+  u_copyGen: f32,
+  u_mediaAge: f32,
+  u_restoration: f32,
+  u_macroBlocking: f32,
 };
 
 @group(0) @binding(0) var<uniform> U: Uniforms;
@@ -669,6 +677,33 @@ fn fs_ghost(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
   let sx = clamp(px - ghostShift, 0, i32(U.u_resolutionX) - 1);
   let ghostSample = textureLoad(u_tex_sharp, vec2<i32>(sx, py), 0).rgb;
   return vec4<f32>(mix(running, ghostSample, min(0.42, U.u_ghosting * 0.45)), 1.0);
+}
+
+// CSS-filter helpers (canvas filter: grayscale → brightness → contrast, then clamp).
+fn csFilter(c: vec3<f32>, gs: f32, br: f32, con: f32) -> vec3<f32> {
+  let lum = dot(c, LUMA);
+  var x = mix(c, vec3<f32>(lum), gs);
+  x = x * br;
+  x = (x - vec3<f32>(0.5)) * con + vec3<f32>(0.5);
+  return clamp(x, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+fn screenBlend(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> { return vec3<f32>(1.0) - (vec3<f32>(1.0) - a) * (vec3<f32>(1.0) - b); }
+
+// Post-process chain pass — phosphor/plasma burn-in. A desaturated/brightened copy of the
+// optics (u_tex_sharp = T_optics) screen- then multiply-blended over the running result.
+// Pointwise. Passthrough when off. CPU crt-renderer-full.js ~901-917.
+@fragment
+fn fs_burnIn(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let running = textureLoad(u_tex, vec2<i32>(px, py), 0).rgb;
+  if (U.u_burnIn <= 0.001) { return vec4<f32>(running, 1.0); }
+  let src = textureLoad(u_tex_sharp, vec2<i32>(px, py), 0).rgb;
+  let g1 = csFilter(src, 0.6 + U.u_burnIn * 0.3, 0.9 + U.u_burnIn * 0.15, 0.85);
+  var col = mix(running, screenBlend(running, g1), min(0.22, U.u_burnIn * 0.24));
+  let g2 = csFilter(src, 1.0, 1.8 + U.u_burnIn * 0.4, 1.0);
+  col = mix(col, col * g2, min(0.11, U.u_burnIn * 0.12));
+  return vec4<f32>(col, 1.0);
 }
 
 // Post-process chain pass — focus breathing (Gaussian self-blur blend). Passthrough when off.
