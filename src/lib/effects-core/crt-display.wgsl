@@ -98,6 +98,7 @@ struct Uniforms {
 
 const PI: f32 = 3.14159265358979;
 const BLUR_RADIUS: i32 = 18;
+const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 
 // Emulated-f64 seededNoise — verbatim twin of noise.wgsl / seeded-noise-f32.ts (WGSL has
 // no #include). Naive f32 scrambles the hash (the ~8000 argument loses low bits before
@@ -400,14 +401,29 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
   let scanlineGain = 1.0 - U.u_scan * (0.35 + 0.65 * (0.5 + 0.5 * scanPhase));
   let level = scanlineGain * dropoutMul * interlaceGate;
 
-  return clamp(
+  var outc = clamp(
     vec3<f32>(redSoft * level * rMask + dither,
               greenSoft * level * gMask + dither,
               blueSoft * level * bMask + dither),
     vec3<f32>(0.0), vec3<f32>(1.0));
-}
 
-const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
+  // CCTV monochrome — pointwise grayscale (+contrast/brightness) blend + green tint. CPU
+  // applies it before bloom, so it is baked into T_optics here.
+  if (U.u_cctvMono > 0.0) {
+    let fullMono = U.u_cctvMono >= 0.999;
+    let lum = dot(outc, LUMA);
+    var g = (lum - 0.5) * (1.0 + U.u_cctvMono * 0.22) + 0.5;
+    g = g * (0.95 + U.u_cctvMono * 0.08);
+    let alpha = select(min(0.9, 0.2 + U.u_cctvMono * 0.7), 1.0, fullMono);
+    outc = mix(outc, vec3<f32>(g), alpha);
+    if (!fullMono) {
+      let tint = vec3<f32>(145.0, 182.0, 148.0) / 255.0;
+      let a = U.u_cctvMono * 0.25;
+      outc = outc * (vec3<f32>(1.0) - a * (vec3<f32>(1.0) - tint));
+    }
+  }
+  return outc;
+}
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -639,6 +655,42 @@ fn fs_composite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32>
   let flicker = U.u_flicker * (0.4 + 0.6 * (0.65 * waveA + 0.35 * waveB));
   let fa = flicker * 0.2;
   col = col * (1.0 - fa) + vec3<f32>(fa);
+
+  // Scanline profile — categorical multiply-darken pattern (pointwise).
+  let sp = U.u_scanlineProfile;
+  if (sp > 0.5) {
+    let row = i32(py);
+    if (sp < 1.5) {                         // soft: every 2nd row -18%
+      if ((row & 1) == 0) { col = col * 0.82; }
+    } else if (sp < 2.5) {                  // hard: 2 of every 3 rows -45%
+      let m = row % 3;
+      if (m == 1 || m == 2) { col = col * 0.55; }
+    } else {                                // triadAware: soft rows + faint columns
+      if ((row & 1) == 0) { col = col * 0.76; }
+      if (i32(px) % 3 == 2) { col = col * 0.86; }
+    }
+  }
+
+  // Subpixel layout — RGB/BGR/PenTile column mask (multiply at 0.5) + screen recover at 0.2.
+  let sub = U.u_subpixelLayout;
+  if (sub > 0.5) {
+    var pat = vec3<f32>(1.0);
+    if (sub > 2.5) {                        // PenTile period 4: R,G,B,G
+      let m = i32(px) % 4;
+      if (m == 0) { pat = vec3<f32>(1.0, 0.0, 0.0); }
+      else if (m == 2) { pat = vec3<f32>(0.0, 0.0, 1.0); }
+      else { pat = vec3<f32>(0.0, 1.0, 0.0); }
+    } else {                                // RGB (1) / BGR (2) period 3
+      let m = i32(px) % 3;
+      let bgr = sub > 1.5;
+      if (m == 0) { pat = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), bgr); }
+      else if (m == 1) { pat = vec3<f32>(0.0, 1.0, 0.0); }
+      else { pat = select(vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(1.0, 0.0, 0.0), bgr); }
+    }
+    col = col * (vec3<f32>(0.5) + 0.5 * pat);
+    let sc = vec3<f32>(1.0) - (vec3<f32>(1.0) - col) * (vec3<f32>(1.0) - col);
+    col = mix(col, sc, 0.2);
+  }
 
   return vec4<f32>(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
