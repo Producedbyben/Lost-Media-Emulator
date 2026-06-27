@@ -471,6 +471,12 @@ export class CRTRendererFull {
     const focusBreathing = Math.max(0, Math.min(1, Number(params.advancedFocusBreathing) || 0));
     const tapeCrease = Math.max(0, Math.min(1, Number(params.advancedTapeCrease) || 0));
     const cctvMonochrome = Math.max(0, Math.min(1, Number(params.advancedCctvMonochrome) || 0));
+    // Phosphor / plasma burn-in: faint retained ghost of the persistent image,
+    // independent of the live picture. Driven by burnInGhost (0–1).
+    const burnInGhost = Math.max(0, Math.min(1, Number(params.burnInGhost) || 0));
+    // Sync-suppression scrambling (cable de-scrambler required): horizontal
+    // tearing/rolling, suppressed/inverted luma bands. Driven by syncSuppression (0–1).
+    const syncSuppression = Math.max(0, Math.min(1, Number(params.syncSuppression) || 0));
     const brightness = Math.max(0.5, Math.min(1.5, Number(params.imageBrightness) || 1));
     const contrast = Math.max(0.5, Math.min(1.6, Number(params.imageContrast) || 1));
     const saturationRaw = Number(params.advancedSaturation);
@@ -517,6 +523,15 @@ export class CRTRendererFull {
     const infraredFalseColor = c01(params.infraredFalseColor);
     const bandingHorizontal = c01(params.bandingHorizontal);
     const hanoverBars = c01(params.hanoverBars);
+    // ---- Epic 3 LOW effect params ----
+    // Nitrate decay: chemical blotches, edge fog, mottled emulsion damage.
+    const nitrateDecay = c01(params.nitrateDecay);
+    // Technicolor 3-strip registration fringe: slight R/G/B mis-registration coloured edges.
+    const technicolorFringe = c01(params.technicolorFringe);
+    // IR illuminator central hotspot bloom (near-field blow-out, rapid edge falloff).
+    const irHotspot = c01(params.irHotspot);
+    // Polaroid SX-70 colour crossover (greenish/yellow shadows, warm highlights).
+    const polaroidCrossover = c01(params.polaroidCrossover);
     // Per-frame film-gate displacement (random translation + small rotation +
     // occasional shutter "judder" jump) — deterministic from the frame index.
     const judderHit = shutterJudder > 0 && seededNoise(frameIndex, 3, 51) < shutterJudder * 0.5;
@@ -844,6 +859,31 @@ export class CRTRendererFull {
       outCtx.drawImage(this.workCanvas, ghostShift, 0); outCtx.restore();
     }
 
+    // ---- Phosphor/plasma burn-in: a faint PERSISTENT retained ghost drawn from
+    // the source image (workCanvas), independent of the live picture. Real burn-in
+    // is a permanent luminance impression baked into the phosphor/pixel layer so it
+    // underlies the live signal at all times. We simulate this with a desaturated,
+    // slightly brightened copy of the source at very low opacity using screen blend
+    // (so it is only visible in darker areas of the live image, matching real
+    // burn-in which is most visible during dark scenes). No Math.random() used. ----
+    if (burnInGhost > 0.001) {
+      // First pass: faint screen-blend ghost — visible in dark image regions only.
+      outCtx.save();
+      outCtx.globalCompositeOperation = "screen";
+      outCtx.globalAlpha = Math.min(0.22, burnInGhost * 0.24);
+      outCtx.filter = `grayscale(${(0.6 + burnInGhost * 0.3).toFixed(3)}) brightness(${(0.9 + burnInGhost * 0.15).toFixed(3)}) contrast(0.85)`;
+      outCtx.drawImage(this.workCanvas, 0, 0);
+      outCtx.restore();
+      // Second pass: multiply-blend darkening tint that embeds the ghost into
+      // bright areas too, at even lower opacity — "baked into" the full image range.
+      outCtx.save();
+      outCtx.globalCompositeOperation = "multiply";
+      outCtx.globalAlpha = Math.min(0.11, burnInGhost * 0.12);
+      outCtx.filter = `grayscale(1) brightness(${(1.8 + burnInGhost * 0.4).toFixed(3)})`;
+      outCtx.drawImage(this.workCanvas, 0, 0);
+      outCtx.restore();
+    }
+
     if (focusBreathing > 0) {
       const breathWave = Math.sin(temporalSeconds * 1.17 + 1.3) * 0.5 + 0.5;
       const blurPx = (0.2 + breathWave * 1.8) * focusBreathing;
@@ -1079,6 +1119,55 @@ export class CRTRendererFull {
       outCtx.save(); outCtx.imageSmoothingEnabled = false;
       outCtx.globalAlpha = Math.min(0.92, 0.35 + quantization * 0.55);
       outCtx.drawImage(this.quantCanvas, 0, 0, qW, qH, 0, 0, width, height); outCtx.restore();
+
+      // ---- DCT block-edge structure: hard 8×8 grid lines at block boundaries
+      // (the defining visual of legacy low-bitrate codecs — RealPlayer 240p, Video CD,
+      // early web encodes). The grid alpha varies per-block via seededNoise so adjacent
+      // blocks read at slightly different brightness, matching real DCT coefficient
+      // truncation. Also adds mosquito ringing: thin oscillating luma halos on the
+      // two pixels adjacent to a high-luma-contrast crossing. ----
+      if (quantization > 0.18) {
+        const blockPx = 8; // DCT block is always 8×8
+        const edgeAlpha = Math.min(0.55, (quantization - 0.18) * 0.85);
+        const ringAmt = Math.min(0.38, (quantization - 0.18) * 0.52);
+        const qImg = outCtx.getImageData(0, 0, width, height);
+        const qd = qImg.data;
+        for (let y = 0; y < height; y++) {
+          const localY = y % blockPx;
+          const blockRow = Math.floor(y / blockPx);
+          for (let x = 0; x < width; x++) {
+            const localX = x % blockPx;
+            const blockCol = Math.floor(x / blockPx);
+            const i = (y * width + x) * 4;
+            // Block-edge darkening: activate on first/last row or column of a block
+            const onHorizEdge = localY === 0;
+            const onVertEdge = localX === 0;
+            if (onHorizEdge || onVertEdge) {
+              // Per-block noise varies the edge shade slightly (different blocks have
+              // different DC-coefficient truncation, so edge jumps differ in magnitude).
+              const blockNoise = seededNoise(blockCol * 0.41, blockRow * 0.37, frameIndex * 0.0);
+              const alpha = edgeAlpha * (0.6 + blockNoise * 0.4);
+              qd[i]     = Math.max(0, qd[i]     - qd[i]     * alpha);
+              qd[i + 1] = Math.max(0, qd[i + 1] - qd[i + 1] * alpha);
+              qd[i + 2] = Math.max(0, qd[i + 2] - qd[i + 2] * alpha);
+            }
+            // Mosquito ringing: on the pixel adjacent to a block boundary, add a faint
+            // noise-modulated brightness oscillation proportional to luma contrast
+            // across the boundary (high-frequency overshoot from quantised AC coeff).
+            if (ringAmt > 0.01 && (localX === 1 || localX === blockPx - 1 ||
+                                    localY === 1 || localY === blockPx - 1)) {
+              const luma = 0.299 * qd[i] + 0.587 * qd[i + 1] + 0.114 * qd[i + 2];
+              // Ringing oscillates with a spatial frequency close to the 8-px DCT period.
+              const ring = Math.sin((localX + localY) * Math.PI * 0.25) *
+                           ringAmt * (luma / 255) * 28;
+              qd[i]     = Math.max(0, Math.min(255, qd[i]     + ring));
+              qd[i + 1] = Math.max(0, Math.min(255, qd[i + 1] + ring));
+              qd[i + 2] = Math.max(0, Math.min(255, qd[i + 2] + ring));
+            }
+          }
+        }
+        outCtx.putImageData(qImg, 0, 0);
+      }
     }
 
     // ============================================================
@@ -1227,6 +1316,74 @@ export class CRTRendererFull {
 
 
 
+    // ---- DV block-error concealment: DV dropouts manifest as SHARP rectangular
+    // macroblocks (DV uses 8×8 DCT blocks grouped into 5-block macroblocks) that
+    // are either frozen at a previous value, filled with a flat DC colour, or
+    // copied from an adjacent block (decoder error-concealment strategies).
+    // Unlike analog horizontal streaks, DV errors are always block-aligned and
+    // hard-edged. Driven by dvBlockError (0–1). ----
+    const dvBlockError = Math.max(0, Math.min(1, Number(params.dvBlockError) || 0));
+    if (dvBlockError > 0.005) {
+      const dvBlock = 16; // DV macroblock (4 × 8×8 luma macroblocks)
+      const errProb = dvBlockError * dvBlockError * 0.35; // quadratic: sparse at low values
+      const dvImg = outCtx.getImageData(0, 0, width, height);
+      const dvd = dvImg.data;
+      for (let by = 0; by < height; by += dvBlock) {
+        for (let bx = 0; bx < width; bx += dvBlock) {
+          // Probability gate — seeded on block position + frame so errors move
+          // frame to frame (LP mode errors are NOT sticky — they flicker).
+          if (seededNoise(bx * 0.31, by * 0.31, frameIndex * 0.5 + 7) > errProb) continue;
+          const bw = Math.min(dvBlock, width - bx);
+          const bh = Math.min(dvBlock, height - by);
+          // Error concealment mode: seeded per block+frame.
+          const errMode = seededNoise(bx, by, frameIndex + 13);
+          if (errMode < 0.45) {
+            // Frozen DC: fill with the average luma of the block (DC-only = no AC).
+            let rSum = 0, gSum = 0, bSum = 0, n = 0;
+            for (let yy = 0; yy < bh; yy++) {
+              const row = (by + yy) * width;
+              for (let xx = 0; xx < bw; xx++) {
+                const i = (row + bx + xx) * 4;
+                rSum += dvd[i]; gSum += dvd[i + 1]; bSum += dvd[i + 2]; n++;
+              }
+            }
+            const rDC = Math.round(rSum / n), gDC = Math.round(gSum / n), bDC = Math.round(bSum / n);
+            for (let yy = 0; yy < bh; yy++) {
+              const row = (by + yy) * width;
+              for (let xx = 0; xx < bw; xx++) {
+                const i = (row + bx + xx) * 4;
+                dvd[i] = rDC; dvd[i + 1] = gDC; dvd[i + 2] = bDC;
+              }
+            }
+          } else if (errMode < 0.80) {
+            // Adjacent-block copy: copy the block immediately above (or below if at top).
+            const srcBy = by > 0 ? by - dvBlock : by + dvBlock;
+            if (srcBy >= 0 && srcBy + bh <= height) {
+              for (let yy = 0; yy < bh; yy++) {
+                const srcRow = (srcBy + yy) * width;
+                const dstRow = (by + yy) * width;
+                for (let xx = 0; xx < bw; xx++) {
+                  const si = (srcRow + bx + xx) * 4;
+                  const di = (dstRow + bx + xx) * 4;
+                  dvd[di] = dvd[si]; dvd[di + 1] = dvd[si + 1]; dvd[di + 2] = dvd[si + 2];
+                }
+              }
+            }
+          } else {
+            // Full black error block (lost packet — decoder outputs silence/zero).
+            for (let yy = 0; yy < bh; yy++) {
+              const row = (by + yy) * width;
+              for (let xx = 0; xx < bw; xx++) {
+                const i = (row + bx + xx) * 4;
+                dvd[i] = 0; dvd[i + 1] = 0; dvd[i + 2] = 0;
+              }
+            }
+          }
+        }
+      }
+      outCtx.putImageData(dvImg, 0, 0);
+    }
+
     // ---- Chroma subsampling (4:4:4 / 4:2:2 / 4:2:0 / 4:1:1) ----
     // Box-averages the Cb/Cr planes over the mode's block size while keeping
     // full-resolution luma — the classic colour-bleed signature of broadcast,
@@ -1366,6 +1523,81 @@ export class CRTRendererFull {
       outCtx.putImageData(img, 0, 0);
     }
 
+    // ---- Sync-suppression scrambling: real cable scrambling suppresses the
+    // horizontal sync pulse so the TV cannot lock; the picture tears and rolls.
+    // Three interlocking effects modelled here:
+    //   1. Horizontal tearing: seeded per-band random scanline horizontal shift
+    //      (different bands offset by different amounts, rapidly changing).
+    //   2. Rolling: the whole image scrolls vertically (sync pulse interval varies).
+    //   3. Luma suppression / inversion bands: some horizontal bands have their
+    //      luma crushed or partially inverted (suppressed-carrier artefact).
+    // All randomness via seededNoise keyed on temporalFrame + y — deterministic. ----
+    if (syncSuppression > 0.01) {
+      // --- Pass 1: horizontal tearing per-band ---
+      // Snapshot the current output, then re-draw each band with a horizontal offset.
+      this.ensureCanvasSize(this.tempCanvas, width, height);
+      const tearCtx = this.tempCtx;
+      tearCtx.clearRect(0, 0, width, height);
+      tearCtx.drawImage(outCtx.canvas, 0, 0);
+      // Rolling: the whole picture slides down by a time-varying fraction of height.
+      // In sync-suppressed TV the vertical sync is also lost, so the picture rolls.
+      const rollPx = Math.round(((temporalFrame * (0.3 + syncSuppression * 0.6)) % 1) * height);
+      outCtx.clearRect(0, 0, width, height);
+      // Draw wrapped roll: draw [rollPx..height] at top, then [0..rollPx] below.
+      if (rollPx > 0) {
+        outCtx.drawImage(this.tempCanvas, 0, rollPx, width, height - rollPx, 0, 0, width, height - rollPx);
+        outCtx.drawImage(this.tempCanvas, 0, 0, width, rollPx, 0, height - rollPx, width, rollPx);
+      } else {
+        outCtx.drawImage(this.tempCanvas, 0, 0);
+      }
+      // Horizontal band tearing: divide the image into seeded bands of ~8–20 lines
+      // and shift each band by a random horizontal offset.
+      const tearImg = outCtx.getImageData(0, 0, width, height);
+      const tData = tearImg.data;
+      const bandH = Math.max(6, Math.round(8 + (1 - syncSuppression) * 14));
+      for (let band = 0; band < Math.ceil(height / bandH); band++) {
+        const yStart = band * bandH;
+        const yEnd = Math.min(height, yStart + bandH);
+        // Per-band horizontal shift: higher syncSuppression → wider tears, faster.
+        const tearNoise = seededNoise(band * 0.53, temporalFrame * (0.5 + syncSuppression), 37);
+        const maxTear = Math.round(syncSuppression * width * 0.55);
+        const tearX = Math.round((tearNoise - 0.5) * 2 * maxTear);
+        if (tearX === 0) continue;
+        for (let y = yStart; y < yEnd; y++) {
+          const rowBase = y * width;
+          for (let x = 0; x < width; x++) {
+            const srcX = ((x - tearX) % width + width) % width;
+            const si = (rowBase + srcX) * 4;
+            const di = (rowBase + x) * 4;
+            tData[di]     = tData[si];
+            tData[di + 1] = tData[si + 1];
+            tData[di + 2] = tData[si + 2];
+          }
+        }
+      }
+      // Luma suppression bands: in sync-suppressed video the blanking pedestal is
+      // wrong, so some horizontal regions look crushed or partially inverted.
+      const suppressBands = Math.max(1, Math.round(syncSuppression * 5));
+      for (let sb = 0; sb < suppressBands; sb++) {
+        const bandPos = seededNoise(sb * 1.7, temporalFrame * 0.13 + sb, 53);
+        const bandTop = Math.floor(bandPos * height);
+        const bandThickness = Math.floor((0.04 + syncSuppression * 0.12) * height);
+        const invertStrength = syncSuppression * (0.4 + seededNoise(sb, temporalFrame * 0.07, 59) * 0.4);
+        for (let y = bandTop; y < Math.min(height, bandTop + bandThickness); y++) {
+          const rowBase = y * width;
+          for (let x = 0; x < width; x++) {
+            const i = (rowBase + x) * 4;
+            const luma = 0.299 * tData[i] + 0.587 * tData[i + 1] + 0.114 * tData[i + 2];
+            const invLuma = 255 - luma;
+            tData[i]     = Math.max(0, Math.min(255, luma * (1 - invertStrength) + invLuma * invertStrength * 0.4));
+            tData[i + 1] = Math.max(0, Math.min(255, luma * (1 - invertStrength) + invLuma * invertStrength * 0.4));
+            tData[i + 2] = Math.max(0, Math.min(255, luma * (1 - invertStrength) + invLuma * invertStrength * 0.4));
+          }
+        }
+      }
+      outCtx.putImageData(tearImg, 0, 0);
+    }
+
     // OSD Overlay rendering (before grading, so it gets affected by color correction)
     this.renderOSD(outCtx, width, height, seconds, params, frameIndex, fps, renderOptions);
 
@@ -1377,30 +1609,32 @@ export class CRTRendererFull {
     }
 
     // ---- Film / sensor colour & tone pass (IR false-colour, print dye-fade,
-    // black crush, highlight roll-off, atmospheric haze). One gated per-pixel
-    // loop; every term is a no-op at 0 so unrelated looks are untouched. ----
+    // black crush, highlight roll-off, atmospheric haze, Polaroid crossover).
+    // One gated per-pixel loop; every term is a no-op at 0. ----
     if (infraredFalseColor > 0.001 || printFadeCyan > 0.001 || printFadeMagenta > 0.001 ||
-        printFadeYellow > 0.001 || blackLevelCrush > 0.001 || highlightRollOff > 0.001 || haze > 0.001) {
+        printFadeYellow > 0.001 || blackLevelCrush > 0.001 || highlightRollOff > 0.001 ||
+        haze > 0.001 || polaroidCrossover > 0.001) {
       const image = outCtx.getImageData(0, 0, width, height);
       const data = image.data;
       for (let i = 0; i < data.length; i += 4) {
         let r = data[i], g = data[i + 1], b = data[i + 2];
-        // Aerochrome IR false-colour: vegetation (green-reflective in normal RGB,
-        // strongly IR-reflective) remaps to red/magenta; reds shift to green; sky
-        // stays cool. Approximated as a partial channel rotation + magenta lift.
+        // Aerochrome IR false-colour (FIXED: stronger green→red/magenta remap).
+        // Kodak Aerochrome: IR-reflective foliage maps to vivid RED/MAGENTA;
+        // reds shift toward green; sky stays blue. Previous render was green→olive.
         if (infraredFalseColor > 0.001) {
           const r0 = r, g0 = g, b0 = b;
-          // Skyness vs vegetation-ness gate the remap so blue sky stays cool while
-          // green/IR-reflective foliage swings to magenta/red.
           const sky = Math.max(0, (b0 - Math.max(r0, g0)) / 255);
           const veg = Math.max(0, (g0 - Math.max(r0, b0)) / 255);
-          const t = infraredFalseColor * (1 - sky * 0.8);
-          const nr = g0;                  // foliage green -> red
-          const ng = r0 * 0.5 + b0 * 0.2; // original red  -> green
-          const nb = b0 * 0.85 + r0 * 0.1;
-          r = r0 * (1 - t) + nr * t + veg * infraredFalseColor * 40;
+          const t = infraredFalseColor * (1 - sky * 0.75);
+          // Full Aerochrome channel rotation: green → red, red → green, blue stays.
+          // The strong magenta lift on vegetated (high-veg) pixels is the signature.
+          const nr = g0 * 1.1 + veg * infraredFalseColor * 80;   // green → vivid red
+          const ng = r0 * 0.45 + b0 * 0.15;                       // red → muted green
+          const nb = b0 * 0.82 + r0 * 0.08;
+          // Also add magenta/pink lift proportional to veg (foliage → pink in Aerochrome).
+          r = r0 * (1 - t) + nr * t;
           g = g0 * (1 - t) + ng * t;
-          b = b0 * (1 - t) + nb * t + veg * infraredFalseColor * 26 + sky * infraredFalseColor * 16;
+          b = b0 * (1 - t) + nb * t - veg * infraredFalseColor * 30 + sky * infraredFalseColor * 14;
         }
         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         // Atmospheric / screen haze: lift toward a mid grey, washing contrast out.
@@ -1428,6 +1662,20 @@ export class CRTRendererFull {
           if (r > knee) r = knee + (r - knee) / soft;
           if (g > knee) g = knee + (g - knee) / soft;
           if (b > knee) b = knee + (b - knee) / soft;
+        }
+        // Polaroid SX-70 colour crossover: SX-70 integral film has a greenish/
+        // yellow cast in shadows that crosses over to a warmer pinkish tone in
+        // highlights — characteristic of the integral dye chemistry.
+        if (polaroidCrossover > 0.001) {
+          const lumaFrac = Math.min(1, luma / 255);
+          // Shadow regime (lumaFrac < 0.45): push green + yellow, desaturate slightly.
+          const shadowW = Math.max(0, 1 - lumaFrac / 0.45);
+          // Highlight regime (lumaFrac > 0.6): warm pinkish shift.
+          const highlightW = Math.max(0, (lumaFrac - 0.6) / 0.4);
+          const p = polaroidCrossover;
+          r += shadowW  * p * (-8) + highlightW * p * 18;
+          g += shadowW  * p * 14   + highlightW * p * (-4);
+          b += shadowW  * p * (-18) + highlightW * p * (-10);
         }
         data[i] = Math.max(0, Math.min(255, r));
         data[i + 1] = Math.max(0, Math.min(255, g));
@@ -1490,6 +1738,84 @@ export class CRTRendererFull {
         }
         outCtx.putImageData(image, 0, 0);
       }
+    }
+
+    // ---- Nitrate decay: chemical decomposition blotches, edge fogging,
+    // and mottled emulsion damage — distinguishes Nitrate Newsreel from
+    // generic B&W grain. All positions seeded on frameIndex so they drift
+    // slowly per frame (chemistry is time-varying, not per-pixel static). ----
+    if (nitrateDecay > 0.001) {
+      // Radial chemical blotches: semi-transparent bright halos at seeded positions.
+      const blotchCount = Math.max(2, Math.round(nitrateDecay * 9));
+      for (let b = 0; b < blotchCount; b++) {
+        const cx = seededNoise(b * 1.3, frameIndex * 0.07 + b * 0.41, 83) * width;
+        const cy = seededNoise(b * 0.87, frameIndex * 0.11 + b * 0.53, 97) * height;
+        const radius = (0.04 + seededNoise(b * 2.1, frameIndex * 0.05, 107) * 0.12) * Math.min(width, height);
+        const alpha = nitrateDecay * (0.18 + seededNoise(b, frameIndex * 0.09, 113) * 0.22);
+        const grad = outCtx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, `rgba(255,248,220,${Math.min(0.55, alpha).toFixed(3)})`);
+        grad.addColorStop(0.5, `rgba(240,230,180,${Math.min(0.28, alpha * 0.5).toFixed(3)})`);
+        grad.addColorStop(1, "rgba(200,190,150,0)");
+        outCtx.save();
+        outCtx.globalCompositeOperation = "screen";
+        outCtx.fillStyle = grad;
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.restore();
+      }
+      // Edge fogging: nitrate decomposes at the film edge first — bright fog band.
+      const fogAlpha = nitrateDecay * 0.28;
+      const fogGrad = outCtx.createLinearGradient(0, 0, width * 0.2, 0);
+      fogGrad.addColorStop(0, `rgba(255,250,220,${Math.min(0.45, fogAlpha).toFixed(3)})`);
+      fogGrad.addColorStop(1, "rgba(255,250,220,0)");
+      outCtx.save(); outCtx.globalCompositeOperation = "screen";
+      outCtx.fillStyle = fogGrad; outCtx.fillRect(0, 0, width, height);
+      outCtx.restore();
+      // Mottled emulsion damage: per-region noise-modulated brightness variation.
+      outCtx.save(); outCtx.globalCompositeOperation = "multiply";
+      outCtx.globalAlpha = nitrateDecay * 0.3;
+      outCtx.filter = `blur(${Math.round(Math.min(width, height) * 0.015)}px) contrast(1.4) brightness(0.85)`;
+      outCtx.drawImage(outCtx.canvas, 0, 0);
+      outCtx.restore();
+    }
+
+    // ---- Technicolor 3-strip registration fringe: slight R/G/B mis-registration
+    // (coloured edges at high-contrast boundaries). The 3-strip process printed each
+    // colour record on a separate strip; slight dimensional misalignment = fringing.
+    // Implemented as three faint offset copies of the image blended per-channel. ----
+    if (technicolorFringe > 0.001) {
+      const shift = Math.max(0.5, technicolorFringe * 2.8); // px mis-registration
+      outCtx.save();
+      outCtx.globalCompositeOperation = "screen";
+      outCtx.globalAlpha = Math.min(0.28, technicolorFringe * 0.32);
+      // Red record: shift right + slight up.
+      outCtx.filter = "saturate(0) brightness(1.2)";
+      outCtx.drawImage(outCtx.canvas, shift, -shift * 0.3);
+      outCtx.restore();
+      outCtx.save();
+      outCtx.globalCompositeOperation = "multiply";
+      outCtx.globalAlpha = Math.min(0.18, technicolorFringe * 0.22);
+      // Cyan (blue+green) record: shift left.
+      outCtx.filter = "hue-rotate(180deg) saturate(1.4) brightness(0.9)";
+      outCtx.drawImage(outCtx.canvas, -shift * 0.7, shift * 0.2);
+      outCtx.restore();
+    }
+
+    // ---- IR illuminator central hotspot: near-field IR-LED bloom with rapid
+    // radial falloff. Ring doorbell / CCTV IR cameras overexpose the near field
+    // (whitewash within ~1–2 metres) while the background stays dark. ----
+    if (irHotspot > 0.001) {
+      const cx = width * 0.5, cy = height * 0.5;
+      const r0 = Math.min(width, height) * (0.08 + irHotspot * 0.10);
+      const r1 = Math.min(width, height) * (0.35 + irHotspot * 0.20);
+      const hotGrad = outCtx.createRadialGradient(cx, cy, r0, cx, cy, r1);
+      hotGrad.addColorStop(0, `rgba(255,255,255,${Math.min(0.85, irHotspot * 0.9).toFixed(3)})`);
+      hotGrad.addColorStop(0.4, `rgba(240,245,255,${Math.min(0.45, irHotspot * 0.5).toFixed(3)})`);
+      hotGrad.addColorStop(1, "rgba(200,210,230,0)");
+      outCtx.save();
+      outCtx.globalCompositeOperation = "screen";
+      outCtx.fillStyle = hotGrad;
+      outCtx.fillRect(0, 0, width, height);
+      outCtx.restore();
     }
   }
 

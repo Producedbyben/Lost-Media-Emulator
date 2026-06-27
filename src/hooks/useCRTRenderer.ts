@@ -133,6 +133,17 @@ export interface CRTParams {
   storageCondition: string;
   copyGenerationCount: number;
   restorationPassLevel: number;
+  // Display retention — phosphor / plasma burn-in ghost layer.
+  burnInGhost: number;
+  // Sync-suppression cable scrambling (horizontal tearing + rolling + luma inversion).
+  syncSuppression: number;
+  // DV/MiniDV block-error concealment (sharp rectangular macroblock errors, not analog streaks).
+  dvBlockError: number;
+  // Epic 3 LOW film/sensor effects.
+  nitrateDecay: number;        // chemical blotches + edge fog + mottled emulsion damage
+  technicolorFringe: number;   // 3-strip R/G/B mis-registration coloured edges
+  irHotspot: number;           // IR illuminator near-field central bloom
+  polaroidCrossover: number;   // SX-70 colour crossover (green/yellow shadows, warm highlights)
   [key: string]: number | string;
 }
 
@@ -253,6 +264,13 @@ export const DEFAULT_PARAMS: CRTParams = {
   storageCondition: "ideal",
   copyGenerationCount: 0,
   restorationPassLevel: 0,
+  burnInGhost: 0,
+  syncSuppression: 0,
+  dvBlockError: 0,
+  nitrateDecay: 0,
+  technicolorFringe: 0,
+  irHotspot: 0,
+  polaroidCrossover: 0,
 };
 
 /** Fit dimensions to maxPixels constraint, preserving aspect ratio */
