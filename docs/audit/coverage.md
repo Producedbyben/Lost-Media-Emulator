@@ -1,0 +1,97 @@
+# Audit coverage
+
+Presets scored: **0 / 91** (0.0%)
+
+## Outstanding presets
+
+- [ ] True Zero (Neutral)
+- [ ] Consumer TV
+- [ ] PVM/BVM
+- [ ] Arcade
+- [ ] Late-80s Home VHS
+- [ ] 90s Rental Tape (3rd Gen Dub)
+- [ ] Hi8 Vacation Cam
+- [ ] MiniDV Family Cam (2002)
+- [ ] Off-Air Analog Broadcast
+- [ ] Public Access Archive
+- [ ] Early Web Rip (2006)
+- [ ] Security Camera Dump
+- [ ] Bootleg Concert Cam
+- [ ] Damaged Archive Recovery
+- [ ] Retro Pixel LCD
+- [ ] Cyberpunk OLED
+- [ ] Neon Sign Bloom (TikTok Style)
+- [ ] Streaming Compression
+- [ ] Digital Surveillance
+- [ ] Silent Film 1920s
+- [ ] Technicolor Print 1950s
+- [ ] Super 8 Home Reel 1970s
+- [ ] 16mm Broadcast Kinescope
+- [ ] Nitrate Newsreel 1930s
+- [ ] Live NTSC Kinescope 1950s
+- [ ] U-matic Field Tape 1970s
+- [ ] Betacam SP ENG 1980s
+- [ ] LaserDisc Transfer 1990s
+- [ ] DVD Rip 2001
+- [ ] HDV Camcorder 2005
+- [ ] DSLR Video 2010
+- [ ] Early Smartphone 2012
+- [ ] 4K HDR Streaming 2020s
+- [ ] PAL Living Room TV (1970s)
+- [ ] Video CD Capture (1999)
+- [ ] CRT PC Monitor (1995)
+- [ ] Cable Access Recorder (1984)
+- [ ] Early Webcam (2008)
+- [ ] Polaroid SX-70 Instant
+- [ ] Disposable Camera 35mm Flash
+- [ ] Aerochrome Infrared Film
+- [ ] Night Vision Camcorder
+- [ ] Police Bodycam 2016
+- [ ] Covert Spycam Button Lens
+- [ ] Ring Doorbell Daytime
+- [ ] Ring Doorbell Night IR
+- [ ] GoPro Hero3 Action Cam
+- [ ] Disposable Security IR Flood
+- [ ] ATSC Broadcast Transition (2009)
+- [ ] Sony Trinitron WEGA (2001)
+- [ ] Shadow Mask CRT Terminal (Amber)
+- [ ] IPS Office LCD (2013)
+- [ ] OLED Smartphone PenTile (2018)
+- [ ] Pioneer Plasma TV (2007)
+- [ ] 2-inch Quadruplex Broadcast (1960s)
+- [ ] VHS-C Camcorder (1993)
+- [ ] S-VHS Master Tape (1996)
+- [ ] RealPlayer 240p Stream (1999)
+- [ ] Pocket Digicam MJPEG (2004)
+- [ ] Blu-ray Disc Transfer (2008)
+- [ ] Vine Reupload Compilation (2014)
+- [ ] Vertical Livestream Story (2024)
+- [ ] Betamax Home Recording (1981)
+- [ ] Video8 Handycam (1988)
+- [ ] MiniDV LP Mode (Dropout-Prone)
+- [ ] D-VHS HD Recording (2003)
+- [ ] TV Tuner Card Capture (2007)
+- [ ] XviD AVI Fansub (2003)
+- [ ] Analog Cable Scrambled Signal
+- [ ] Rear-Projection CRT TV (2004)
+- [ ] LED Billboard Phone Capture
+- [ ] Zoom Call Recording (2020)
+- [ ] PAL UHF Antenna (1978)
+- [ ] VHS Mold Damage (30yr Attic)
+- [ ] Betamax Humid Garage (1983)
+- [ ] 35mm Faded Cinema Print
+- [ ] 8mm Kodachrome Home Movie
+- [ ] YouTube 2007 Re-encode
+- [ ] MPEG-2 Satellite Glitch
+- [ ] iPhone 3G Vertical Video
+- [ ] Instagram Live 2024
+- [ ] CRT Plasma Burn-In
+- [ ] PenTile OLED Sunlight
+- [ ] Trinitron Warm Glow
+- [ ] Drone Footage Jello
+- [ ] Restored Archive Master
+- [ ] 4th Gen VHS Bootleg
+- [ ] TikTok Screen Record Repost
+- [ ] Datamosh Bloom (I-Frame Removal)
+- [ ] Corrupted Codec (Bit-Rot)
+- [ ] Pixel Sort Glitch Art
