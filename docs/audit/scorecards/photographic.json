@@ -1,0 +1,16 @@
+[
+  {
+    "id": "Polaroid SX-70 Instant",
+    "kind": "preset", "medium": "photo", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored (no cleared instant-film reference). Warm, soft, low-contrast = a believable SX-70 base. Add the SX-70 colour crossover (greenish/yellow shadows, warm highlights) and optionally the white instant-frame border. Pending a Polaroid reference."
+  },
+  {
+    "id": "Disposable Camera 35mm Flash",
+    "kind": "preset", "medium": "photo", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Harsh on-camera-flash falloff (bright centre, dark edges) + grain + vignette = an authentic disposable-flash snapshot. Plausible. Pending a reference."
+  }
+]

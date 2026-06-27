@@ -1,0 +1,72 @@
+[
+  {
+    "id": "Security Camera Dump",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy", "digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored (no cleared CCTV footage). Monochrome + 'REC / H.265 2.0Mbps / CAM 1' OSD + timestamp + low-bitrate compression = an authentic CCTV dump. Compression aspect anchored to the codec reference. Strong."
+  },
+  {
+    "id": "Digital Surveillance",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy", "digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Monochrome + interlace/scanline + OSD + compression — convincing surveillance look. Lower confidence pending cleared CCTV footage."
+  },
+  {
+    "id": "Night Vision Camcorder",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Strong monochrome-GREEN night-vision cast + bloom is the correct signature. Could add more sensor noise and a central IR-illuminator hotspot with edge falloff. Pending a night-vision reference."
+  },
+  {
+    "id": "Police Bodycam 2016",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy", "digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Colour + large burned-in date/time + H.264 compression = authentic bodycam. Add the wide-angle barrel/fisheye distortion bodycams have. Pending cleared bodycam footage."
+  },
+  {
+    "id": "Covert Spycam Button Lens",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Vignette + low quality are right; push the defining tight circular 'keyhole' vignette + pinhole fisheye + colour cast of a button/pinhole lens. Pending a reference."
+  },
+  {
+    "id": "Ring Doorbell Daytime",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy", "digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Wide fisheye (frame edges bow) + timestamp + compression = a convincing Ring/doorbell daytime look. Pending cleared doorbell footage."
+  },
+  {
+    "id": "Ring Doorbell Night IR",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Monochrome IR night mode + fisheye + OSD is good. Add the bright central IR-LED hotspot with rapid edge falloff that doorbell IR produces. Pending a reference."
+  },
+  {
+    "id": "Disposable Security IR Flood",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "PROXY-scored. Monochrome is right but the defining IR-FLOOD over-illumination (blown-out near-field hotspot, subjects bleached white, deep falloff to black) is under-represented. Add the IR overexposure gradient. Pending a reference."
+  },
+  {
+    "id": "GoPro Hero3 Action Cam",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Strong ultra-wide fisheye (edges bow markedly) + punchy saturation + timestamp = authentic GoPro. Good. Pending cleared action-cam footage."
+  },
+  {
+    "id": "Drone Footage Jello",
+    "kind": "preset", "medium": "sensor", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored, and the defining 'jello' is TEMPORAL (rolling-shutter wobble/skew from prop vibration) so it cannot be judged on a static frame — clean/sharp base looks right. VERIFY the rolling-shutter wobble in motion AND in export (preview↔export parity). Pending a reference + a motion check."
+  }
+]

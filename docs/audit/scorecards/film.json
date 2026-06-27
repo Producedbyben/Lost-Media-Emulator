@@ -1,0 +1,58 @@
+[
+  {
+    "id": "Silent Film 1920s",
+    "kind": "preset", "medium": "film", "referenceRefs": ["film-silent-bw-chaplin", "domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored (B&W still + documented film knowledge; no cleared motion-film footage). Correct B&W + heavy grain + raised contrast. Add the silent-era motion tells: gate weave (vertical jitter), vertical scratches/tramlines, dust, and brightness flicker. Re-score against real film footage."
+  },
+  {
+    "id": "Nitrate Newsreel 1930s",
+    "kind": "preset", "medium": "film", "referenceRefs": ["film-silent-bw-chaplin", "domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "PROXY-scored. Reads almost identically to Silent Film 1920s — the defining NITRATE DECAY (blooming chemical blotches, edge fogging, mottled emulsion damage) is not distinct from generic B&W grain. Differentiate with nitrate decay artifacts."
+  },
+  {
+    "id": "Technicolor Print 1950s",
+    "kind": "preset", "medium": "film", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Hyper-saturated dye-transfer look is right. Add the 3-strip Technicolor registration fringe (slight R/G/B mis-registration coloured edges) which is its signature. Lower confidence pending a Technicolor reference."
+  },
+  {
+    "id": "16mm Broadcast Kinescope",
+    "kind": "preset", "medium": "film", "referenceRefs": ["film-silent-bw-chaplin", "domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Warm, grainy, soft film-of-a-TV-screen look is convincing (grain + softness + contrast). Plausible; confirm against a real kinescope reference."
+  },
+  {
+    "id": "Super 8 Home Reel 1970s",
+    "kind": "preset", "medium": "film", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Warm cast + heavy grain + vignette read as authentic Super 8. Could add gate weave + occasional splice/flash-frame. Lower confidence pending a Super 8 reference."
+  },
+  {
+    "id": "8mm Kodachrome Home Movie",
+    "kind": "preset", "medium": "film", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Kodachrome's signature is PUNCHY saturation with deep blacks and rich reds; the render leans slightly washed/warm. Deepen contrast/blacks and richen reds. Pending a Kodachrome reference."
+  },
+  {
+    "id": "35mm Faded Cinema Print",
+    "kind": "preset", "medium": "film", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Faded/desaturated with grain + dust is good. Push the signature dye-fade: cyan dye fades first, so faded prints skew strongly MAGENTA/PINK — the cast should be more pronounced. Pending a faded-print reference."
+  },
+  {
+    "id": "Aerochrome Infrared Film",
+    "kind": "preset", "medium": "film", "referenceRefs": ["domain-knowledge-proxy"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "PROXY-scored. Overall magenta IR false-colour cast is the right vibe, but Aerochrome's defining behaviour is GREEN vegetation (IR-reflective chlorophyll) rendering as bright RED/magenta; here green maps to olive/dark rather than red. Map green→red for the false-colour signature. Pending a colour-IR reference."
+  }
+]

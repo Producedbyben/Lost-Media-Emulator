@@ -30,5 +30,21 @@
     "license": "Public Domain (CC PDM source)",
     "redistribute": false,
     "demonstrates": "real low-bitrate codec artifacts — 8x8 DCT block edges, mosquito/ringing noise around high-contrast edges, and quantization banding, produced by re-encoding the public-domain CEP507 clip at 90kbps MPEG-4 via ffmpeg. Derived internal reference (method reproducible from the PD source); not bundled."
+  },
+  {
+    "id": "film-silent-bw-chaplin",
+    "medium": "film",
+    "source": "https://commons.wikimedia.org/wiki/File:Charlie_Chaplin.jpg",
+    "license": "Public Domain (US, pre-1929)",
+    "redistribute": false,
+    "demonstrates": "silent-era B&W film tonality, contrast and monochrome rendition (Charlie Chaplin, PD). PARTIAL anchor: it is a clean high-quality restoration, so film GRAIN / scratches / gate weave / dye behaviour are judged from documented film-stock characteristics, not this still. URL-cited only."
+  },
+  {
+    "id": "domain-knowledge-proxy",
+    "medium": "proxy",
+    "source": "Owner-authorized proxy (2026-06-27): no cleared footage available for these families; scored against documented sensor/optics/film-stock artifact characteristics.",
+    "license": "N/A — documentation/domain-knowledge proxy",
+    "redistribute": false,
+    "demonstrates": "LOWER-CONFIDENCE proxy anchor for families lacking cleared footage — film grain/halation/decay, CCTV/bodycam/doorbell compression + burned-in OSD, IR/night-vision (green & IR-flood) sensor behaviour, action-cam fisheye/rolling-shutter, and instant/disposable-flash photographic characteristics. Every scorecard using this ref discloses the proxy and should be re-scored when real footage is sourced."
   }
 ]
