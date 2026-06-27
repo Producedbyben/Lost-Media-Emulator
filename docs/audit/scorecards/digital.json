@@ -1,0 +1,170 @@
+[
+  {
+    "id": "Blu-ray Disc Transfer (2008)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Correctly pristine/sharp with no visible compression artifacts — right for a high-bitrate H.264 Blu-ray. Good restraint (clean is the authentic look here)."
+  },
+  {
+    "id": "4K HDR Streaming 2020s",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Clean, vivid, sharp — correct for modern high-bitrate HEVC/AV1 streaming. Authentic by being near-artifact-free."
+  },
+  {
+    "id": "DVD Rip 2001",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Mostly clean with only mild softness — correct for high-bitrate MPEG-2 DVD, and well differentiated from the heavily-blocky low-bitrate web presets."
+  },
+  {
+    "id": "Streaming Compression",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Shows real DCT blocking + occasional coloured macroblock errors + smear, matching the codec reference's block/mosquito behaviour. Good."
+  },
+  {
+    "id": "XviD AVI Fansub (2003)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Visible 8x8 block edges on the flat colour blocks plus scattered coloured macroblock errors — authentic XviD low-bitrate behaviour."
+  },
+  {
+    "id": "Pocket Digicam MJPEG (2004)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Per-frame MJPEG blocking + an authentic 'REC / BAT 84%' camcorder OSD and timestamp. Era-true."
+  },
+  {
+    "id": "Instagram Live 2024",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Soft mobile H.264 with mild compression — plausible for a phone livestream. Could add slight motion-blocking on movement."
+  },
+  {
+    "id": "Zoom Call Recording (2020)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Soft with mild blocking + a timecode/UNIT OSD. To nail Zoom specifically, add the heavy H.264 macroblocking + temporal smear that appears on motion at low upstream bandwidth."
+  },
+  {
+    "id": "Early Smartphone 2012",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Soft, mildly compressed with a REC/BAT OSD — plausible early phone video."
+  },
+  {
+    "id": "Early Webcam (2008)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Soft and low-res. Add the defining webcam traits: heavy low-light luma/chroma noise, low frame rate smear, and aggressive auto-exposure — currently it reads cleaner than a real 2008 webcam."
+  },
+  {
+    "id": "iPhone 3G Vertical Video",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Soft low-quality VGA-ish look — correct for the iPhone 3G's notoriously poor video. Plausible."
+  },
+  {
+    "id": "Vertical Livestream Story (2024)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Clean modern mobile H.264 with an OSD overlay — plausible for a phone story/livestream."
+  },
+  {
+    "id": "Vine Reupload Compilation (2014)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Generational re-compression is well represented — coloured macroblock errors + heavy blocking from repeated re-encodes, the signature of a re-uploaded compilation."
+  },
+  {
+    "id": "TikTok Screen Record Repost",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Strong 'deep-fried' re-compression — blocking + coloured corruption + screen-record softness, authentic for a many-times-reposted clip."
+  },
+  {
+    "id": "MPEG-2 Satellite Glitch",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Convincing satellite MPEG-2 break-up — scattered coloured macroblock errors and block-freeze/smear concentrated in bands, matching real DVB signal loss."
+  },
+  {
+    "id": "Datamosh Bloom (I-Frame Removal)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Real datamosh behaviour — block-wise smear/bloom where P-frame motion is applied to stale content after I-frame removal. A genuine digital phenomenon, correctly blocky rather than a soft blur."
+  },
+  {
+    "id": "Corrupted Codec (Bit-Rot)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Random coloured macroblock corruption + displacement across the frame — authentic bit-rot/corrupted-bitstream decode errors."
+  },
+  {
+    "id": "RealPlayer 240p Stream (1999)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Very soft/smeary, which is partly right for RealVideo, but the codec reference shows hard 8x8 block edges that are mostly absent here — leans gaussian blur over blocky DCT. Add subtle block structure."
+  },
+  {
+    "id": "Video CD Capture (1999)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "MPEG-1 VCD should show COARSE 8x8 blocking on gradients (per the codec reference); currently reads more as soft blur than the chunky MPEG-1 block grid."
+  },
+  {
+    "id": "Early Web Rip (2006)",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "Plausible low-quality web video but leans blur; add visible DCT block edges + mosquito ringing around high-contrast edges to match the codec reference."
+  },
+  {
+    "id": "YouTube 2007 Re-encode",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 4 },
+    "severity": "low",
+    "note": "2007 YouTube used Sorenson/H.263 at low bitrate which blocks heavily; the render is soft rather than blocky. Push the block structure + mosquito noise."
+  },
+  {
+    "id": "DSLR Video 2010",
+    "kind": "preset", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "Currently just clean. Early HDSLR video is defined by line-skipping moiré/aliasing on fine detail and rolling-shutter skew — neither is present. Add those rather than generic softness."
+  },
+  {
+    "id": "advancedMacroBlocking",
+    "kind": "effect", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "STRENGTH: produces genuine block-aligned coloured macroblock errors + displacement/smear matching real codec corruption (per digital-compression-derived). Drives the convincing Satellite/Datamosh/Bit-Rot/Vine/TikTok looks."
+  },
+  {
+    "id": "advancedQuantization",
+    "kind": "effect", "medium": "digital", "referenceRefs": ["digital-compression-derived"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 3, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "med",
+    "note": "On low-bitrate LEGACY presets (RealPlayer/VCD/YouTube2007/Early Web) the compression reads as gaussian softness rather than the hard 8x8 DCT BLOCK boundaries on flat gradients + mosquito ringing around high-contrast edges that the codec reference shows. The block-edge primitive should be visible at low quality, not just blur."
+  }
+]

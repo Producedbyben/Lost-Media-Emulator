@@ -1,6 +1,6 @@
 # Audit coverage
 
-Presets scored: **26 / 91** (28.6%)
+Presets scored: **48 / 91** (52.7%)
 
 ## Outstanding presets
 
@@ -9,11 +9,9 @@ Presets scored: **26 / 91** (28.6%)
 - [ ] MiniDV Family Cam (2002)
 - [ ] Off-Air Analog Broadcast
 - [ ] Public Access Archive
-- [ ] Early Web Rip (2006)
 - [ ] Security Camera Dump
 - [ ] Damaged Archive Recovery
 - [ ] Neon Sign Bloom (TikTok Style)
-- [ ] Streaming Compression
 - [ ] Digital Surveillance
 - [ ] Silent Film 1920s
 - [ ] Technicolor Print 1950s
@@ -23,15 +21,9 @@ Presets scored: **26 / 91** (28.6%)
 - [ ] Live NTSC Kinescope 1950s
 - [ ] Betacam SP ENG 1980s
 - [ ] LaserDisc Transfer 1990s
-- [ ] DVD Rip 2001
 - [ ] HDV Camcorder 2005
-- [ ] DSLR Video 2010
-- [ ] Early Smartphone 2012
-- [ ] 4K HDR Streaming 2020s
 - [ ] PAL Living Room TV (1970s)
-- [ ] Video CD Capture (1999)
 - [ ] Cable Access Recorder (1984)
-- [ ] Early Webcam (2008)
 - [ ] Polaroid SX-70 Instant
 - [ ] Disposable Camera 35mm Flash
 - [ ] Aerochrome Infrared Film
@@ -44,28 +36,14 @@ Presets scored: **26 / 91** (28.6%)
 - [ ] Disposable Security IR Flood
 - [ ] ATSC Broadcast Transition (2009)
 - [ ] 2-inch Quadruplex Broadcast (1960s)
-- [ ] RealPlayer 240p Stream (1999)
-- [ ] Pocket Digicam MJPEG (2004)
-- [ ] Blu-ray Disc Transfer (2008)
-- [ ] Vine Reupload Compilation (2014)
-- [ ] Vertical Livestream Story (2024)
 - [ ] Video8 Handycam (1988)
 - [ ] MiniDV LP Mode (Dropout-Prone)
 - [ ] D-VHS HD Recording (2003)
 - [ ] TV Tuner Card Capture (2007)
-- [ ] XviD AVI Fansub (2003)
 - [ ] Analog Cable Scrambled Signal
-- [ ] Zoom Call Recording (2020)
 - [ ] PAL UHF Antenna (1978)
 - [ ] 35mm Faded Cinema Print
 - [ ] 8mm Kodachrome Home Movie
-- [ ] YouTube 2007 Re-encode
-- [ ] MPEG-2 Satellite Glitch
-- [ ] iPhone 3G Vertical Video
-- [ ] Instagram Live 2024
 - [ ] Drone Footage Jello
 - [ ] Restored Archive Master
-- [ ] TikTok Screen Record Repost
-- [ ] Datamosh Bloom (I-Frame Removal)
-- [ ] Corrupted Codec (Bit-Rot)
 - [ ] Pixel Sort Glitch Art
