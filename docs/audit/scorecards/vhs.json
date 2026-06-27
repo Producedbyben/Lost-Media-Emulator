@@ -1,0 +1,128 @@
+[
+  {
+    "id": "Late-80s Home VHS",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Composite softness, rightward chroma bleed, and mild desaturation match the 1989 Palace VHS reference well; the head-switch band renders as a smooth dark bar rather than a torn/noisy band, and dropout texture is fine speckle rather than horizontal streaks (see advancedDropouts/advancedHeadSwitching effect cards). Default param values (chromaDelay 0.33, headSwitching 0.42, scanline 0.52) sit in a sensible late-80s home-tape range."
+  },
+  {
+    "id": "90s Rental Tape (3rd Gen Dub)",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Generational scaling is correct — every degradation param is raised above Late-80s Home VHS (dropouts 0.49 vs 0.31, ghosting 0.43 vs 0.29, wobble 0.44 vs 0.34) and scanlines go soft/low-modulation in highlights (measured range ~2 in bright vs ~20 in mids), matching a worn 3rd-gen dub. Inherits the head-switch-band and dropout-shape caveats."
+  },
+  {
+    "id": "VHS-C Camcorder (1993)",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "VHS-C is VHS-format tape; composite artifacts and the camcorder timestamp OSD read correctly for a 1993 consumer camcorder. Same head-switch-band/dropout-shape shape gaps as the other VHS presets; otherwise period-true."
+  },
+  {
+    "id": "S-VHS Master Tape (1996)",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 4, "defaults": 4, "eraFit": 4 },
+    "severity": "none",
+    "note": "Correctly configured cleaner than baseline VHS — chromaDelay 0.15, dropouts 0.10, headSwitching 0.14, scanline 0.36 are all well below the VHS presets, which is right for S-VHS's higher luma bandwidth and Y/C path. Could push luma sharpness/edge detail slightly further to sell the S-VHS advantage, but direction and restraint are correct."
+  },
+  {
+    "id": "4th Gen VHS Bootleg",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Heavy chroma bleed, strong softening, timebase waviness and washed-out colour read as a believable nth-generation bootleg dub. Artifact correctness limited only by the shared dropout-shape gap (speckle vs horizontal streaks)."
+  },
+  {
+    "id": "VHS Mold Damage (30yr Attic)",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989", "vhs-static-cc0"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "med",
+    "note": "Aging reads as uniform fine speckle plus desaturation (dropouts 0.62, dropoutFrequency 0.56, tapeCrease 0.58). Real 30-yr mold/oxide damage is blotchy and CLUSTERED — horizontal oxide-shed streaks, sticky-shed dropout bursts, and patchy chroma loss — rather than evenly-distributed pepper noise. The gap is the underlying dropout primitive's shape (see advancedDropouts)."
+  },
+  {
+    "id": "Bootleg Concert Cam",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Reads as a consumer-VHS bootleg: strong rightward chroma bleed, softness, dark bottom band, camcorder OSD. Same head-switch/dropout shape caveats."
+  },
+  {
+    "id": "Betamax Home Recording (1981)",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "Scored against the VHS reference as a composite colour-under PROXY (Betamax shares the colour-under composite path, so core artifacts are comparable) — but Betamax-specific behaviour is UNVERIFIED and needs its own cleared Betamax reference before a confident score. The on-screen OSD label text appears garbled ('CTFID CHANNEL3'); verify the OSD glyph/label set."
+  },
+  {
+    "id": "Betamax Humid Garage (1983)",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989", "vhs-static-cc0"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "Betamax aging proxy-scored against the VHS reference. Aging speckle has the same shape gap as the other aging presets (uniform pepper vs clustered oxide-shed). Needs a Betamax reference to confirm format-specific traits."
+  },
+  {
+    "id": "U-matic Field Tape 1970s",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 3, "eraFit": 3 },
+    "severity": "low",
+    "note": "VHS reference is only an APPROXIMATE composite proxy for U-matic (3/4\" pro, 1970s). The look reads as generic-tape rather than U-matic-distinct (no clear U-matic luma/colour-under signature or 70s broadcast character). Needs a U-matic reference for a confident score."
+  },
+  {
+    "id": "Consumer TV",
+    "kind": "preset",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Display-layer preset (the CRT TV the family plays back on; correctly carries no camcorder OSD). Measured scanline modulation is near brightness-INDEPENDENT (range 36 in highlights vs 32 in mids) whereas a real CRT blooms in highlights and fills the gaps, so scanlines read slightly too uniform. The VHS reference is tape-through-an-unknown-display, so display-only traits are judged loosely."
+  },
+  {
+    "id": "advancedDropouts",
+    "kind": "effect",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989", "vhs-static-cc0"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 4, "artifactCorrectness": 2, "defaults": 3, "eraFit": 3 },
+    "severity": "high",
+    "note": "Swept 0.2/0.5/0.95: parameterBehaviour scales smoothly (light -> moderate -> heavy), but the artifact SHAPE is wrong. It renders as uniform black salt-and-pepper speckle distributed evenly across the whole frame. Real VHS dropouts are brief HORIZONTAL streaks (~1-4 scanlines tall, ~20-80px wide), irregularly CLUSTERED in time/space, and commonly a bright flash at contact loss with a dark recovery (polarity varies). This is the signature tape artifact and the highest-impact authenticity fix in the family; every VHS/aging preset inherits it."
+  },
+  {
+    "id": "advancedHeadSwitching",
+    "kind": "effect",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 3, "parameterBehaviour": 2, "artifactCorrectness": 2, "defaults": 3, "eraFit": 3 },
+    "severity": "med",
+    "note": "Sweeping advancedHeadSwitching 0.2->0.95 in ISOLATION on a static frame produced no clearly visible change at the frame bottom; the dark bottom band seen in full presets reads as a smooth/clean dark bar (measured: bottom-row luma variance 49 < mid-frame 60, i.e. LESS noisy than the picture, the opposite of real head-switching). Real head-switching is a torn, noisy, skewed band of ~6-12 scanlines at the very bottom. Investigate whether the visible band is even driven by this param, and give it torn-noise texture + skew."
+  },
+  {
+    "id": "advancedChromaDelay",
+    "kind": "effect",
+    "medium": "vhs",
+    "referenceRefs": ["vhs-palace-cartoons-1989"],
+    "scores": { "physicalPlausibility": 4, "parameterBehaviour": 4, "artifactCorrectness": 3, "defaults": 4, "eraFit": 4 },
+    "severity": "low",
+    "note": "Swept 0.2/0.5/0.95: responsive and the DIRECTION is correct — colour lags to the right of luma edges (confirmed both visually and by pixel probe: red elevated in the grey region right of the red block). But edges read as torn/jagged colour fringing rather than a smooth horizontal chroma smear, and a thin blue boundary artifact appears at the left frame edge at higher values. Smooth the smear and clamp the edge artifact."
+  }
+]

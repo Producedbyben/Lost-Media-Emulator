@@ -1,22 +1,18 @@
 # Audit coverage
 
-Presets scored: **0 / 91** (0.0%)
+Presets scored: **11 / 91** (12.1%)
 
 ## Outstanding presets
 
 - [ ] True Zero (Neutral)
-- [ ] Consumer TV
 - [ ] PVM/BVM
 - [ ] Arcade
-- [ ] Late-80s Home VHS
-- [ ] 90s Rental Tape (3rd Gen Dub)
 - [ ] Hi8 Vacation Cam
 - [ ] MiniDV Family Cam (2002)
 - [ ] Off-Air Analog Broadcast
 - [ ] Public Access Archive
 - [ ] Early Web Rip (2006)
 - [ ] Security Camera Dump
-- [ ] Bootleg Concert Cam
 - [ ] Damaged Archive Recovery
 - [ ] Retro Pixel LCD
 - [ ] Cyberpunk OLED
@@ -29,7 +25,6 @@ Presets scored: **0 / 91** (0.0%)
 - [ ] 16mm Broadcast Kinescope
 - [ ] Nitrate Newsreel 1930s
 - [ ] Live NTSC Kinescope 1950s
-- [ ] U-matic Field Tape 1970s
 - [ ] Betacam SP ENG 1980s
 - [ ] LaserDisc Transfer 1990s
 - [ ] DVD Rip 2001
@@ -59,14 +54,11 @@ Presets scored: **0 / 91** (0.0%)
 - [ ] OLED Smartphone PenTile (2018)
 - [ ] Pioneer Plasma TV (2007)
 - [ ] 2-inch Quadruplex Broadcast (1960s)
-- [ ] VHS-C Camcorder (1993)
-- [ ] S-VHS Master Tape (1996)
 - [ ] RealPlayer 240p Stream (1999)
 - [ ] Pocket Digicam MJPEG (2004)
 - [ ] Blu-ray Disc Transfer (2008)
 - [ ] Vine Reupload Compilation (2014)
 - [ ] Vertical Livestream Story (2024)
-- [ ] Betamax Home Recording (1981)
 - [ ] Video8 Handycam (1988)
 - [ ] MiniDV LP Mode (Dropout-Prone)
 - [ ] D-VHS HD Recording (2003)
@@ -77,8 +69,6 @@ Presets scored: **0 / 91** (0.0%)
 - [ ] LED Billboard Phone Capture
 - [ ] Zoom Call Recording (2020)
 - [ ] PAL UHF Antenna (1978)
-- [ ] VHS Mold Damage (30yr Attic)
-- [ ] Betamax Humid Garage (1983)
 - [ ] 35mm Faded Cinema Print
 - [ ] 8mm Kodachrome Home Movie
 - [ ] YouTube 2007 Re-encode
@@ -90,7 +80,6 @@ Presets scored: **0 / 91** (0.0%)
 - [ ] Trinitron Warm Glow
 - [ ] Drone Footage Jello
 - [ ] Restored Archive Master
-- [ ] 4th Gen VHS Bootleg
 - [ ] TikTok Screen Record Repost
 - [ ] Datamosh Bloom (I-Frame Removal)
 - [ ] Corrupted Codec (Bit-Rot)
