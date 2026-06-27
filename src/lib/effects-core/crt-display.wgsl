@@ -93,6 +93,12 @@ struct Uniforms {
   u_grainCoefXLo: f32,
   u_grainCoefYHi: f32,
   u_grainCoefYLo: f32,
+  // --- 6.3a high-frequency effects ---
+  u_exposurePump: f32,
+  u_whiteBalanceDrift: f32,
+  u_ghosting: f32,
+  u_focusBreathing: f32,
+  u_temporalFrame: f32,   // stuttered frame (real frame is u_frameIndex)
 };
 
 @group(0) @binding(0) var<uniform> U: Uniforms;
@@ -197,8 +203,10 @@ const BAYER: array<f32, 16> = array<f32, 16>(
 fn optics(px: f32, py: f32) -> vec3<f32> {
   let W = U.u_resolutionX;
   let H = U.u_resolutionY;
-  let tFrame = U.u_frameIndex;
-  let tSec = U.u_frameIndex / U.u_fps;
+  // Temporal terms use the STUTTERED frame; gate offsets below use the REAL frame.
+  let tFrame = U.u_temporalFrame;
+  let tSec = U.u_temporalFrame / U.u_fps;
+  let realFrame = U.u_frameIndex;
 
   let nx = (px / (W - 1.0)) * 2.0 - 1.0;
   let ny = (py / (H - 1.0)) * 2.0 - 1.0;
@@ -211,10 +219,10 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
   let overscan = select(1.0, cornerWarp, barrel < 0.0);
 
   // Per-frame film-gate offsets (CPU computes these once per frame; same for every pixel).
-  let judderHit = U.u_shutterJudder > 0.0 && seededNoise(tFrame, 3.0, 51.0) < U.u_shutterJudder * 0.5;
-  let gateOffX = (seededNoise(tFrame, 11.0, 7.0) - 0.5) * U.u_gateJitterX * 0.03 + select(0.0, (seededNoise(tFrame, 5.0, 9.0) - 0.5) * 0.05, judderHit);
-  let gateOffY = (seededNoise(tFrame, 17.0, 13.0) - 0.5) * U.u_gateJitterY * 0.03 + select(0.0, (seededNoise(tFrame, 7.0, 3.0) - 0.5) * 0.06, judderHit);
-  let gateRot = (seededNoise(tFrame, 23.0, 19.0) - 0.5) * U.u_gateRotation * 0.05;
+  let judderHit = U.u_shutterJudder > 0.0 && seededNoise(realFrame, 3.0, 51.0) < U.u_shutterJudder * 0.5;
+  let gateOffX = (seededNoise(realFrame, 11.0, 7.0) - 0.5) * U.u_gateJitterX * 0.03 + select(0.0, (seededNoise(realFrame, 5.0, 9.0) - 0.5) * 0.05, judderHit);
+  let gateOffY = (seededNoise(realFrame, 17.0, 13.0) - 0.5) * U.u_gateJitterY * 0.03 + select(0.0, (seededNoise(realFrame, 7.0, 3.0) - 0.5) * 0.06, judderHit);
+  let gateRot = (seededNoise(realFrame, 23.0, 19.0) - 0.5) * U.u_gateRotation * 0.05;
 
   // Geometric warps added to the barrel-warped source coords.
   let wobble = sin((ny + tSec * 0.9) * PI * 6.0) * U.u_timeWobble * 0.012;
@@ -385,7 +393,7 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
       rMask = select(cool, hot, pentileX == 0 || pentileX == 2);
       gMask = select(cool, hot, greenShare);
       bMask = select(cool, hot, pentileX == 1 || pentileX == 3);
-    } else if (mt > 7.5) {                // plasmaCell (8): gas-cell pulse + noise
+    } else if (mt > 7.5 && mt < 8.5) {    // plasmaCell (8): gas-cell pulse + noise
       let cellXp = f32(mxi / 2);
       let cellYp = f32(myi / 2);
       let pulse = 0.9 + 0.1 * sin(tSec * 9.0 + (cellXp + cellYp) * 0.3);
@@ -394,6 +402,53 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
       rMask = cellGain * (1.0 + maskStrength * 0.02);
       gMask = cellGain;
       bMask = cellGain * (1.0 - maskStrength * 0.02);
+    } else if (mt > 8.5 && mt < 9.5) {    // filmSuper8 (9): edge vignette + perforation band
+      let edgeX = min(px / max(1.0, W), (W - px) / max(1.0, W));
+      let edgeY = min(py / max(1.0, H), (H - py) / max(1.0, H));
+      let edgeVig = min(edgeX, edgeY);
+      let perfBand = px < W * 0.04 || px > W * 0.96;
+      let perfPulse = 0.86 + 0.14 * sin((py / max(1.0, H)) * PI * 12.0 + tSec * 4.0);
+      let s8 = 1.0 - mask * (0.22 * (1.0 - edgeVig));
+      rMask = s8 * select(1.0, perfPulse, perfBand);
+      gMask = rMask; bMask = rMask;
+    } else if (mt > 9.5 && mt < 10.5) {   // film16mm (10): gate darken + weave texture
+      let gateEdge = min(min(px / max(1.0, W), (W - px) / max(1.0, W)), min(py / max(1.0, H), (H - py) / max(1.0, H)));
+      let gateDarken = 1.0 - mask * (0.16 * (1.0 - gateEdge));
+      let weaveTex = 1.0 + mask * 0.08 * (seededNoise(px * 0.03, py * 0.03, tFrame) - 0.5);
+      rMask = gateDarken * weaveTex; gMask = rMask; bMask = rMask;
+    } else if (mt > 10.5 && mt < 11.5) {  // instantDyeCloud (11): radial dye cloud
+      let radial = length(vec2<f32>(px / max(1.0, W) - 0.5, py / max(1.0, H) - 0.5));
+      let cloud = seededNoise(px * 0.09, py * 0.09, tFrame * 0.22);
+      let density = 1.0 + mask * ((cloud - 0.5) * 0.22 - radial * 0.18);
+      rMask = density * (1.0 + mask * 0.04); gMask = density; bMask = density * (1.0 - mask * 0.03);
+    } else if (mt > 11.5 && mt < 12.5) {  // irBloomSpeckle (12): IR hotspot + speckle
+      let radial = length(vec2<f32>(px / max(1.0, W) - 0.5, py / max(1.0, H) - 0.5));
+      let hotspot = 1.0 + mask * max(0.0, 0.2 - radial) * 1.2;
+      let speckle = 1.0 + mask * (seededNoise(px * 0.31, py * 0.31, tFrame * 0.12) - 0.5) * 0.32;
+      let irGain = hotspot * speckle;
+      rMask = irGain; gMask = irGain; bMask = irGain;
+    } else if (mt > 12.5 && mt < 13.5) {  // cmosRollingColumn (13): column/row FPN
+      let colf = f32(i32(px) % 8) / 8.0;
+      let rowf = f32(i32(py) % 12) / 12.0;
+      let colFpn = 1.0 + mask * ((colf - 0.5) * 0.14 + (seededNoise(px * 0.07, 0.14, 0.03) - 0.5) * 0.2);
+      let rowFpn = 1.0 + mask * ((rowf - 0.5) * 0.08);
+      let cmosGain = colFpn * rowFpn;
+      rMask = cmosGain * (1.0 + mask * 0.01); gMask = cmosGain; bMask = cmosGain * (1.0 - mask * 0.01);
+    } else if (mt > 13.5 && mt < 14.5) {  // lowBitrateBlockGrid (14): 12px block grid + edges
+      let localX = i32(px) % 12;
+      let localY = i32(py) % 12;
+      let edge = localX <= 1 || localY <= 1 || localX >= 11 || localY >= 11;
+      let blockNoise = seededNoise(floor(px / 12.0) * 0.63, floor(py / 12.0) * 0.63, tFrame * 0.05);
+      let blockGain = 1.0 + mask * ((blockNoise - 0.5) * 0.12 - select(0.0, 0.14, edge));
+      rMask = blockGain; gMask = blockGain; bMask = blockGain;
+    } else if (mt > 14.5) {               // fisheyeMicrolens (15): radial vignette + microlens
+      let fnx = (px / max(1.0, W)) * 2.0 - 1.0;
+      let fny = (py / max(1.0, H)) * 2.0 - 1.0;
+      let radius = min(1.6, sqrt(fnx * fnx + fny * fny));
+      let vig = 1.0 - mask * max(0.0, radius - 0.55) * 0.28;
+      let micro = 1.0 + mask * (seededNoise(px * 0.18, py * 0.18, 0.21) - 0.5) * max(0.0, radius - 0.35) * 0.2;
+      let fisheyeGain = vig * micro;
+      rMask = fisheyeGain * (1.0 + mask * 0.015); gMask = fisheyeGain; bMask = fisheyeGain * (1.0 - mask * 0.015);
     }
   }
 
@@ -693,6 +748,20 @@ fn fs_composite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32>
   let flicker = U.u_flicker * (0.4 + 0.6 * (0.65 * waveA + 0.35 * waveB));
   let fa = flicker * 0.2;
   col = col * (1.0 - fa) + vec3<f32>(fa);
+
+  // Exposure pump (global brightness pulse) + white-balance drift (warm screen). Temporal,
+  // so they use the stuttered frame. (CPU crt-renderer-full.js ~1089-1098.)
+  let etSec = U.u_temporalFrame / U.u_fps;
+  if (U.u_exposurePump > 0.0) {
+    let wave = 1.0 + (sin(etSec * 1.53) * 0.5 + 0.5) * U.u_exposurePump * 0.28;
+    col = mix(col, col * wave, min(0.35, U.u_exposurePump * 0.35));
+  }
+  if (U.u_whiteBalanceDrift > 0.0) {
+    let warm = (sin(etSec * 0.37 + 2.4) * 0.5 + 0.5) * U.u_whiteBalanceDrift;
+    let tint = vec3<f32>(30.0 + warm * 70.0, 18.0 + warm * 28.0, 40.0 + (1.0 - warm) * 80.0) / 255.0;
+    let screened = vec3<f32>(1.0) - (vec3<f32>(1.0) - col) * (vec3<f32>(1.0) - tint);
+    col = mix(col, screened, min(0.22, 0.05 + U.u_whiteBalanceDrift * 0.2));
+  }
 
   // Scanline profile — categorical multiply-darken pattern (pointwise).
   let sp = U.u_scanlineProfile;
