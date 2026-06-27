@@ -1514,10 +1514,52 @@ export function useCRTRenderer() {
           fileName: ensureFilename(job.fileName || job.name || "", "gif", "lme-export"),
         });
       } else {
-        // Video job (mp4 / webm). Transparently fall back when the requested
-        // encoder isn't available: MP4 → WebM → GIF. The shared `progress`
-        // callback keeps the queue's per-frame progress + ETA accurate
-        // regardless of which encoder actually runs.
+        // Prefer the native ffmpeg pipeline on desktop (same as handleExportMp4).
+        // Opens a Save dialog per job to let the user pick the destination — if
+        // the user cancels the dialog the job is marked cancelled (AbortError).
+        const ffmpegReady = job.format !== "webm" && await isFfmpegExportAvailable();
+        if (ffmpegReady) {
+          if (signal.aborted) throw new DOMException("aborted", "AbortError");
+          const defaultName = ensureFilename(job.fileName || job.name || "", "mp4", "lme-export");
+          const desktopApi = (window as unknown as { desktop?: { saveDialog?: (o: { defaultName: string }) => Promise<string | null> } }).desktop;
+          const outPath = await desktopApi?.saveDialog?.({ defaultName });
+          if (!outPath) throw new DOMException("aborted", "AbortError");
+          if (signal.aborted) throw new DOMException("aborted", "AbortError");
+
+          // Mirror handleExportMp4: compute true export dims from source + options.
+          const srcDims = sourceDimsRef.current;
+          const sourceW = srcDims?.w && srcDims.w > 0 ? srcDims.w : canvas.width;
+          const sourceH = srcDims?.h && srcDims.h > 0 ? srcDims.h : canvas.height;
+          const { width: targetWidth, height: targetHeight } = computeExportSize({
+            sourceW, sourceH,
+            resolution: job.options?.resolution ?? 0,
+            aspectRatio: job.options?.aspectRatio,
+          });
+
+          const wantsAudio = job.options?.includeAudio !== false;
+          const audioSourcePath = (wantsAudio && isVideoRef.current && sourcePathRef.current)
+            ? sourcePathRef.current : undefined;
+
+          await exportViaFfmpeg({
+            canvas, renderer,
+            params: job.params,
+            fps: Math.max(1, job.fps),
+            duration: Math.max(0.5, job.duration),
+            codec: "h264",
+            outPath,
+            audioSourcePath,
+            videoElement: isVideoRef.current ? videoElementRef.current : undefined,
+            targetWidth,
+            targetHeight,
+            frameMode: job.options?.aspectRatio && job.options.aspectRatio !== "original" ? "crop" : undefined,
+            renderOptions,
+            onProgress: (r) => progress(r, Math.round(r * Math.max(1, Math.floor(job.fps * job.duration))), Math.max(1, Math.floor(job.fps * job.duration))),
+            signal,
+          });
+          return;
+        }
+
+        // Web / WebM fallback — same as before.
         const caps = getVideoExportCapabilities();
         const videoArgs = {
           canvas, renderer,
