@@ -209,9 +209,10 @@ const ExportPanel = ({
   const isGif = codec === "gif";
   const isProRes = codec === "prores422" || codec === "prores4444";
   const videoExt = tier.ext; // mp4 | mov | gif
-  // ffmpeg-only tiers can't run on the web build; the queue uses the WebCodecs
-  // engine, so it only accepts H.264 and GIF.
-  const queueable = codec === "h264" || codec === "gif";
+  // On desktop the queue now goes through the native ffmpeg pipeline, so all
+  // codecs (including ProRes/HEVC) are queueable. On the web build only H.264
+  // and GIF are supported (WebCodecs fallback).
+  const queueable = isDesktop ? true : (codec === "h264" || codec === "gif");
   // Which delivery preset (if any) the current settings match — for the highlight.
   const activePreset = DELIVERY_PRESETS.find(
     (p) => p.codec === codec && p.resolution === resolution && p.aspectRatio === aspectRatio,
@@ -250,7 +251,8 @@ const ExportPanel = ({
 
   const handleAddToQueue = () => {
     if (!onEnqueueExport || !currentParams) return;
-    // Queue runs on the WebCodecs engine → H.264 mp4 or GIF only.
+    // On desktop the queue uses the ffmpeg pipeline for all video formats.
+    // On web only mp4 (WebCodecs) and gif are supported.
     const fmt: "mp4" | "gif" = isGif ? "gif" : "mp4";
     const jobFps = fmt === "gif" ? Math.min(15, fps) : fps;
     const ar = aspectRatio !== "original" ? aspectRatio : undefined;
@@ -441,6 +443,12 @@ const ExportPanel = ({
                   );
                 })}
               </div>
+              {!isDesktop && DELIVERY_PRESETS.some((p) => p.desktopOnly) && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Info className="w-3 h-3 shrink-0" />
+                  Dimmed presets (Master) require the desktop app for ProRes export.
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <span className="text-xs text-muted-foreground">Codec</span>
@@ -460,6 +468,12 @@ const ExportPanel = ({
               <p className="text-[11px] text-muted-foreground">
                 {isGif ? "Max 480px wide · lower FPS recommended for file size" : `${tier.hint} · .${tier.ext}`}
               </p>
+              {!isDesktop && CODEC_TIERS.some((t) => t.desktopOnly) && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Info className="w-3 h-3 shrink-0" />
+                  HEVC and ProRes require the desktop app — dimmed here.
+                </p>
+              )}
             </div>
           </Section>
 
@@ -623,16 +637,33 @@ const ExportPanel = ({
         </div>
       </div>
 
-      {/* Render progress */}
+      {/* Render progress — shown while a single export is running. The queue
+          has its own per-job progress bars in ExportQueue below. */}
       {isExporting && (
-        <div className="space-y-1">
-          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+        <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-[12px] font-medium text-primary">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse inline-block" />
+              Rendering…
+            </span>
+            <span className="text-[12px] font-mono text-muted-foreground">
+              {Math.round(exportProgress * 100)}%
+            </span>
+          </div>
+          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all duration-200"
               style={{ width: `${exportProgress * 100}%` }} />
           </div>
-          <div className="flex justify-between text-[12px] text-muted-foreground font-mono">
-            <span>Frame {Math.round(exportProgress * exportFrames)}/{exportFrames}</span>
-            <span>{Math.round(exportProgress * 100)}%</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-mono text-muted-foreground">
+              Frame {Math.round(exportProgress * exportFrames)}/{exportFrames}
+            </span>
+            {onCancelExport && (
+              <button onClick={onCancelExport}
+                className="flex items-center gap-1 text-[11px] font-medium text-destructive hover:text-destructive/80 transition-colors">
+                <X className="w-3 h-3" /> Cancel
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -652,7 +683,7 @@ const ExportPanel = ({
           <button
             onClick={handleAddToQueue}
             disabled={!hasImage || !queueable}
-            title={queueable ? undefined : "The queue supports H.264 and GIF — export ProRes/HEVC directly"}
+            title={queueable ? undefined : "The queue supports H.264 and GIF on the web build — open the desktop app for ProRes/HEVC"}
             className="flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-dashed border-border">
             <ListPlus className="w-3.5 h-3.5" /> Add to queue
           </button>
