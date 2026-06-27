@@ -1079,6 +1079,55 @@ export class CRTRendererFull {
       outCtx.save(); outCtx.imageSmoothingEnabled = false;
       outCtx.globalAlpha = Math.min(0.92, 0.35 + quantization * 0.55);
       outCtx.drawImage(this.quantCanvas, 0, 0, qW, qH, 0, 0, width, height); outCtx.restore();
+
+      // ---- DCT block-edge structure: hard 8×8 grid lines at block boundaries
+      // (the defining visual of legacy low-bitrate codecs — RealPlayer 240p, Video CD,
+      // early web encodes). The grid alpha varies per-block via seededNoise so adjacent
+      // blocks read at slightly different brightness, matching real DCT coefficient
+      // truncation. Also adds mosquito ringing: thin oscillating luma halos on the
+      // two pixels adjacent to a high-luma-contrast crossing. ----
+      if (quantization > 0.18) {
+        const blockPx = 8; // DCT block is always 8×8
+        const edgeAlpha = Math.min(0.55, (quantization - 0.18) * 0.85);
+        const ringAmt = Math.min(0.38, (quantization - 0.18) * 0.52);
+        const qImg = outCtx.getImageData(0, 0, width, height);
+        const qd = qImg.data;
+        for (let y = 0; y < height; y++) {
+          const localY = y % blockPx;
+          const blockRow = Math.floor(y / blockPx);
+          for (let x = 0; x < width; x++) {
+            const localX = x % blockPx;
+            const blockCol = Math.floor(x / blockPx);
+            const i = (y * width + x) * 4;
+            // Block-edge darkening: activate on first/last row or column of a block
+            const onHorizEdge = localY === 0;
+            const onVertEdge = localX === 0;
+            if (onHorizEdge || onVertEdge) {
+              // Per-block noise varies the edge shade slightly (different blocks have
+              // different DC-coefficient truncation, so edge jumps differ in magnitude).
+              const blockNoise = seededNoise(blockCol * 0.41, blockRow * 0.37, frameIndex * 0.0);
+              const alpha = edgeAlpha * (0.6 + blockNoise * 0.4);
+              qd[i]     = Math.max(0, qd[i]     - qd[i]     * alpha);
+              qd[i + 1] = Math.max(0, qd[i + 1] - qd[i + 1] * alpha);
+              qd[i + 2] = Math.max(0, qd[i + 2] - qd[i + 2] * alpha);
+            }
+            // Mosquito ringing: on the pixel adjacent to a block boundary, add a faint
+            // noise-modulated brightness oscillation proportional to luma contrast
+            // across the boundary (high-frequency overshoot from quantised AC coeff).
+            if (ringAmt > 0.01 && (localX === 1 || localX === blockPx - 1 ||
+                                    localY === 1 || localY === blockPx - 1)) {
+              const luma = 0.299 * qd[i] + 0.587 * qd[i + 1] + 0.114 * qd[i + 2];
+              // Ringing oscillates with a spatial frequency close to the 8-px DCT period.
+              const ring = Math.sin((localX + localY) * Math.PI * 0.25) *
+                           ringAmt * (luma / 255) * 28;
+              qd[i]     = Math.max(0, Math.min(255, qd[i]     + ring));
+              qd[i + 1] = Math.max(0, Math.min(255, qd[i + 1] + ring));
+              qd[i + 2] = Math.max(0, Math.min(255, qd[i + 2] + ring));
+            }
+          }
+        }
+        outCtx.putImageData(qImg, 0, 0);
+      }
     }
 
     // ============================================================
