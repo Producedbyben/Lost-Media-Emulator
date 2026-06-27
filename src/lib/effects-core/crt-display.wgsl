@@ -88,6 +88,11 @@ struct Uniforms {
   u_scanlineProfile: f32,
   u_subpixelLayout: f32,
   u_cctvMono: f32,
+  // grain hash coefficients reduced mod 2pi, as double-f32 (hi+lo)
+  u_grainCoefXHi: f32,
+  u_grainCoefXLo: f32,
+  u_grainCoefYHi: f32,
+  u_grainCoefYLo: f32,
 };
 
 @group(0) @binding(0) var<uniform> U: Uniforms;
@@ -149,6 +154,18 @@ fn reduceHash(acc0: vec2<f32>) -> f32 {
 }
 fn seededNoise(x: f32, y: f32, frame: f32) -> f32 {
   var acc = addDD(termDD(x, C0_HI, C0_LO), termDD(y, C1_HI, C1_LO));
+  acc = addDD(acc, termDD(frame, C2_HI, C2_LO));
+  return reduceHash(acc);
+}
+// Grain noise: the x/y hash coefficients (gf*12.9898, gfy*78.233) arrive REDUCED mod 2pi as
+// double-f32 uniforms, so px*coefX / py*coefY stay small-magnitude (~400 vs ~67k) and the
+// emulated-f64 hash reproduces the CPU grain field. offX/offY are the chroma-channel offsets
+// (added in pre-coefficient space; their arg contribution is off*12.9898 / off*78.233).
+fn grainNoise(px: f32, py: f32, frame: f32, offX: f32, offY: f32) -> f32 {
+  var acc = termDD(px, U.u_grainCoefXHi, U.u_grainCoefXLo);
+  acc = addDD(acc, termDD(py, U.u_grainCoefYHi, U.u_grainCoefYLo));
+  if (offX != 0.0) { acc = addDD(acc, termDD(offX, C0_HI, C0_LO)); }
+  if (offY != 0.0) { acc = addDD(acc, termDD(offY, C1_HI, C1_LO)); }
   acc = addDD(acc, termDD(frame, C2_HI, C2_LO));
   return reduceHash(acc);
 }
@@ -271,19 +288,14 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
   }
 
   // Film grain (CPU works in 0..255: (noise-0.5)*255*(grain*0.34) → in 0..1 the 255s cancel).
-  // NOTE: grain's per-pixel noise argument (x*gf) is large-magnitude and non-integer; the
-  // emulated-f64 hash does not reach bit-parity with the CPU f64 field at this magnitude on
-  // GPU float behaviour, so grain is perceptually-valid but not correlated. Low-amplitude
-  // grain still clears the < 6 gate; grain-heavy presets are gated to CPU (gpuSignalOK).
+  // Uses grainNoise with mod-2pi-reduced coefficients so the GPU field matches the CPU.
   if (U.u_filmGrain > 0.0) {
-    let gf = 1.91 / (1.0 + U.u_grainSize * 2.2);
-    let gfy = 1.37 / (1.0 + U.u_grainSize * 2.2);
-    let grain = (seededNoise(px * gf, py * gfy, tFrame * 1.3) - 0.5) * (U.u_filmGrain * 0.34);
+    let grain = (grainNoise(px, py, tFrame * 1.3, 0.0, 0.0) - 0.5) * (U.u_filmGrain * 0.34);
     if (U.u_grainChromaticity > 0.001) {
       let cAmt = U.u_filmGrain * U.u_grainChromaticity * 0.26;
-      redSoft = redSoft + grain + (seededNoise(px * gf + 3.3, py * gfy, tFrame * 1.7) - 0.5) * cAmt;
-      greenSoft = greenSoft + grain + (seededNoise(px * gf, py * gfy + 5.1, tFrame * 1.9) - 0.5) * cAmt;
-      blueSoft = blueSoft + grain + (seededNoise(px * gf + 7.7, py * gfy + 2.2, tFrame * 2.3) - 0.5) * cAmt;
+      redSoft = redSoft + grain + (grainNoise(px, py, tFrame * 1.7, 3.3, 0.0) - 0.5) * cAmt;
+      greenSoft = greenSoft + grain + (grainNoise(px, py, tFrame * 1.9, 0.0, 5.1) - 0.5) * cAmt;
+      blueSoft = blueSoft + grain + (grainNoise(px, py, tFrame * 2.3, 7.7, 2.2) - 0.5) * cAmt;
     } else {
       redSoft = redSoft + grain;
       greenSoft = greenSoft + grain;

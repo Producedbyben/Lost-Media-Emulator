@@ -65,7 +65,15 @@ export const CRT_SIGNAL_UNIFORMS = [
   "u_filmHalation", "u_noise", "u_quantization",
   // pointwise post-passes
   "u_scanlineProfile", "u_subpixelLayout", "u_cctvMono",
+  // grain hash coefficients (gf*12.9898, gfy*78.233) REDUCED mod 2pi (exact for integer
+  // pixel coords by sine periodicity) and carried as double-f32 (hi+lo). The reduction
+  // shrinks the GPU argument magnitude ~67k → ~400 so the emulated-f64 hash reproduces the
+  // CPU grain field (the large magnitude was what broke it on GPU float behaviour).
+  "u_grainCoefXHi", "u_grainCoefXLo", "u_grainCoefYHi", "u_grainCoefYLo",
 ] as const;
+
+const TWO_PI = 2 * Math.PI;
+const reduceMod2Pi = (v: number) => v - TWO_PI * Math.round(v / TWO_PI);
 
 // Pure params → uniform Float32Array for the signal shader (display + grade + per-pixel
 // artifacts). The shader clamps ranges; this only packs and maps categoricals to codes.
@@ -137,5 +145,14 @@ export function buildSignalUniforms(
   set("u_scanlineProfile", SCANLINE_PROFILE_CODES[String(params.scanlineProfile ?? "off")] ?? 0);
   set("u_subpixelLayout", SUBPIXEL_CODES[String(params.subpixelLayoutOverride ?? "none")] ?? 0);
   set("u_cctvMono", n(params.advancedCctvMonochrome));
+  // Grain coefficients: gf = 1.91/(1+grainSize*2.2), gfy = 1.37/(1+grainSize*2.2). Fold the
+  // hash coefficient in (gf*12.9898, gfy*78.233), reduce mod 2pi (f64), split to double-f32.
+  const denom = 1 + n(params.grainSize) * 2.2;
+  const coefX = reduceMod2Pi((1.91 / denom) * 12.9898);
+  const coefY = reduceMod2Pi((1.37 / denom) * 78.233);
+  set("u_grainCoefXHi", coefX);
+  set("u_grainCoefXLo", coefX - Math.fround(coefX));
+  set("u_grainCoefYHi", coefY);
+  set("u_grainCoefYLo", coefY - Math.fround(coefY));
   return out;
 }

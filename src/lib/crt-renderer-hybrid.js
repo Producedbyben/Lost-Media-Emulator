@@ -39,9 +39,19 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
   "gateRotation", "shutterJudder", "advancedRfInterference",
   // per-pixel colour
   "advancedFilmDust", "advancedFilmScratches", "advancedFilmHalation", "noise",
+  // film grain: the mod-2pi-reduced grain hash is perceptually close at low/moderate
+  // amplitude (not bit-exact — GPU double-f32 addition limits); a conservative amplitude
+  // cap below keeps it inside the < 6 gate. grainSize/grainChromaticity ride along.
+  "advancedFilmGrain", "grainSize", "grainChromaticity",
   // pointwise post-passes
   "advancedCctvMonochrome",
 ]);
+
+// Grain is only perceptually faithful up to a moderate amplitude (measured: 0.3 → ~4.6,
+// 0.35 → ~5.4, 0.6 → ~9 mean-err). Cap below the < 6 gate with margin. (No catalogue preset
+// currently routes with grain — they co-occur with other CPU-gated effects — so this only
+// affects manual grain on a GPU-routed look + is groundwork for Epic 6.3.)
+const GRAIN_GPU_MAX = 0.3;
 
 // Params the GPU fragment shader reproduces faithfully.
 const GPU_SUPPORTED = new Set([
@@ -123,6 +133,10 @@ export class CRTRendererHybrid {
     // implemented; chroma subsampling + non-ideal storage are multi-pass → CPU.
     if (params.chromaSubsamplingMode && params.chromaSubsamplingMode !== "444") return false;
     if (params.storageCondition && params.storageCondition !== "ideal") return false;
+
+    // Grain is GPU-faithful only up to a moderate amplitude — heavier grain diverges past
+    // the gate (GPU double-f32 limit), so route those to CPU.
+    if ((Number(params.advancedFilmGrain) || 0) > GRAIN_GPU_MAX) return false;
 
     // Every numeric param not in the supported set must be neutral — this routes grain,
     // quantization, and all multi-pass / inter-frame effects to CPU.
