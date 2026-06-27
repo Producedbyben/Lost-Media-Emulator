@@ -3,6 +3,11 @@
 // canvas context (the same render-to-2D-ctx contract the WebGL2 renderer uses, so the
 // hybrid can swap it in transparently).
 //
+// Three render passes (matching crt-display.wgsl): optics → T_optics, a separable
+// Gaussian (blurH → T_h, vertical blur folded into the composite), then the bloom
+// composite + grade + vignette + flicker to the canvas. A real separable blur is needed
+// because the CPU bloom is a true canvas blur() — anything cheaper diverges badly.
+//
 // `create()` resolves to null whenever WebGPU is unavailable or the pipeline fails to
 // build, so callers fall back to WebGL2/CPU without a broken frame. Export is never
 // routed here — this accelerates PREVIEW only.
@@ -12,19 +17,29 @@ import { CRT_DISPLAY_UNIFORMS, buildUniforms } from "./param-map";
 // Uniform buffer rounded up to a 16-byte multiple (WGSL uniform layout); the packed
 // Float32Array (21 f32 = 84 bytes) writes into the first part.
 const UNIFORM_BYTES = Math.ceil((CRT_DISPLAY_UNIFORMS.length * 4) / 16) * 16;
+const INTERMEDIATE_FORMAT: GPUTextureFormat = "rgba8unorm";
 
 export class WebGPUBackend {
   private device: GPUDevice;
   private context: GPUCanvasContext;
   private canvas: HTMLCanvasElement;
-  private pipeline: GPURenderPipeline;
-  private bindGroupLayout: GPUBindGroupLayout;
-  private uniformBuf: GPUBuffer;
-  private sampler: GPUSampler;
   private format: GPUTextureFormat;
+  private sampler: GPUSampler;
+  private uniformBuf: GPUBuffer;
 
-  private texture: GPUTexture | null = null;
-  private bindGroup: GPUBindGroup | null = null;
+  private opticsPipeline: GPURenderPipeline;
+  private blurHPipeline: GPURenderPipeline;
+  private compositePipeline: GPURenderPipeline;
+  private layout3: GPUBindGroupLayout;
+  private layoutComposite: GPUBindGroupLayout;
+
+  // Per-size resources.
+  private srcTex: GPUTexture | null = null;
+  private tOptics: GPUTexture | null = null;
+  private tH: GPUTexture | null = null;
+  private bgOptics: GPUBindGroup | null = null;
+  private bgBlurH: GPUBindGroup | null = null;
+  private bgComposite: GPUBindGroup | null = null;
   private texW = 0;
   private texH = 0;
 
@@ -34,32 +49,37 @@ export class WebGPUBackend {
 
   private dead = false;
 
-  private constructor(
-    device: GPUDevice,
-    context: GPUCanvasContext,
-    canvas: HTMLCanvasElement,
-    pipeline: GPURenderPipeline,
-    bindGroupLayout: GPUBindGroupLayout,
-    uniformBuf: GPUBuffer,
-    sampler: GPUSampler,
-    format: GPUTextureFormat,
-  ) {
-    this.device = device;
-    this.context = context;
-    this.canvas = canvas;
-    this.pipeline = pipeline;
-    this.bindGroupLayout = bindGroupLayout;
-    this.uniformBuf = uniformBuf;
-    this.sampler = sampler;
-    this.format = format;
+  private constructor(parts: {
+    device: GPUDevice;
+    context: GPUCanvasContext;
+    canvas: HTMLCanvasElement;
+    format: GPUTextureFormat;
+    sampler: GPUSampler;
+    uniformBuf: GPUBuffer;
+    opticsPipeline: GPURenderPipeline;
+    blurHPipeline: GPURenderPipeline;
+    compositePipeline: GPURenderPipeline;
+    layout3: GPUBindGroupLayout;
+    layoutComposite: GPUBindGroupLayout;
+  }) {
+    this.device = parts.device;
+    this.context = parts.context;
+    this.canvas = parts.canvas;
+    this.format = parts.format;
+    this.sampler = parts.sampler;
+    this.uniformBuf = parts.uniformBuf;
+    this.opticsPipeline = parts.opticsPipeline;
+    this.blurHPipeline = parts.blurHPipeline;
+    this.compositePipeline = parts.compositePipeline;
+    this.layout3 = parts.layout3;
+    this.layoutComposite = parts.layoutComposite;
 
     this.fitCanvas = document.createElement("canvas");
     const fc = this.fitCanvas.getContext("2d", { alpha: false });
     if (!fc) throw new Error("2d context unavailable");
     this.fitCtx = fc;
 
-    // Device loss → mark dead so the hybrid falls back on the next frame.
-    device.lost.then(() => { this.dead = true; }).catch(() => { this.dead = true; });
+    this.device.lost.then(() => { this.dead = true; }).catch(() => { this.dead = true; });
   }
 
   static async create(): Promise<WebGPUBackend | null> {
@@ -79,24 +99,45 @@ export class WebGPUBackend {
       context.configure({ device, format, alphaMode: "opaque" });
 
       const module = device.createShaderModule({ code: shaderCode });
-      // Surface WGSL compile errors as a failed create() (→ fallback).
       const info = await module.getCompilationInfo();
       if (info.messages.some((m) => m.type === "error")) return null;
 
-      const bindGroupLayout = device.createBindGroupLayout({
+      const tex = (): GPUBindGroupLayoutEntry["texture"] => ({ sampleType: "float", viewDimension: "2d" });
+      const layout3 = device.createBindGroupLayout({
         entries: [
           { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
           { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
-          { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float", viewDimension: "2d" } },
+          { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: tex() },
         ],
       });
-      const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
+      const layoutComposite = device.createBindGroupLayout({
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+          { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: tex() },
+          { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: tex() },
+        ],
+      });
+      const pl3 = device.createPipelineLayout({ bindGroupLayouts: [layout3] });
+      const plComposite = device.createPipelineLayout({ bindGroupLayouts: [layoutComposite] });
 
       device.pushErrorScope("validation");
-      const pipeline = await device.createRenderPipelineAsync({
-        layout: pipelineLayout,
+      const opticsPipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
         vertex: { module, entryPoint: "vs_main" },
-        fragment: { module, entryPoint: "fs_main", targets: [{ format }] },
+        fragment: { module, entryPoint: "fs_optics", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const blurHPipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_blurH", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const compositePipeline = await device.createRenderPipelineAsync({
+        layout: plComposite,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_composite", targets: [{ format }] },
         primitive: { topology: "triangle-list" },
       });
       const err = await device.popErrorScope();
@@ -113,30 +154,60 @@ export class WebGPUBackend {
         addressModeV: "clamp-to-edge",
       });
 
-      return new WebGPUBackend(device, context, canvas, pipeline, bindGroupLayout, uniformBuf, sampler, format);
+      return new WebGPUBackend({
+        device, context, canvas, format, sampler, uniformBuf,
+        opticsPipeline, blurHPipeline, compositePipeline, layout3, layoutComposite,
+      });
     } catch {
       return null;
     }
   }
 
   private ensureSize(width: number, height: number): void {
-    if (this.texW === width && this.texH === height && this.texture) return;
+    if (this.texW === width && this.texH === height && this.srcTex) return;
     if (this.canvas.width !== width) this.canvas.width = width;
     if (this.canvas.height !== height) this.canvas.height = height;
     this.context.configure({ device: this.device, format: this.format, alphaMode: "opaque" });
 
-    this.texture?.destroy();
-    this.texture = this.device.createTexture({
+    this.srcTex?.destroy();
+    this.tOptics?.destroy();
+    this.tH?.destroy();
+    this.srcTex = this.device.createTexture({
       size: [width, height],
       format: "rgba8unorm",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     });
-    this.bindGroup = this.device.createBindGroup({
-      layout: this.bindGroupLayout,
+    const intermediate = () => this.device.createTexture({
+      size: [width, height],
+      format: INTERMEDIATE_FORMAT,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    this.tOptics = intermediate();
+    this.tH = intermediate();
+
+    this.bgOptics = this.device.createBindGroup({
+      layout: this.layout3,
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuf } },
         { binding: 1, resource: this.sampler },
-        { binding: 2, resource: this.texture.createView() },
+        { binding: 2, resource: this.srcTex.createView() },
+      ],
+    });
+    this.bgBlurH = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tOptics.createView() },
+      ],
+    });
+    this.bgComposite = this.device.createBindGroup({
+      layout: this.layoutComposite,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tH.createView() },
+        { binding: 3, resource: this.tOptics.createView() },
       ],
     });
     this.texW = width;
@@ -185,7 +256,7 @@ export class WebGPUBackend {
     const fitted = this.coverFit(source, width, height);
     this.device.queue.copyExternalImageToTexture(
       { source: fitted, flipY: false },
-      { texture: this.texture! },
+      { texture: this.srcTex! },
       [width, height],
     );
 
@@ -193,23 +264,54 @@ export class WebGPUBackend {
     this.device.queue.writeBuffer(this.uniformBuf, 0, u.buffer, u.byteOffset, u.byteLength);
 
     const encoder = this.device.createCommandEncoder();
+    const opticsPass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tOptics!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    opticsPass.setPipeline(this.opticsPipeline);
+    opticsPass.setBindGroup(0, this.bgOptics!);
+    opticsPass.draw(3);
+    opticsPass.end();
+
+    const blurPass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tH!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    blurPass.setPipeline(this.blurHPipeline);
+    blurPass.setBindGroup(0, this.bgBlurH!);
+    blurPass.draw(3);
+    blurPass.end();
+
     const view = this.context.getCurrentTexture().createView();
-    const pass = encoder.beginRenderPass({
+    const composite = encoder.beginRenderPass({
       colorAttachments: [{ view, loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
     });
-    pass.setPipeline(this.pipeline);
-    pass.setBindGroup(0, this.bindGroup!);
-    pass.draw(3);
-    pass.end();
+    composite.setPipeline(this.compositePipeline);
+    composite.setBindGroup(0, this.bgComposite!);
+    composite.draw(3);
+    composite.end();
+
     this.device.queue.submit([encoder.finish()]);
 
     outCtx.clearRect(0, 0, width, height);
     outCtx.drawImage(this.canvas, 0, 0, width, height);
   }
 
+  // The internal canvas the GPU renders into (the fidelity sweep reads it back after
+  // flush(); the live path uses the drawImage inside render()).
+  get outputCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
+  // Await GPU completion — used by the offline fidelity sweep so a pixel readback can't
+  // race the submitted frame. Not needed on the RAF preview path.
+  async flush(): Promise<void> {
+    await this.device.queue.onSubmittedWorkDone();
+  }
+
   dispose(): void {
     this.dead = true;
-    this.texture?.destroy();
+    this.srcTex?.destroy();
+    this.tOptics?.destroy();
+    this.tH?.destroy();
     this.uniformBuf?.destroy();
     this.device?.destroy();
   }

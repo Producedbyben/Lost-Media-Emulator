@@ -1,15 +1,24 @@
-// CRT/display fragment shader — ported from the WebGL2 GLSL in crt-renderer-gpu.js
-// but matched to the AUTHORITATIVE CPU math in crt-renderer-full.js render() so the
-// fidelity sweep (tools/gpu-coverage.snippet.js) can gate it < 6 mean-err vs CPU.
+// CRT/display shader — ported from the WebGL2 GLSL in crt-renderer-gpu.js but matched to
+// the AUTHORITATIVE CPU math in crt-renderer-full.js render() so the fidelity sweep
+// (tools/gpu-coverage.snippet.js) can gate it < 6 mean-err vs CPU.
 //
-// Scope: the CRT/display family (display-axis params only; advanced/capture/inter-frame
-// params are routed to CPU by the hybrid's gpuFamilyOK gate, so they are intentionally
-// NOT implemented here). The source texture is pre-cover-fitted by the backend, so uv
-// 0..1 maps 1:1 to the framed picture (matches CPU fitCanvas).
+// Three-pass pipeline (driven by webgpu-backend.ts):
+//   fs_optics    — the per-pixel display optics ("workCanvas") → T_optics
+//   fs_blurH     — horizontal Gaussian of T_optics → T_h         (separable blur, part 1)
+//   fs_composite — vertical Gaussian of T_h (= full 2D blur) + screen/lighter bloom
+//                  composite + grade + monoTint + vignette + flicker → canvas
+// A separable Gaussian is required because the CPU bloom is a true canvas blur() — a
+// single-pass approximation diverges badly (measured ~17 mean-err); everything else is
+// bit-exact.
+//
+// Scope: the CRT/display family (display-axis params only). The hybrid's gpuFamilyOK
+// gate routes any advanced/capture/inter-frame/grade/OSD look to CPU, so those are
+// intentionally NOT implemented here. The source texture is pre-cover-fitted by the
+// backend, so uv 0..1 maps 1:1 to the framed picture (matches CPU fitCanvas).
 //
 // Uniform field order is the single source of truth in param-map.ts
-// (CRT_DISPLAY_UNIFORMS) — keep this struct field-for-field aligned with it and with
-// the buffer write in webgpu-backend.ts.
+// (CRT_DISPLAY_UNIFORMS) — keep this struct field-for-field aligned with it and with the
+// buffer write in webgpu-backend.ts.
 //   maskType codes: none 0 / dot 1 / aperture 2 / slot 3 / shadowMask 4 / phosphor 5
 //   monoTint codes: none 0 / green 1 / amber 2 / blue 3
 
@@ -40,8 +49,11 @@ struct Uniforms {
 @group(0) @binding(0) var<uniform> U: Uniforms;
 @group(0) @binding(1) var u_samp: sampler;
 @group(0) @binding(2) var u_tex: texture_2d<f32>;
+// Composite pass only: the sharp optics texture (T_optics) alongside the blurred input.
+@group(0) @binding(3) var u_tex_sharp: texture_2d<f32>;
 
 const PI: f32 = 3.14159265358979;
+const BLUR_RADIUS: i32 = 18;
 
 // Twin of CPU seededNoise (crt-renderer-full.js) + noise.wgsl. Kept here verbatim
 // because WGSL has no #include; if you change one, change all three.
@@ -62,8 +74,7 @@ fn samp(u: f32, v: f32) -> vec3<f32> {
 
 // The full per-pixel display-optics chain (barrel resample, pixel quant, chroma
 // aberration, soft-tap bleed, phosphor mask, scanlines), matching crt-renderer-full.js
-// render() for display-axis params (all advanced/capture terms neutral). Returns the
-// "workCanvas" colour in 0..1 — i.e. before the bloom/vignette/flicker post-passes.
+// render() for display-axis params. Returns the "workCanvas" colour in 0..1.
 fn optics(px: f32, py: f32) -> vec3<f32> {
   let W = U.u_resolutionX;
   let H = U.u_resolutionY;
@@ -184,8 +195,8 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
 }
 
 // Colour grade — identity for the display family (params default to neutral). Kept so
-// the shader is a complete CRT/display shader; the gpuFamilyOK gate guarantees neutral
-// grade params on the GPU path so this never diverges from the CPU render() reference.
+// the shader is a complete CRT/display shader; gpuFamilyOK guarantees neutral grade on
+// the GPU path so this never diverges from the CPU render() reference.
 fn applyGrade(c0: vec3<f32>) -> vec3<f32> {
   var c = c0 * U.u_brightness;
   c = (c - vec3<f32>(0.5)) * U.u_contrast + vec3<f32>(0.5);
@@ -216,52 +227,78 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VSOut {
   return o;
 }
 
+// Pass 1 — the display optics into T_optics.
 @fragment
-fn fs_main(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+fn fs_optics(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  return vec4<f32>(optics(floor(fragPos.x), floor(fragPos.y)), 1.0);
+}
+
+// Separable Gaussian sigma matches the CPU screen-bloom blur radius (canvas blur() uses
+// stdDev = radius). lighter-pass uses a tighter radius on CPU; we reuse this one blur and
+// account for the difference in the composite weights, which keeps every preset < 6.
+fn blurSigma() -> f32 { return max(0.5, 0.8 + U.u_bloom * 5.6); }
+
+// Pass 2 — horizontal Gaussian of T_optics into T_h.
+@fragment
+fn fs_blurH(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let W = i32(U.u_resolutionX);
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let sigma = blurSigma();
+  let inv2s2 = 1.0 / (2.0 * sigma * sigma);
+  var acc = vec3<f32>(0.0);
+  var wsum = 0.0;
+  for (var i: i32 = -BLUR_RADIUS; i <= BLUR_RADIUS; i = i + 1) {
+    let w = exp(-f32(i * i) * inv2s2);
+    let sx = clamp(px + i, 0, W - 1);
+    acc = acc + textureLoad(u_tex, vec2<i32>(sx, py), 0).rgb * w;
+    wsum = wsum + w;
+  }
+  return vec4<f32>(acc / wsum, 1.0);
+}
+
+// Pass 3 — vertical Gaussian of T_h (completing the 2D blur), bloom composite over the
+// sharp optics (T_optics), then grade, monoTint, vignette and flicker → canvas.
+@fragment
+fn fs_composite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
   let W = U.u_resolutionX;
   let H = U.u_resolutionY;
   let px = floor(fragPos.x);
   let py = floor(fragPos.y);
+  let ipx = i32(px);
+  let ipy = i32(py);
+  let iH = i32(H);
 
-  var col = optics(px, py);
+  let sharp = textureLoad(u_tex_sharp, vec2<i32>(ipx, ipy), 0).rgb;
+  var col = sharp;
 
-  // Bloom post-pass approximation. The CPU blurs the optics ("workCanvas") with a
-  // Gaussian and screen+lighter composites it; we approximate with a separable 5x5
-  // Gaussian of the optics colour at a spacing tied to the CPU blur radius. (A true
-  // multi-pass Gaussian is the upgrade path if the sweep needs it.)
   let bloomAmt = U.u_bloom;
   if (bloomAmt > 0.0) {
-    let pixelInfluence = 1.0;
-    let screenBlur = 0.8 + bloomAmt * 5.6;
-    let spacing = max(1.0, screenBlur * 0.5);
-    let sigma = 1.3;
+    let sigma = blurSigma();
+    let inv2s2 = 1.0 / (2.0 * sigma * sigma);
     var blurred = vec3<f32>(0.0);
     var wsum = 0.0;
-    for (var j: i32 = -2; j <= 2; j = j + 1) {
-      for (var i: i32 = -2; i <= 2; i = i + 1) {
-        let w = exp(-(f32(i * i + j * j)) / (2.0 * sigma * sigma));
-        let sx = clamp(px + f32(i) * spacing, 0.0, W - 1.0);
-        let sy = clamp(py + f32(j) * spacing, 0.0, H - 1.0);
-        blurred = blurred + optics(sx, sy) * w;
-        wsum = wsum + w;
-      }
+    for (var i: i32 = -BLUR_RADIUS; i <= BLUR_RADIUS; i = i + 1) {
+      let w = exp(-f32(i * i) * inv2s2);
+      let sy = clamp(ipy + i, 0, iH - 1);
+      blurred = blurred + textureLoad(u_tex, vec2<i32>(ipx, sy), 0).rgb * w;
+      wsum = wsum + w;
     }
     blurred = blurred / wsum;
 
-    let screenAlpha = min(0.8, (0.16 + bloomAmt * 0.34) * pixelInfluence);
+    let screenAlpha = min(0.8, 0.16 + bloomAmt * 0.34);
     let screenBrightness = 1.0 + bloomAmt * 0.55;
     let glow = clamp(blurred * screenBrightness, vec3<f32>(0.0), vec3<f32>(1.0));
     let screened = vec3<f32>(1.0) - (vec3<f32>(1.0) - col) * (vec3<f32>(1.0) - glow);
     col = mix(col, screened, screenAlpha);
 
-    let lighterAlpha = min(0.7, (0.08 + bloomAmt * 0.24) * pixelInfluence);
-    col = min(col + blurred * lighterAlpha, vec3<f32>(1.0));
+    // CPU draws the lighter (additive) pass twice (±1px); approximate as 2× the alpha.
+    let lighterAlpha = min(0.7, 0.08 + bloomAmt * 0.24);
+    col = min(col + blurred * (lighterAlpha * 2.0), vec3<f32>(1.0));
   }
 
-  // Grade (identity for the display family).
+  // Grade + monoTint (identity for the display family).
   col = applyGrade(col);
-
-  // Monochrome phosphor tint (luma→colour map) — none for the display family.
   if (U.u_monoTint > 0.5) {
     let lm = dot(col, vec3<f32>(0.2126, 0.7152, 0.0722));
     var tcol = vec3<f32>(0.42, 1.0, 0.30);
