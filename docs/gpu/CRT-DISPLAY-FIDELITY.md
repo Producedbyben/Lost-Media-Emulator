@@ -68,3 +68,21 @@ which brought every bloom level to ≤ 1.2 and the whole routed family under the
   governs export. WebGPU accelerates **preview** only.
 - GPU is perceptual-parity (f32) to CPU (f64), not bit-identical — expected and well
   within the < 6 bar (Epic 1's GPU tolerance was 12).
+
+## Live verification (Task 6, via the production `CRTRendererHybrid`)
+
+Driven through the real `CRTRendererHybrid` (the same class the app uses), at 1280×720:
+
+| Check | Result |
+|---|---|
+| Consumer CRT TV routes to GPU | `activeMode === "webgpu"` ✓ |
+| Per-frame time (WebGPU) | **3.2 ms** |
+| Per-frame time (CPU, same look) | **544.8 ms** — the ~525 ms preview freeze, gone (~170×) |
+| Fallback: WebGPU nulled | falls to WebGL2 (`activeMode "gpu"`) ✓ |
+| Fallback: both GPU backends nulled | falls to CPU (`activeMode "cpu"`) ✓ |
+| Non-CRT look (datamosh inter-frame) | routes to CPU ✓ |
+| Export path (`preferGPU` off) | routes to CPU, **bit-identical** across renders (maxDiff 0) ✓ |
+
+Export forces `preferGPU = false` before rendering frames (see `useCRTRenderer.ts`), and
+the WebGPU branch is gated on `preferGPU`, so export is unaffected and the Epic 1
+determinism sweep (455/455) stands.
