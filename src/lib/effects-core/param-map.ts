@@ -12,7 +12,9 @@ export const CRT_DISPLAY_UNIFORMS = [
 // vertical RGB triad) is distinct from `dot` (the radial dot grid), so it gets its own
 // code rather than collapsing onto dot the way the legacy WebGL2 shader did.
 const MASK_CODES: Record<string, number> = { none: 0, dot: 1, aperture: 2, slot: 3, shadowMask: 4, phosphor: 5 };
-const MONO_CODES: Record<string, number> = { none: 0, green: 1, amber: 2, blue: 3 };
+const MONO_CODES: Record<string, number> = { none: 0, green: 1, amber: 2, blue: 3, white: 4 };
+const SCANLINE_PROFILE_CODES: Record<string, number> = { off: 0, soft: 1, hard: 2, triadAware: 3 };
+const SUBPIXEL_CODES: Record<string, number> = { none: 0, RGB: 1, BGR: 2, PenTile: 3 };
 const n = (v: unknown, d = 0) => (typeof v === "number" && Number.isFinite(v) ? v : d);
 
 export function buildUniforms(
@@ -42,5 +44,98 @@ export function buildUniforms(
   set("u_fps", ctx.fps);
   set("u_resolutionX", ctx.width);
   set("u_resolutionY", ctx.height);
+  return out;
+}
+
+// Epic 6.2: the full per-pixel signal core. The 6.1 display fields stay a stable prefix
+// (same order/indices) so the display path is unaffected; the capture/grade per-pixel
+// fields are appended. This is the single source of truth shared with crt-display.wgsl's
+// Uniforms struct and webgpu-backend.ts's buffer write.
+export const CRT_SIGNAL_UNIFORMS = [
+  ...CRT_DISPLAY_UNIFORMS,
+  // grade stage
+  "u_irFalseColor", "u_printFadeC", "u_printFadeM", "u_printFadeY", "u_blackCrush",
+  "u_highlightRolloff", "u_haze", "u_polaroidCrossover", "u_monoTintStrength", "u_irHotspot",
+  // per-pixel geometric / chroma / level
+  "u_pixelSize", "u_lineJitter", "u_timeWobble", "u_headSwitching", "u_chromaDelay",
+  "u_crossColor", "u_dropouts", "u_interlacing", "u_tapeCrease", "u_gateWeave",
+  "u_gateJitterX", "u_gateJitterY", "u_gateRotation", "u_shutterJudder", "u_rfInterference",
+  // per-pixel colour artifacts
+  "u_filmGrain", "u_grainSize", "u_grainChromaticity", "u_filmDust", "u_filmScratches",
+  "u_filmHalation", "u_noise", "u_quantization",
+  // pointwise post-passes
+  "u_scanlineProfile", "u_subpixelLayout", "u_cctvMono",
+] as const;
+
+// Pure params → uniform Float32Array for the signal shader (display + grade + per-pixel
+// artifacts). The shader clamps ranges; this only packs and maps categoricals to codes.
+export function buildSignalUniforms(
+  params: Record<string, number | string>,
+  ctx: { width: number; height: number; seconds: number; frameIndex: number; fps: number },
+): Float32Array {
+  const out = new Float32Array(CRT_SIGNAL_UNIFORMS.length);
+  const set = (k: string, v: number) => { out[CRT_SIGNAL_UNIFORMS.indexOf(k)] = v; };
+  // Display block (mirror buildUniforms).
+  set("u_scan", n(params.scanlineStrength));
+  set("u_mask", n(params.phosphorMask));
+  set("u_maskType", MASK_CODES[String(params.maskType ?? "none")] ?? 0);
+  set("u_maskScale", n(params.maskScale, 1));
+  set("u_barrel", n(params.barrelDistortion));
+  set("u_vignette", n(params.vignette));
+  set("u_bloom", n(params.bloom));
+  set("u_ca", n(params.chromaticAberration));
+  set("u_flicker", n(params.flicker));
+  set("u_brightness", n(params.imageBrightness, 1));
+  set("u_contrast", n(params.imageContrast, 1));
+  set("u_saturation", n(params.advancedSaturation, 1));
+  set("u_gamma", n(params.imageGamma, 1));
+  set("u_temperature", n(params.imageTemperature));
+  set("u_tint", n(params.imageTint));
+  set("u_monoTint", MONO_CODES[String(params.monochromeTint ?? "none")] ?? 0);
+  set("u_time", ctx.seconds);
+  set("u_frameIndex", ctx.frameIndex);
+  set("u_fps", ctx.fps);
+  set("u_resolutionX", ctx.width);
+  set("u_resolutionY", ctx.height);
+  // Grade stage.
+  set("u_irFalseColor", n(params.infraredFalseColor));
+  set("u_printFadeC", n(params.printFadeCyan));
+  set("u_printFadeM", n(params.printFadeMagenta));
+  set("u_printFadeY", n(params.printFadeYellow));
+  set("u_blackCrush", n(params.blackLevelCrush));
+  set("u_highlightRolloff", n(params.highlightRollOff));
+  set("u_haze", n(params.haze));
+  set("u_polaroidCrossover", n(params.polaroidCrossover));
+  set("u_monoTintStrength", n(params.monochromeTintStrength, 1));
+  set("u_irHotspot", n(params.irHotspot));
+  // Per-pixel geometric / chroma / level.
+  set("u_pixelSize", n(params.pixelSize, 1));
+  set("u_lineJitter", n(params.advancedLineJitter));
+  set("u_timeWobble", n(params.advancedTimebaseWobble));
+  set("u_headSwitching", n(params.advancedHeadSwitching));
+  set("u_chromaDelay", n(params.advancedChromaDelay));
+  set("u_crossColor", n(params.advancedCrossColor));
+  set("u_dropouts", n(params.advancedDropouts));
+  set("u_interlacing", n(params.advancedInterlacing));
+  set("u_tapeCrease", n(params.advancedTapeCrease));
+  set("u_gateWeave", n(params.advancedFilmGateWeave));
+  set("u_gateJitterX", n(params.gateJitterX));
+  set("u_gateJitterY", n(params.gateJitterY));
+  set("u_gateRotation", n(params.gateRotation));
+  set("u_shutterJudder", n(params.shutterJudder));
+  set("u_rfInterference", n(params.advancedRfInterference));
+  // Per-pixel colour artifacts.
+  set("u_filmGrain", n(params.advancedFilmGrain));
+  set("u_grainSize", n(params.grainSize));
+  set("u_grainChromaticity", n(params.grainChromaticity));
+  set("u_filmDust", n(params.advancedFilmDust));
+  set("u_filmScratches", n(params.advancedFilmScratches));
+  set("u_filmHalation", n(params.advancedFilmHalation));
+  set("u_noise", n(params.noise));
+  set("u_quantization", n(params.advancedQuantization));
+  // Pointwise post-passes.
+  set("u_scanlineProfile", SCANLINE_PROFILE_CODES[String(params.scanlineProfile ?? "off")] ?? 0);
+  set("u_subpixelLayout", SUBPIXEL_CODES[String(params.subpixelLayoutOverride ?? "none")] ?? 0);
+  set("u_cctvMono", n(params.advancedCctvMonochrome));
   return out;
 }
