@@ -11,10 +11,10 @@
 // single-pass approximation diverges badly (measured ~17 mean-err); everything else is
 // bit-exact.
 //
-// Scope: the CRT/display family (display-axis params only). The hybrid's gpuFamilyOK
-// gate routes any advanced/capture/inter-frame/grade/OSD look to CPU, so those are
-// intentionally NOT implemented here. The source texture is pre-cover-fitted by the
-// backend, so uv 0..1 maps 1:1 to the framed picture (matches CPU fitCanvas).
+// Scope: the per-pixel signal core (Epic 6.2 — display + grade + per-pixel artifacts).
+// The hybrid's gpuSignalOK gate routes any multi-pass / inter-frame / grain / quantization
+// look to CPU, so those are intentionally NOT implemented here. The source texture is
+// pre-cover-fitted by the backend, so uv 0..1 maps 1:1 to the framed picture (CPU fitCanvas).
 //
 // Uniform field order is the single source of truth in param-map.ts
 // (CRT_SIGNAL_UNIFORMS — the 6.1 CRT_DISPLAY_UNIFORMS prefix + the Epic 6.2 grade /

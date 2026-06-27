@@ -19,6 +19,30 @@ const WEBGPU_DISPLAY_SUPPORTED = new Set([
   "phosphorPersistence", "beamSpotSizeX", "beamSpotSizeY", "pixelResponseTime",
 ]);
 
+// Epic 6.2: the per-pixel signal core the WGSL shader reproduces at fidelity (verified by
+// the full-catalogue sweep, docs/gpu/SIGNAL-FIDELITY.md). Allowed at any value. NOT here
+// (→ CPU): advancedFilmGrain/grainSize/grainChromaticity (grain's large-magnitude per-pixel
+// noise arg can't reach bit-parity on GPU float behaviour), advancedQuantization (multi-pass
+// DCT/resolution on CPU), and every multi-pass / inter-frame effect (handled by the catch-all).
+const WEBGPU_SIGNAL_SUPPORTED = new Set([
+  ...WEBGPU_DISPLAY_SUPPORTED,
+  "pixelSize",
+  // grade stage
+  "imageBrightness", "imageContrast", "advancedSaturation", "imageGamma",
+  "imageTemperature", "imageTint", "infraredFalseColor", "printFadeCyan",
+  "printFadeMagenta", "printFadeYellow", "blackLevelCrush", "highlightRollOff",
+  "haze", "polaroidCrossover", "monochromeTintStrength", "irHotspot",
+  // per-pixel geometric / chroma / level
+  "advancedLineJitter", "advancedTimebaseWobble", "advancedHeadSwitching",
+  "advancedChromaDelay", "advancedCrossColor", "advancedDropouts", "advancedInterlacing",
+  "advancedTapeCrease", "advancedFilmGateWeave", "gateJitterX", "gateJitterY",
+  "gateRotation", "shutterJudder", "advancedRfInterference",
+  // per-pixel colour
+  "advancedFilmDust", "advancedFilmScratches", "advancedFilmHalation", "noise",
+  // pointwise post-passes
+  "advancedCctvMonochrome",
+]);
+
 // Params the GPU fragment shader reproduces faithfully.
 const GPU_SUPPORTED = new Set([
   "scanlineStrength", "phosphorMask", "barrelDistortion", "bloom", "flicker",
@@ -32,7 +56,7 @@ const GPU_SUPPORTED = new Set([
 // Params whose neutral (no-op) value is 1 rather than 0.
 const NEUTRAL_ONE = new Set([
   "pixelSize", "imageBrightness", "imageContrast", "advancedSaturation",
-  "imageGamma", "maskScale",
+  "imageGamma", "maskScale", "monochromeTintStrength",
 ]);
 
 export class CRTRendererHybrid {
@@ -73,17 +97,19 @@ export class CRTRendererHybrid {
     }
   }
 
-  // Can the WGSL CRT/display shader reproduce this exact look at fidelity? True only for
-  // the CRT/display family this increment flips: a supported mask geometry, an active
-  // display effect, and NO capture / advanced / inter-frame / grade / OSD / categorical
-  // params (those keep running on the authoritative CPU path). grade is required neutral
-  // because the GPU shader's grade is identity and CPU render() grades the source first.
-  gpuFamilyOK(params, renderOptions) {
+  // Can the WGSL signal shader reproduce this look at fidelity (mean-err < 6 vs the CPU
+  // render)? True for the per-pixel signal core (Epic 6.2): a supported mask geometry, an
+  // active supported effect, and NO multi-pass (format composite/resolution, quantization
+  // DCT, ghosting/persistence, generation loss, media aging, macroblocking, nitrate/
+  // technicolor, neon wide-bleed), inter-frame (datamosh, pixel-sort) or grain param (the
+  // catch-all enforces this). gpuSignalOK must allow EXACTLY the < 6 set — the sweep
+  // verifies allowedFailing === [] (docs/gpu/SIGNAL-FIDELITY.md).
+  gpuSignalOK(params, renderOptions) {
     if (!params) return false;
     const maskType = typeof params.maskType === "string" ? params.maskType : "phosphor";
     if (!WEBGPU_SUPPORTED_MASKS.has(maskType)) return false;
 
-    // OSD / source view / format authenticity → CPU (parity with _gpuCanHandle).
+    // OSD / source view / format authenticity → CPU.
     if ((Number(params.advancedTimestampOSD) || 0) > 0.01) return false;
     if (renderOptions && renderOptions.sourceView) return false;
     if (renderOptions && renderOptions.formatProfile) {
@@ -93,33 +119,37 @@ export class CRTRendererHybrid {
       if (needsRes || needsComposite) return false;
     }
 
-    // Categorical / string effects the shader doesn't implement.
-    if (params.scanlineProfile && params.scanlineProfile !== "off") return false;
-    if (params.subpixelLayoutOverride && params.subpixelLayoutOverride !== "none") return false;
+    // String effects: scanlineProfile / subpixelLayoutOverride / monochromeTint are now
+    // implemented; chroma subsampling + non-ideal storage are multi-pass → CPU.
     if (params.chromaSubsamplingMode && params.chromaSubsamplingMode !== "444") return false;
-    if (params.monochromeTint && params.monochromeTint !== "none") return false;
     if (params.storageCondition && params.storageCondition !== "ideal") return false;
 
-    // Every other numeric param must be at its neutral value (no capture/advanced/
-    // inter-frame/grade fx the shader can't carry — including pixelSize, fixed at 1).
+    // Every numeric param not in the supported set must be neutral — this routes grain,
+    // quantization, and all multi-pass / inter-frame effects to CPU.
     for (const key in params) {
       if (key === "maskType") continue;
       const val = params[key];
       if (typeof val !== "number" || !Number.isFinite(val)) continue;
-      if (WEBGPU_DISPLAY_SUPPORTED.has(key)) continue;
+      if (WEBGPU_SIGNAL_SUPPORTED.has(key)) continue;
       const neutral = NEUTRAL_ONE.has(key) ? 1 : 0;
       if (Math.abs(val - neutral) > 1e-4) return false;
     }
 
-    // Require at least one active display effect — otherwise there's nothing to
+    // Require at least one active supported effect — otherwise there's nothing to
     // accelerate (the CPU per-pixel loop is skipped anyway), so let it fall through.
+    for (const key of WEBGPU_SIGNAL_SUPPORTED) {
+      if (!(key in params)) continue;
+      const val = Number(params[key]);
+      if (!Number.isFinite(val)) continue;
+      const neutral = NEUTRAL_ONE.has(key) ? 1 : 0;
+      if (Math.abs(val - neutral) > 1e-4) return true;
+    }
+    // A non-"none" categorical look also counts as active.
     return (
-      (Number(params.scanlineStrength) || 0) > 1e-4 ||
-      (Number(params.phosphorMask) || 0) > 1e-4 ||
-      (Number(params.bloom) || 0) > 1e-4 ||
-      Math.abs(Number(params.barrelDistortion) || 0) > 1e-4 ||
-      (Number(params.chromaticAberration) || 0) > 1e-4 ||
-      (Number(params.flicker) || 0) > 1e-4
+      (typeof params.maskType === "string" && params.maskType !== "none" && (Number(params.phosphorMask) || 0) > 1e-4) ||
+      (params.scanlineProfile && params.scanlineProfile !== "off") ||
+      (params.subpixelLayoutOverride && params.subpixelLayoutOverride !== "none") ||
+      (params.monochromeTint && params.monochromeTint !== "none")
     );
   }
 
@@ -229,7 +259,7 @@ export class CRTRendererHybrid {
   render(outCtx, width, height, seconds, params, frameIndex, fps, renderOptions) {
     // Preferred path: WebGPU for fidelity-passed CRT/display looks. Any failure
     // (device lost, unsupported) falls through to WebGL2 → CPU below.
-    if (this.preferGPU && this.webgpuRenderer && this._lastImg && this.gpuFamilyOK(params, renderOptions)) {
+    if (this.preferGPU && this.webgpuRenderer && this._lastImg && this.gpuSignalOK(params, renderOptions)) {
       try {
         this.webgpuRenderer.render(outCtx, this._lastImg, width, height, seconds, params, frameIndex, fps);
         this.activeMode = "webgpu";
