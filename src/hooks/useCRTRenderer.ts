@@ -133,6 +133,8 @@ export interface CRTParams {
   storageCondition: string;
   copyGenerationCount: number;
   restorationPassLevel: number;
+  // Display retention — phosphor / plasma burn-in ghost layer.
+  burnInGhost: number;
   [key: string]: number | string;
 }
 
@@ -253,6 +255,7 @@ export const DEFAULT_PARAMS: CRTParams = {
   storageCondition: "ideal",
   copyGenerationCount: 0,
   restorationPassLevel: 0,
+  burnInGhost: 0,
 };
 
 /** Fit dimensions to maxPixels constraint, preserving aspect ratio */

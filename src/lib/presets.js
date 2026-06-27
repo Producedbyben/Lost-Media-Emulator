@@ -2457,6 +2457,9 @@ export const PRESETS = {
     pixelResponseTime: 0.56,
     scanlineProfile: "soft", subpixelLayoutOverride: "RGB",
     advancedGhosting: 0.44,
+    // The defining burn-in trait: a faint persistent retained ghost image
+    // independent of the live picture (visible as a pale shadow in dark areas).
+    burnInGhost: 0.74,
     mediaAgeYears: 12,
     maskType: "plasmaCell",
   },

@@ -471,6 +471,9 @@ export class CRTRendererFull {
     const focusBreathing = Math.max(0, Math.min(1, Number(params.advancedFocusBreathing) || 0));
     const tapeCrease = Math.max(0, Math.min(1, Number(params.advancedTapeCrease) || 0));
     const cctvMonochrome = Math.max(0, Math.min(1, Number(params.advancedCctvMonochrome) || 0));
+    // Phosphor / plasma burn-in: faint retained ghost of the persistent image,
+    // independent of the live picture. Driven by burnInGhost (0–1).
+    const burnInGhost = Math.max(0, Math.min(1, Number(params.burnInGhost) || 0));
     const brightness = Math.max(0.5, Math.min(1.5, Number(params.imageBrightness) || 1));
     const contrast = Math.max(0.5, Math.min(1.6, Number(params.imageContrast) || 1));
     const saturationRaw = Number(params.advancedSaturation);
@@ -842,6 +845,31 @@ export class CRTRendererFull {
       const ghostShift = Math.round((0.5 + ghosting * 3.5) * Math.sin(temporalSeconds * 1.7));
       outCtx.save(); outCtx.globalAlpha = Math.min(0.42, ghosting * 0.45);
       outCtx.drawImage(this.workCanvas, ghostShift, 0); outCtx.restore();
+    }
+
+    // ---- Phosphor/plasma burn-in: a faint PERSISTENT retained ghost drawn from
+    // the source image (workCanvas), independent of the live picture. Real burn-in
+    // is a permanent luminance impression baked into the phosphor/pixel layer so it
+    // underlies the live signal at all times. We simulate this with a desaturated,
+    // slightly brightened copy of the source at very low opacity using screen blend
+    // (so it is only visible in darker areas of the live image, matching real
+    // burn-in which is most visible during dark scenes). No Math.random() used. ----
+    if (burnInGhost > 0.001) {
+      // First pass: faint screen-blend ghost — visible in dark image regions only.
+      outCtx.save();
+      outCtx.globalCompositeOperation = "screen";
+      outCtx.globalAlpha = Math.min(0.22, burnInGhost * 0.24);
+      outCtx.filter = `grayscale(${(0.6 + burnInGhost * 0.3).toFixed(3)}) brightness(${(0.9 + burnInGhost * 0.15).toFixed(3)}) contrast(0.85)`;
+      outCtx.drawImage(this.workCanvas, 0, 0);
+      outCtx.restore();
+      // Second pass: multiply-blend darkening tint that embeds the ghost into
+      // bright areas too, at even lower opacity — "baked into" the full image range.
+      outCtx.save();
+      outCtx.globalCompositeOperation = "multiply";
+      outCtx.globalAlpha = Math.min(0.11, burnInGhost * 0.12);
+      outCtx.filter = `grayscale(1) brightness(${(1.8 + burnInGhost * 0.4).toFixed(3)})`;
+      outCtx.drawImage(this.workCanvas, 0, 0);
+      outCtx.restore();
     }
 
     if (focusBreathing > 0) {
