@@ -200,6 +200,17 @@ export class CRTRendererFull {
     this.cachedOutImageData = null;
     this.cachedOutImageWidth = 0;
     this.cachedOutImageHeight = 0;
+    // Clear datamosh / digital-decay inter-frame feedback so each render starts
+    // from a clean, deterministic state. Without this, the P-frame accumulator
+    // and last-frame index carry over between renders, making the glitch presets
+    // (datamosh, bit-rot, satellite/macroblock corruption) non-reproducible and
+    // dependent on whatever the preview rendered first — breaking export parity.
+    this._moshLastFrame = -999;
+    this._moshLastW = 0;
+    this._moshLastH = 0;
+    if (this.moshCtx && this.moshCanvas) {
+      this.moshCtx.clearRect(0, 0, this.moshCanvas.width, this.moshCanvas.height);
+    }
   }
 
   /**
