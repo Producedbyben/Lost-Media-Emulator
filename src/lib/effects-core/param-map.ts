@@ -79,7 +79,13 @@ export const CRT_SIGNAL_UNIFORMS = [
   // Epic 6.3a: high-frequency post-process effects + the stuttered temporal frame (NOT the
   // real frame — u_frameIndex stays the real one for gate offsets).
   "u_exposurePump", "u_whiteBalanceDrift", "u_ghosting", "u_focusBreathing", "u_temporalFrame",
+  // Epic 6.3b: screen-space self-composite filters + resolution-reduction effects.
+  "u_burnIn", "u_generationLoss", "u_copyGen", "u_mediaAge", "u_restoration",
+  "u_macroBlocking", "u_quantization",
 ] as const;
+
+// Storage-condition severity factor (CPU crt-renderer-full.js ~535).
+const STORAGE_SEVERITY: Record<string, number> = { ideal: 0.45, dry: 0.55, humid: 0.95, hot: 1.1, moldRisk: 1.45 };
 
 const TWO_PI = 2 * Math.PI;
 const reduceMod2Pi = (v: number) => v - TWO_PI * Math.round(v / TWO_PI);
@@ -175,5 +181,15 @@ export function buildSignalUniforms(
   const fs = Math.max(0, Math.min(1, n(params.advancedFrameStutter)));
   const hold = Math.floor(fs * fs * 6);
   set("u_temporalFrame", hold > 0 ? ctx.frameIndex - (ctx.frameIndex % (hold + 1)) : ctx.frameIndex);
+  // Epic 6.3b.
+  set("u_burnIn", n(params.burnInGhost));
+  set("u_generationLoss", n(params.advancedGenerationLoss));
+  set("u_copyGen", Math.max(0, Math.min(20, Math.round(n(params.copyGenerationCount)))));
+  set("u_restoration", n(params.restorationPassLevel));
+  set("u_macroBlocking", n(params.advancedMacroBlocking));
+  set("u_quantization", n(params.advancedQuantization));
+  // mediaAge folds the storage severity into the CPU's ageNorm = mediaAgeYears/100 * severity.
+  const severity = STORAGE_SEVERITY[String(params.storageCondition ?? "ideal")] ?? 0.45;
+  set("u_mediaAge", (Math.max(0, Math.min(100, n(params.mediaAgeYears))) / 100) * severity);
   return out;
 }

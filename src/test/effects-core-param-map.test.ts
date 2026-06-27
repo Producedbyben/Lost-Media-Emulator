@@ -79,3 +79,22 @@ describe("buildSignalUniforms — 6.3a", () => {
     expect(u[idx("u_maskType")]).toBe(13);
   });
 });
+
+describe("buildSignalUniforms — 6.3b", () => {
+  const ctx = { width: 640, height: 480, seconds: 0, frameIndex: 0, fps: 30 };
+  const idx = (k: string) => CRT_SIGNAL_UNIFORMS.indexOf(k);
+  it("packs the 6.3b uniforms", () => {
+    const u = buildSignalUniforms({ advancedGenerationLoss: 0.5, advancedQuantization: 0.4, advancedMacroBlocking: 0.3, restorationPassLevel: 0.2, burnInGhost: 0.1, copyGenerationCount: 3 }, ctx);
+    expect(u[idx("u_generationLoss")]).toBeCloseTo(0.5, 5);
+    expect(u[idx("u_quantization")]).toBeCloseTo(0.4, 5);
+    expect(u[idx("u_macroBlocking")]).toBeCloseTo(0.3, 5);
+    expect(u[idx("u_restoration")]).toBeCloseTo(0.2, 5);
+    expect(u[idx("u_burnIn")]).toBeCloseTo(0.1, 5);
+    expect(u[idx("u_copyGen")]).toBe(3);
+  });
+  it("folds storage severity into mediaAge (ageNorm)", () => {
+    // mediaAgeYears 50, storage humid (0.95) → ageNorm = 0.5*0.95 = 0.475
+    const u = buildSignalUniforms({ mediaAgeYears: 50, storageCondition: "humid" }, ctx);
+    expect(u[idx("u_mediaAge")]).toBeCloseTo(0.475, 4);
+  });
+});
