@@ -10,7 +10,7 @@
  * buffer untouched if the profile is effectively clean or anything fails.
  */
 
-type AudioProfile = {
+export type AudioProfile = {
   lowCutHz: number;
   highCutHz: number;
   hiss: number;
@@ -23,7 +23,38 @@ type AudioProfile = {
   companding: number;
   crackle: number;
   silent: number;
+  // Per-clip shaping (Epic 4 audio panel). Optional so existing format profiles
+  // (which omit them) behave as gain 1 / no fade.
+  gain?: number;
+  fadeIn?: number;
+  fadeOut?: number;
 };
+
+// Deterministic PRNG (mulberry32) so the additive noise bed is reproducible — a
+// given profile always yields the same degraded audio, which keeps preview audio
+// byte-identical to the exported audio (the whole point of Epic 4's one DSP).
+export function seededRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Apply level gain + linear fade-in/out (seconds) to one channel, in place.
+export function applyGainFade(channel: Float32Array, sampleRate: number, gain: number, fadeIn: number, fadeOut: number): void {
+  const n = channel.length;
+  const inN = Math.min(n, Math.max(0, Math.round((fadeIn || 0) * sampleRate)));
+  const outN = Math.min(n, Math.max(0, Math.round((fadeOut || 0) * sampleRate)));
+  for (let i = 0; i < n; i++) {
+    let g = gain;
+    if (inN > 0 && i < inN) g *= i / inN;
+    if (outN > 0 && i >= n - outN) g *= (n - 1 - i) / outN;
+    channel[i] *= g;
+  }
+}
 
 function isEffectivelyClean(p: AudioProfile): boolean {
   return (
@@ -37,7 +68,10 @@ function isEffectivelyClean(p: AudioProfile): boolean {
     p.telephone < 0.01 &&
     p.crackle < 0.01 &&
     p.lowCutHz <= 22 &&
-    p.highCutHz >= 18000
+    p.highCutHz >= 18000 &&
+    Math.abs((p.gain ?? 1) - 1) < 0.01 &&
+    (p.fadeIn ?? 0) < 0.01 &&
+    (p.fadeOut ?? 0) < 0.01
   );
 }
 
@@ -56,12 +90,13 @@ function buildNoiseBed(
   const humGain = p.hum * 0.03;
   for (let ch = 0; ch < channels; ch++) {
     const data = bed.getChannelData(ch);
+    const rng = seededRng(0x9e3779b9 + ch);
     let lp = 0;
     for (let i = 0; i < length; i++) {
       let s = 0;
       // Hiss — gently low-passed white noise so it sits like tape hiss.
       if (hissGain > 0) {
-        const white = Math.random() * 2 - 1;
+        const white = rng() * 2 - 1;
         lp += 0.4 * (white - lp);
         s += (0.5 * white + 0.5 * lp) * hissGain;
       }
@@ -77,8 +112,8 @@ function buildNoiseBed(
     if (p.crackle > 0.01) {
       const rate = p.crackle * 0.0008; // probability per sample
       for (let i = 0; i < length; i++) {
-        if (Math.random() < rate) {
-          const amp = (Math.random() * 2 - 1) * p.crackle * 0.5;
+        if (rng() < rate) {
+          const amp = (rng() * 2 - 1) * p.crackle * 0.5;
           data[i] += amp;
           if (i + 1 < length) data[i + 1] += amp * 0.4;
         }
@@ -205,6 +240,14 @@ export async function degradeAudioBuffer(
 
     source.start();
     const rendered = await ctx.startRendering();
+    // Per-clip level/gain + linear fades, applied to the rendered buffer so they
+    // ride through the one DSP (preview == export).
+    const gain = profile.gain ?? 1;
+    if (Math.abs(gain - 1) > 0.001 || (profile.fadeIn ?? 0) > 0.001 || (profile.fadeOut ?? 0) > 0.001) {
+      for (let ch = 0; ch < rendered.numberOfChannels; ch++) {
+        applyGainFade(rendered.getChannelData(ch), rendered.sampleRate, gain, profile.fadeIn ?? 0, profile.fadeOut ?? 0);
+      }
+    }
     return rendered;
   } catch (err) {
     console.warn("Audio degradation failed — using original audio:", err);
