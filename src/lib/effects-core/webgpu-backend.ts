@@ -19,6 +19,13 @@ import { CRT_SIGNAL_UNIFORMS, buildSignalUniforms } from "./param-map";
 const UNIFORM_BYTES = Math.ceil((CRT_SIGNAL_UNIFORMS.length * 4) / 16) * 16;
 const INTERMEDIATE_FORMAT: GPUTextureFormat = "rgba8unorm";
 
+// Iterative dub chain (generationLoss / copyGen): each sub-draw is a ping-pong pass that reads
+// its own {shiftSigned, sat, con, sigma, alpha} from a dynamic-offset slice of one uniform
+// buffer. genLoss is ≤ 4 iterations × 2 sub-draws, copyGen ≤ 6 × 2 → 20 passes worst case.
+const DUB_PARAM_FLOATS = 5;
+const DUB_STRIDE = 256; // ≥ minUniformBufferOffsetAlignment (spec default 256).
+const MAX_DUB_PASSES = 20;
+
 export class WebGPUBackend {
   private device: GPUDevice;
   private context: GPUCanvasContext;
@@ -32,10 +39,15 @@ export class WebGPUBackend {
   private ghostPipeline: GPURenderPipeline;
   private burnInPipeline: GPURenderPipeline;
   private focusPipeline: GPURenderPipeline;
+  private dubPipeline: GPURenderPipeline;
+  private mediaAgePipeline: GPURenderPipeline;
+  private restorePipeline: GPURenderPipeline;
   private blurHPipeline: GPURenderPipeline;
   private compositePipeline: GPURenderPipeline;
   private layout3: GPUBindGroupLayout;
   private layoutComposite: GPUBindGroupLayout;
+  private layoutDub: GPUBindGroupLayout;
+  private dubBuf: GPUBuffer;
 
   // Per-size resources.
   private srcTex: GPUTexture | null = null;
@@ -49,6 +61,12 @@ export class WebGPUBackend {
   private bgGhost: GPUBindGroup | null = null;
   private bgBurnIn: GPUBindGroup | null = null;
   private bgFocus: GPUBindGroup | null = null;
+  // Single-input ping-pong bind groups (read tPpA / tPpB) for the variable-length tail chain.
+  private bgReadA: GPUBindGroup | null = null;
+  private bgReadB: GPUBindGroup | null = null;
+  // Dub passes additionally bind the dynamic-offset DubParams buffer (binding 4).
+  private bgDubReadA: GPUBindGroup | null = null;
+  private bgDubReadB: GPUBindGroup | null = null;
   private bgBlurH: GPUBindGroup | null = null;
   private bgComposite: GPUBindGroup | null = null;
   private texW = 0;
@@ -72,10 +90,15 @@ export class WebGPUBackend {
     ghostPipeline: GPURenderPipeline;
     burnInPipeline: GPURenderPipeline;
     focusPipeline: GPURenderPipeline;
+    dubPipeline: GPURenderPipeline;
+    mediaAgePipeline: GPURenderPipeline;
+    restorePipeline: GPURenderPipeline;
     blurHPipeline: GPURenderPipeline;
     compositePipeline: GPURenderPipeline;
     layout3: GPUBindGroupLayout;
     layoutComposite: GPUBindGroupLayout;
+    layoutDub: GPUBindGroupLayout;
+    dubBuf: GPUBuffer;
   }) {
     this.device = parts.device;
     this.context = parts.context;
@@ -88,10 +111,15 @@ export class WebGPUBackend {
     this.ghostPipeline = parts.ghostPipeline;
     this.burnInPipeline = parts.burnInPipeline;
     this.focusPipeline = parts.focusPipeline;
+    this.dubPipeline = parts.dubPipeline;
+    this.mediaAgePipeline = parts.mediaAgePipeline;
+    this.restorePipeline = parts.restorePipeline;
     this.blurHPipeline = parts.blurHPipeline;
     this.compositePipeline = parts.compositePipeline;
     this.layout3 = parts.layout3;
     this.layoutComposite = parts.layoutComposite;
+    this.layoutDub = parts.layoutDub;
+    this.dubBuf = parts.dubBuf;
 
     this.fitCanvas = document.createElement("canvas");
     const fc = this.fitCanvas.getContext("2d", { alpha: false });
@@ -137,8 +165,18 @@ export class WebGPUBackend {
           { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: tex() },
         ],
       });
+      // Dub passes read one input texture (binding 2) + a dynamic-offset DubParams slice (binding 4).
+      const layoutDub = device.createBindGroupLayout({
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: "filtering" } },
+          { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: tex() },
+          { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform", hasDynamicOffset: true } },
+        ],
+      });
       const pl3 = device.createPipelineLayout({ bindGroupLayouts: [layout3] });
       const plComposite = device.createPipelineLayout({ bindGroupLayouts: [layoutComposite] });
+      const plDub = device.createPipelineLayout({ bindGroupLayouts: [layoutDub] });
 
       device.pushErrorScope("validation");
       const gradePipeline = await device.createRenderPipelineAsync({
@@ -171,6 +209,24 @@ export class WebGPUBackend {
         fragment: { module, entryPoint: "fs_focus", targets: [{ format: INTERMEDIATE_FORMAT }] },
         primitive: { topology: "triangle-list" },
       });
+      const dubPipeline = await device.createRenderPipelineAsync({
+        layout: plDub,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_dub", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const mediaAgePipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_mediaAge", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const restorePipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_restore", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
       const blurHPipeline = await device.createRenderPipelineAsync({
         layout: pl3,
         vertex: { module, entryPoint: "vs_main" },
@@ -190,6 +246,10 @@ export class WebGPUBackend {
         size: UNIFORM_BYTES,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
+      const dubBuf = device.createBuffer({
+        size: MAX_DUB_PASSES * DUB_STRIDE,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
       const sampler = device.createSampler({
         magFilter: "linear",
         minFilter: "linear",
@@ -198,9 +258,10 @@ export class WebGPUBackend {
       });
 
       return new WebGPUBackend({
-        device, context, canvas, format, sampler, uniformBuf,
-        gradePipeline, opticsPipeline, ghostPipeline, burnInPipeline, focusPipeline, blurHPipeline,
-        compositePipeline, layout3, layoutComposite,
+        device, context, canvas, format, sampler, uniformBuf, dubBuf,
+        gradePipeline, opticsPipeline, ghostPipeline, burnInPipeline, focusPipeline,
+        dubPipeline, mediaAgePipeline, restorePipeline, blurHPipeline,
+        compositePipeline, layout3, layoutComposite, layoutDub,
       });
     } catch {
       return null;
@@ -281,6 +342,43 @@ export class WebGPUBackend {
         { binding: 2, resource: this.tPpB.createView() },
       ],
     });
+    // Variable-length tail chain (dub iterations → mediaAge → restoration). Single-input
+    // ping-pong: bgRead{A,B} read tPp{A,B}; the dub variants also bind the dynamic DubParams.
+    this.bgReadA = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tPpA.createView() },
+      ],
+    });
+    this.bgReadB = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tPpB.createView() },
+      ],
+    });
+    const dubEntry = { binding: 4, resource: { buffer: this.dubBuf, offset: 0, size: DUB_PARAM_FLOATS * 4 } };
+    this.bgDubReadA = this.device.createBindGroup({
+      layout: this.layoutDub,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tPpA.createView() },
+        dubEntry,
+      ],
+    });
+    this.bgDubReadB = this.device.createBindGroup({
+      layout: this.layoutDub,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tPpB.createView() },
+        dubEntry,
+      ],
+    });
     // Bloom GLOW comes from T_optics (the CPU blurs the pre-chain workCanvas), while the
     // composite BASE is T_filtered (= tPpB, the post-process chain output). So blurH blurs
     // T_optics; the composite samples T_h (blurred T_optics) over tPpB.
@@ -331,6 +429,38 @@ export class WebGPUBackend {
     return this.fitCanvas;
   }
 
+  // Per-sub-draw dub schedule, matching the CPU loops exactly (crt-renderer-full.js ~927-957).
+  // Each entry is [shiftSigned, saturate, contrast, blurSigma, alpha]; generationLoss rounds its
+  // shift to an integer, copyGen keeps it fractional (sub-pixel). Each iteration emits a +shift
+  // and a −shift sub-draw (so the count is always even). Capped at MAX_DUB_PASSES.
+  private buildDubSchedule(genLoss: number, copyGen: number): number[][] {
+    const out: number[][] = [];
+    if (genLoss > 0) {
+      const dubPasses = Math.max(1, Math.floor(1 + genLoss * 3));
+      const alpha = Math.min(0.34, 0.11 + genLoss * 0.2);
+      for (let i = 0; i < dubPasses; i++) {
+        const shift = Math.round((i + 1) * (0.5 + genLoss * 1.8));
+        const sat = Math.max(0.25, 1 - genLoss * (0.26 + i * 0.07));
+        const con = Math.max(0.65, 1 - genLoss * (0.12 + i * 0.04));
+        const sigma = genLoss * (0.9 + i * 0.45);
+        out.push([shift, sat, con, sigma, alpha], [-shift, sat, con, sigma, alpha]);
+      }
+    }
+    if (copyGen > 0) {
+      const passes = Math.min(6, copyGen);
+      const alpha = Math.min(0.32, 0.08 + copyGen * 0.02);
+      for (let i = 0; i < passes; i++) {
+        const g = (i + 1) / Math.max(passes, copyGen);
+        const shift = 0.6 + g * 1.6 + copyGen * 0.06;
+        const sat = Math.max(0.2, 1 - copyGen * 0.05 - i * 0.015);
+        const con = Math.max(0.6, 1 - copyGen * 0.018 - i * 0.01);
+        const sigma = copyGen * 0.12 + i * 0.18;
+        out.push([shift, sat, con, sigma, alpha], [-shift, sat, con, sigma, alpha]);
+      }
+    }
+    return out.slice(0, MAX_DUB_PASSES);
+  }
+
   render(
     outCtx: CanvasRenderingContext2D,
     source: CanvasImageSource,
@@ -353,6 +483,19 @@ export class WebGPUBackend {
 
     const u = buildSignalUniforms(params, { width, height, seconds, frameIndex, fps });
     this.device.queue.writeBuffer(this.uniformBuf, 0, u.buffer, u.byteOffset, u.byteLength);
+
+    // Iterative dub schedule (generationLoss / copyGen) — one entry per ping-pong sub-draw,
+    // uploaded into the strided DubParams buffer the dub passes index by dynamic offset.
+    const dub = this.buildDubSchedule(
+      Math.max(0, Math.min(1, Number(params.advancedGenerationLoss) || 0)),
+      Math.max(0, Math.min(20, Math.round(Number(params.copyGenerationCount) || 0))),
+    );
+    if (dub.length > 0) {
+      const floatsPerSlot = DUB_STRIDE / 4;
+      const strided = new Float32Array(dub.length * floatsPerSlot);
+      for (let k = 0; k < dub.length; k++) strided.set(dub[k], k * floatsPerSlot);
+      this.device.queue.writeBuffer(this.dubBuf, 0, strided.buffer, strided.byteOffset, dub.length * DUB_STRIDE);
+    }
 
     const encoder = this.device.createCommandEncoder();
     const gradePass = encoder.beginRenderPass({
@@ -396,6 +539,32 @@ export class WebGPUBackend {
     focusPass.setBindGroup(0, this.bgFocus!);
     focusPass.draw(3);
     focusPass.end();
+
+    // Variable-length tail chain (cur starts at tPpA after focus): the iterative dub sub-draws,
+    // then the always-run (passthrough when off) mediaAge + restoration passes. Each reads the
+    // running texture and writes the other ping-pong texture; the pass count is always even so
+    // the final result lands back on tPpA (= the bloom composite's sharp base).
+    let cur = this.tPpA!;
+    const runTail = (pipeline: GPURenderPipeline, dubOffset: number | null) => {
+      const onA = cur === this.tPpA;
+      const out = onA ? this.tPpB! : this.tPpA!;
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{ view: out.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+      });
+      pass.setPipeline(pipeline);
+      if (dubOffset !== null) {
+        pass.setBindGroup(0, onA ? this.bgDubReadA! : this.bgDubReadB!, [dubOffset]);
+      } else {
+        pass.setBindGroup(0, onA ? this.bgReadA! : this.bgReadB!);
+      }
+      pass.draw(3);
+      pass.end();
+      cur = out;
+    };
+    for (let k = 0; k < dub.length; k++) runTail(this.dubPipeline, k * DUB_STRIDE);
+    runTail(this.mediaAgePipeline, null);
+    runTail(this.restorePipeline, null);
+    // cur === tPpA here (even tail pass count); bgComposite binds tPpA as the sharp base.
 
     const blurPass = encoder.beginRenderPass({
       colorAttachments: [{ view: this.tH!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
@@ -441,6 +610,7 @@ export class WebGPUBackend {
     this.tPpB?.destroy();
     this.tH?.destroy();
     this.uniformBuf?.destroy();
+    this.dubBuf?.destroy();
     this.device?.destroy();
   }
 }

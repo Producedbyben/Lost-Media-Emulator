@@ -115,6 +115,19 @@ struct Uniforms {
 // Composite pass only: the sharp optics texture (T_optics) alongside the blurred input.
 @group(0) @binding(3) var u_tex_sharp: texture_2d<f32>;
 
+// Per-pass scratch params for the iterative dub chain (generationLoss / copyGen). Bound at
+// binding 4 with a DYNAMIC offset so each ping-pong pass reads its own iteration's
+// {signed shift, saturate, contrast, blur sigma, alpha} without rewriting the main uniforms.
+// Only fs_dub references this binding; every other pass leaves it unbound.
+struct DubParams {
+  d_shiftSigned: f32,   // dir * |shift| (the drawImage x offset; can be fractional for copyGen)
+  d_sat: f32,
+  d_con: f32,
+  d_sigma: f32,         // canvas blur() radius (≈ Gaussian stdDev)
+  d_alpha: f32,         // globalAlpha of the self-draw
+};
+@group(0) @binding(4) var<uniform> D: DubParams;
+
 const PI: f32 = 3.14159265358979;
 const BLUR_RADIUS: i32 = 18;
 const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
@@ -689,6 +702,50 @@ fn csFilter(c: vec3<f32>, gs: f32, br: f32, con: f32) -> vec3<f32> {
 }
 fn screenBlend(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> { return vec3<f32>(1.0) - (vec3<f32>(1.0) - a) * (vec3<f32>(1.0) - b); }
 
+// CSS filter: saturate → contrast (the genLoss/copyGen dub filter order, blur applied
+// separately first). saturate(s) = mix(luma, c, s); contrast(con) = (c-0.5)*con+0.5.
+fn satCon(c: vec3<f32>, sat: f32, con: f32) -> vec3<f32> {
+  let lum = dot(c, LUMA);
+  var x = mix(vec3<f32>(lum), c, sat);
+  x = (x - vec3<f32>(0.5)) * con + vec3<f32>(0.5);
+  return clamp(x, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+// CSS filter: saturate → contrast → brightness (mediaAge fade + restoration revive order).
+fn satConBri(c: vec3<f32>, sat: f32, con: f32, bri: f32) -> vec3<f32> {
+  let lum = dot(c, LUMA);
+  var x = mix(vec3<f32>(lum), c, sat);
+  x = (x - vec3<f32>(0.5)) * con + vec3<f32>(0.5);
+  x = x * bri;
+  return clamp(x, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+// Canvas "overlay" blend, per channel (base = dst, blend = src).
+fn overlayBlend(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
+  let lo = 2.0 * base * blend;
+  let hi = vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - base) * (vec3<f32>(1.0) - blend);
+  return select(hi, lo, base < vec3<f32>(0.5));
+}
+// 2D Gaussian of the running texture (u_tex) around an integer centre. Matches the canvas
+// blur() the way fs_focus does (stdDev = radius). Radius capped so the inner loop stays cheap.
+fn dubBlur(cx: i32, cy: i32, sigma: f32) -> vec3<f32> {
+  let s = max(sigma, 1.0e-3);
+  let inv2s2 = 1.0 / (2.0 * s * s);
+  let R = i32(min(8.0, ceil(s * 3.0)));
+  let W = i32(U.u_resolutionX);
+  let H = i32(U.u_resolutionY);
+  var acc = vec3<f32>(0.0);
+  var wsum = 0.0;
+  for (var j: i32 = -R; j <= R; j = j + 1) {
+    for (var i: i32 = -R; i <= R; i = i + 1) {
+      let w = exp(-f32(i * i + j * j) * inv2s2);
+      let sx = clamp(cx + i, 0, W - 1);
+      let sy = clamp(cy + j, 0, H - 1);
+      acc = acc + textureLoad(u_tex, vec2<i32>(sx, sy), 0).rgb * w;
+      wsum = wsum + w;
+    }
+  }
+  return acc / wsum;
+}
+
 // Post-process chain pass — phosphor/plasma burn-in. A desaturated/brightened copy of the
 // optics (u_tex_sharp = T_optics) screen- then multiply-blended over the running result.
 // Pointwise. Passthrough when off. CPU crt-renderer-full.js ~901-917.
@@ -732,6 +789,131 @@ fn fs_focus(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
     }
   }
   return vec4<f32>(mix(center, acc / wsum, min(0.55, U.u_focusBreathing * 0.6)), 1.0);
+}
+
+// Post-process chain pass — one iterative dub sub-draw (generationLoss / copyGen). The CPU
+// loops drawImage(canvas, ±shift) with filter `blur() saturate() contrast()` at low alpha,
+// each draw reading the PREVIOUS full frame — so each sub-draw is its own ping-pong pass and
+// the per-pass {shift, sat, con, sigma, alpha} arrive via the dynamic DubParams binding. The
+// canvas is blurred first (integer grid), then drawn at the (possibly fractional, for copyGen)
+// offset, so we bilinearly sample the blurred+filtered field at x - shiftSigned.
+// CPU crt-renderer-full.js ~927-957.
+@fragment
+fn fs_dub(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let center = textureLoad(u_tex, vec2<i32>(px, py), 0).rgb;
+  let W = U.u_resolutionX;
+  // Source x of the drawn copy: drawImage(canvas, shiftSigned) puts canvas(x-shiftSigned) at x.
+  let fx = f32(px) - D.d_shiftSigned;
+  // Only the region the drawn (same-size) canvas covers gets the self-draw; elsewhere the
+  // transparent source leaves the destination untouched.
+  if (fx < 0.0 || fx > W - 1.0) { return vec4<f32>(center, 1.0); }
+  let x0 = floor(fx);
+  let fr = fx - x0;
+  let i0 = i32(x0);
+  let b0 = satCon(dubBlur(i0, py, D.d_sigma), D.d_sat, D.d_con);
+  let b1 = satCon(dubBlur(min(i0 + 1, i32(W) - 1), py, D.d_sigma), D.d_sat, D.d_con);
+  let filtered = mix(b0, b1, fr);
+  return vec4<f32>(mix(center, filtered, D.d_alpha), 1.0);
+}
+
+// Post-process chain pass — media aging (years in storage). u_mediaAge = ageNorm (= the CPU's
+// mediaAgeYears/100 * storageSeverity). Yellow multiply tint → desaturate/contrast/brightness
+// self-blend → lifted-black screen fill → deterministic mulberry speckle dust. All POINTWISE
+// (the CPU self-draw has no blur), so it ports exactly bar the tiny AA on the dust dots.
+// Passthrough when off. CPU crt-renderer-full.js ~959-1007.
+@fragment
+fn fs_mediaAge(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  var col = textureLoad(u_tex, vec2<i32>(px, py), 0).rgb;
+  let ageNorm = U.u_mediaAge;
+  if (ageNorm <= 0.001) { return vec4<f32>(col, 1.0); }
+
+  // 1. Yellowing / dye fade: warm multiply tint.
+  let tint = vec3<f32>(245.0, 235.0 - ageNorm * 40.0, max(150.0, 205.0 - ageNorm * 70.0)) / 255.0;
+  col = mix(col, col * tint, min(0.4, ageNorm * 0.42));
+
+  // 2. Desaturation + faded contrast (lifted blacks) self-filter blend.
+  let fadeSat = max(0.35, 1.0 - ageNorm * 0.55);
+  let fadeCon = max(0.7, 1.0 - ageNorm * 0.28);
+  let lift = min(0.18, ageNorm * 0.2);
+  col = mix(col, satConBri(col, fadeSat, fadeCon, 1.0 + lift * 0.5), min(0.85, 0.5 + ageNorm * 0.5));
+
+  // 3. Lifted-black screen fill.
+  if (lift > 0.001) {
+    col = mix(col, screenBlend(col, vec3<f32>(70.0, 64.0, 52.0) / 255.0), lift);
+  }
+
+  // 4. Age dust / speckle — the CPU's deterministic mulberry-LCG sequence (4 draws/speckle:
+  // x, y, r, dark). Reproduced exactly; the hard disk approximates the canvas arc's sub-pixel
+  // AA (negligible on mean-err: a few px of ~140 dots over the whole frame).
+  let speckles = i32(floor(ageNorm * 140.0));
+  if (speckles > 0) {
+    let W = U.u_resolutionX;
+    let H = U.u_resolutionY;
+    let pcx = f32(px) + 0.5;
+    let pcy = f32(py) + 0.5;
+    var seed: u32 = u32(U.u_frameIndex) * 2654435761u;
+    for (var s: i32 = 0; s < speckles; s = s + 1) {
+      seed = seed * 1664525u + 1013904223u; let rx = f32(seed) / 4294967296.0;
+      seed = seed * 1664525u + 1013904223u; let ry = f32(seed) / 4294967296.0;
+      seed = seed * 1664525u + 1013904223u; let rr = f32(seed) / 4294967296.0;
+      seed = seed * 1664525u + 1013904223u; let rd = f32(seed) / 4294967296.0;
+      let cx = rx * W;
+      let cy = ry * H;
+      let r = 0.4 + rr * (1.0 + ageNorm * 1.6);
+      let dark = rd > 0.5;
+      if ((pcx - cx) * (pcx - cx) + (pcy - cy) * (pcy - cy) <= r * r) {
+        let a = select(0.5, 0.35, dark) * min(1.0, 0.4 + ageNorm);
+        let scol = select(vec3<f32>(238.0, 232.0, 214.0), vec3<f32>(20.0, 16.0, 12.0), dark) / 255.0;
+        col = mix(col, scol, a);
+      }
+    }
+  }
+  return vec4<f32>(col, 1.0);
+}
+
+// Post-process chain pass — restoration (partial recovery of an aged/dubbed image). Pass 1 is
+// a pointwise saturate/contrast/brightness revive; pass 2 overlays invert(blur(pass1)) for a
+// local sharpen. Since pass 1 is pointwise, blur(pass1) = blur with the pass-1 filter applied
+// to each tap, so both fold into one pass. Passthrough when off. CPU crt-renderer-full.js ~1010-1025.
+@fragment
+fn fs_restore(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let inp = textureLoad(u_tex, vec2<i32>(px, py), 0).rgb;
+  let rp = U.u_restoration;
+  if (rp <= 0.001) { return vec4<f32>(inp, 1.0); }
+  let sat1 = 1.0 + rp * 0.4;
+  let con1 = 1.0 + rp * 0.22;
+  let bri1 = 1.0 - rp * 0.04;
+  let a1 = min(0.6, rp * 0.6);
+  // pass1At(c) = the pointwise revive blend.
+  let center1 = mix(inp, satConBri(inp, sat1, con1, bri1), a1);
+
+  // pass 2: overlay( center1, invert(blur(pass1)) ) at alpha. blur(0.6 + rp*0.8).
+  let sigma = 0.6 + rp * 0.8;
+  let inv2s2 = 1.0 / (2.0 * sigma * sigma);
+  let R = i32(min(8.0, ceil(sigma * 3.0)));
+  let W = i32(U.u_resolutionX);
+  let H = i32(U.u_resolutionY);
+  var acc = vec3<f32>(0.0);
+  var wsum = 0.0;
+  for (var j: i32 = -R; j <= R; j = j + 1) {
+    for (var i: i32 = -R; i <= R; i = i + 1) {
+      let w = exp(-f32(i * i + j * j) * inv2s2);
+      let sx = clamp(px + i, 0, W - 1);
+      let sy = clamp(py + j, 0, H - 1);
+      let tap = textureLoad(u_tex, vec2<i32>(sx, sy), 0).rgb;
+      acc = acc + mix(tap, satConBri(tap, sat1, con1, bri1), a1) * w;
+      wsum = wsum + w;
+    }
+  }
+  let inv = vec3<f32>(1.0) - acc / wsum;
+  let a2 = min(0.4, rp * 0.4);
+  return vec4<f32>(mix(center1, overlayBlend(center1, inv), a2), 1.0);
 }
 
 // Separable Gaussian sigma matches the CPU screen-bloom blur radius (canvas blur() uses
