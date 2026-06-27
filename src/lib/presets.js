@@ -662,10 +662,11 @@ export const PRESETS = {
     advancedFilmGateWeave: 0.2,
     advancedFilmHalation: 0.5,
     // Technicolor's signature: dense subtractive saturation + deep blacks, with
-    // slight RGB-record registration fringing (chromaticAberration above).
+    // 3-strip RGB mis-registration fringing (now via technicolorFringe renderer param).
     advancedSaturation: 1.4,
     imageContrast: 1.14,
     imageBrightness: 0.96,
+    technicolorFringe: 0.54,
     maskType: "none",
   },
   "Super 8 Home Reel 1970s": {
@@ -749,6 +750,8 @@ export const PRESETS = {
     advancedFilmScratches: 0.74,
     advancedFilmGateWeave: 0.63,
     advancedFilmHalation: 0.29,
+    // Nitrate decomposition: chemical blotches, edge fogging, mottled damage.
+    nitrateDecay: 0.64,
     maskType: "none",
   },
   "Live NTSC Kinescope 1950s": {
@@ -1229,9 +1232,11 @@ export const PRESETS = {
     advancedFilmScratches: 0.05,
     advancedFilmGateWeave: 0.11,
     advancedFilmHalation: 0.48,
-    // SX-70 integral film reads warm & creamy with a gentle green-tinged cast.
+    // SX-70 integral film: green/yellow shadow crossover + warm pinkish highlights.
     imageTemperature: 0.12,
     imageTint: -0.04,
+    // SX-70 colour crossover: greenish/yellow shadows, warm highlights (integral dye chemistry).
+    polaroidCrossover: 0.68,
     maskType: "instantDyeCloud",
   },
   "Disposable Camera 35mm Flash": {
@@ -1347,6 +1352,8 @@ export const PRESETS = {
     advancedQuantization: 0.3,
     advancedGenerationLoss: 0.14,
     advancedMacroBlocking: 0.24,
+    // IR illuminator central hotspot bloom (near-field overexposure).
+    irHotspot: 0.52,
     maskType: "irBloomSpeckle",
   },
   "Police Bodycam 2016": {
@@ -1476,6 +1483,8 @@ export const PRESETS = {
     advancedQuantization: 0.44,
     advancedGenerationLoss: 0.12,
     advancedMacroBlocking: 0.36,
+    // IR illuminator central hotspot (ring-style narrow-angle illuminator).
+    irHotspot: 0.66,
     maskType: "irBloomSpeckle",
   },
   "GoPro Hero3 Action Cam": {
@@ -1542,6 +1551,8 @@ export const PRESETS = {
     advancedQuantization: 0.51,
     advancedGenerationLoss: 0.21,
     advancedMacroBlocking: 0.43,
+    // Wide-angle flood IR: strong near-field blow-out (max hotspot strength).
+    irHotspot: 0.84,
     maskType: "irBloomSpeckle",
   },
   "ATSC Broadcast Transition (2009)": {
@@ -2380,12 +2391,12 @@ export const PRESETS = {
     grainSize: 0.44, grainChromaticity: 0.52,
     gateJitterX: 0.14, gateJitterY: 0.18, gateRotation: 0.08,
     shutterJudder: 0.22,
-    printFadeCyan: 0.62, printFadeMagenta: 0.34, printFadeYellow: 0.78,
+    // Cyan dye fades fastest → strong MAGENTA/PINK cast (pushed from 0.62 → 0.82).
+    printFadeCyan: 0.82, printFadeMagenta: 0.52, printFadeYellow: 0.78,
     cueMarks: 0.38, spliceFlash: 0.24,
     mediaAgeYears: 50, storageCondition: "hot",
-    // Faded release prints lose saturation and skew warm/pink as the cyan dye
-    // fades fastest (consumed grading; printFade* fields are not yet read).
-    advancedSaturation: 0.8, imageTemperature: 0.1, imageTint: 0.12,
+    // Stronger pink skew (imageTint now consumed by renderer).
+    advancedSaturation: 0.8, imageTemperature: 0.12, imageTint: 0.22,
     maskType: "none",
   },
   "8mm Kodachrome Home Movie": {
@@ -2400,9 +2411,10 @@ export const PRESETS = {
     printFadeCyan: 0.28, printFadeMagenta: 0.14, printFadeYellow: 0.52,
     vignette: 0.38, cornerSharpnessFalloff: 0.32,
     mediaAgeYears: 45, storageCondition: "ideal",
-    // Kodachrome = rich, dense saturation + golden warmth (consumed grading params;
-    // the printFade*/grainSize fields above are not yet read by the renderer).
-    advancedSaturation: 1.3, imageTemperature: 0.16, imageContrast: 1.07,
+    // Kodachrome = rich, dense saturation + deep blacks + golden warmth.
+    // Added blackLevelCrush for the signature punchy shadow depth.
+    advancedSaturation: 1.38, imageTemperature: 0.18, imageContrast: 1.12,
+    blackLevelCrush: 0.42,
     maskType: "filmSuper8",
   },
   "YouTube 2007 Re-encode": {
