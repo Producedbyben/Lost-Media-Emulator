@@ -74,6 +74,11 @@ module.exports = {
       ]
     : [],
   mac: {
+    // Release artifacts carry the app version with a `v` prefix, e.g.
+    // "Lost Media Emulator-v1.1.1-arm64.dmg" / "…-v1.1.1-arm64.zip". The shop
+    // DMG is re-keyed to a fixed name on upload; the zip name flows into
+    // latest-mac.yml for the updater, and the R2 `update` push globs *-arm64*.zip.
+    artifactName: "${productName}-v${version}-${arch}.${ext}",
     // dmg = the shop download; zip = what electron-updater/Squirrel.Mac applies.
     target: [
       { target: "dmg", arch: "arm64" },
