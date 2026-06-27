@@ -86,3 +86,21 @@ shader can't render. This keeps `allowedFailing` empty.
   looks (grain + OSD + exotic masks + multi-pass), most of which are deferred to 6.3 / gated.
   The per-pixel core itself is broad (grade + ~all per-pixel artifacts, verified above); the
   building-block display family flips 17/24.
+
+## Live verification (Task 8, via the production `CRTRendererHybrid`)
+
+Driven through the real `CRTRendererHybrid` at 1280×720, look = the "Consumer TV" classic
+(capture + display + grade):
+
+| Check | Result |
+|---|---|
+| Consumer TV routes to GPU | `activeMode === "webgpu"` ✓ |
+| Per-frame time (WebGPU) | **3.4 ms** |
+| Per-frame time (CPU, same look) | **467.8 ms** — the preview freeze, gone (~137×) |
+| Fallback: WebGPU nulled | falls to WebGL2 (`"gpu"`) ✓ |
+| Fallback: both GPU backends nulled | falls to CPU (`"cpu"`) ✓ |
+| Non-routed look (grain 0.6 + datamosh) | routes to CPU ✓ |
+| Export path (`preferGPU` off) | routes to CPU, **bit-identical** across renders (maxDiff 0) ✓ |
+
+148 tests green, tsc + `vite build` clean. The CPU renderer and export path are untouched,
+so the Epic 1 determinism sweep stays 455/455.
