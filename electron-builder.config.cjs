@@ -44,6 +44,10 @@ module.exports = {
     "electron/ffmpeg-locate.cjs",
     "electron/ffmpeg-args.cjs",
     "electron/ffmpeg-session.cjs",
+    "electron/ffmpeg-ipc.cjs",
+    // Headless asset-render mode (`--lme-render`): main.cjs requires this at startup,
+    // so it MUST ship in the asar or the app fails to launch.
+    "electron/lme-render-core.cjs",
     "electron/updater.cjs",
     "electron/license.html",
     "electron/license/identity.cjs",

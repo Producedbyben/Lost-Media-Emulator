@@ -12,6 +12,10 @@ const licenseApi = require("./license/api.cjs");
 const { initAutoUpdate } = require("./updater.cjs");
 
 const isDev = !app.isPackaged;
+// Headless asset-render mode: `… --lme-render --in img --look "Consumer TV" --out out.png`.
+// Skips the window/menu/license/updater/single-instance and renders via the CPU export pipeline,
+// so the installed app is self-contained for automated asset creation. See electron/lme-render-core.cjs.
+const HEADLESS = process.argv.includes("--lme-render");
 
 // Activation state, resolved before the window shows. The main process is the
 // only writer of the stored token, so the gate can't be bypassed from the page.
@@ -223,7 +227,7 @@ ipcMain.handle("license:deactivate", async () => {
 // Session + encode handlers live in ffmpeg-ipc.cjs so the headless render CLI shares them.
 // The interactive app reveals the finished file in Finder; the GUI-only save-dialog / probe-audio
 // handlers below stay here (they need mainWindow / dialog).
-registerFfmpegIpc(ipcMain, { revealOnEncode: true });
+registerFfmpegIpc(ipcMain, { revealOnEncode: !HEADLESS });
 
 // ffmpeg writes the file itself, so the renderer needs a real destination path
 // before encoding. Return the chosen absolute path (or null if cancelled).
@@ -326,8 +330,19 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// Single-instance lock so re-launching focuses the existing window.
-if (!app.requestSingleInstanceLock()) {
+if (HEADLESS) {
+  // Headless render: no window/menu/license/updater, and skip the single-instance lock so it
+  // works even while the GUI app is open. ffmpeg IPC was registered above with revealOnEncode:false.
+  const { runHeadlessRender } = require("./lme-render-core.cjs");
+  runHeadlessRender({
+    app,
+    BrowserWindow,
+    distPath: path.join(__dirname, "..", "dist", "index.html"),
+    preloadPath: path.join(__dirname, "preload.cjs"),
+    argv: process.argv,
+  });
+} else if (!app.requestSingleInstanceLock()) {
+  // Single-instance lock so re-launching focuses the existing window.
   app.quit();
 } else {
   app.on("second-instance", () => {
