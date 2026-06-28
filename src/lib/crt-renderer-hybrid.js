@@ -55,8 +55,14 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
   // Epic 6.3a: temporal/global modulations + ping-pong post-process filters.
   "advancedExposurePump", "advancedWhiteBalanceDrift", "advancedFrameStutter",
   "advancedGhosting", "advancedFocusBreathing",
-  // Epic 6.3b: screen-space self-composite filters (added as each clears the < 6 gate).
-  "burnInGhost",
+  // Epic 6.3b: screen-space self-composite filters + resolution-reduction effects. Each cleared
+  // the < 6 gate in isolation AND in combination (full-amplitude, so no caps): generationLoss
+  // <=0.99, copyGen <=1.45, restoration <=1.25, mediaAge <=0.93, macroBlocking <=1.91,
+  // quantization <=2.82 (incl. its 8x8 DCT block grid + mosquito ringing). mediaAgeYears is
+  // gated to ideal storage by the storageCondition check below (non-ideal severities also match
+  // but stay CPU pending a wider sweep). See docs/gpu/SIGNAL-FIDELITY.md.
+  "burnInGhost", "advancedGenerationLoss", "copyGenerationCount", "restorationPassLevel",
+  "mediaAgeYears", "advancedMacroBlocking", "advancedQuantization",
 ]);
 
 // Grain is only perceptually faithful up to a moderate amplitude (measured: 0.3 → ~4.6,
@@ -64,6 +70,19 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
 // currently routes with grain — they co-occur with other CPU-gated effects — so this only
 // affects manual grain on a GPU-routed look + is groundwork for Epic 6.3.)
 const GRAIN_GPU_MAX = 0.3;
+
+// pixelSize > 1 (block pixelation) + a 6.3b screen-space/resolution effect diverges on GPU:
+// floor((u·W)/pixelSize) turns the tiny f32↔f64 difference in the (warped) sample coordinate
+// into a whole-block colour error, and the 6.3b blur-feedback / downscale passes then amplify it
+// (codec presets: pixelSize 2 → 6.9-12.6, 3 → 12-14, 5 → 22 mean-err). pixelSize > 1 WITHOUT a
+// 6.3b effect was already sound through 6.2/6.3a (the pure-display Jumbotron/LED-billboard/
+// viewfinder building blocks route at 4.3-5.8, and the chain is byte-exact passthrough for them),
+// so gate ONLY the combination — sound for the 8 warped codec presets without de-routing the
+// display family. The per-pixel sampling-grid match itself is a separate (6.2-class) fix.
+const EPIC_6_3B_EFFECTS = [
+  "burnInGhost", "advancedGenerationLoss", "copyGenerationCount", "restorationPassLevel",
+  "mediaAgeYears", "advancedMacroBlocking", "advancedQuantization",
+];
 
 // Params the GPU fragment shader reproduces faithfully.
 const GPU_SUPPORTED = new Set([
@@ -149,6 +168,14 @@ export class CRTRendererHybrid {
     // Grain is GPU-faithful only up to a moderate amplitude — heavier grain diverges past
     // the gate (GPU double-f32 limit), so route those to CPU.
     if ((Number(params.advancedFilmGrain) || 0) > GRAIN_GPU_MAX) return false;
+
+    // pixelSize > 1 block pixelation combined with a 6.3b screen-space/resolution effect diverges
+    // on GPU (the block sampling-grid mismatch, amplified by the 6.3b passes) — route to CPU.
+    // pixelSize > 1 on its own (pure-display pixelation) stays faithful and is allowed.
+    if ((Number(params.pixelSize) || 1) > 1.0001 &&
+        EPIC_6_3B_EFFECTS.some((k) => Math.abs(Number(params[k]) || 0) > 1e-4)) {
+      return false;
+    }
 
     // Every numeric param not in the supported set must be neutral — this routes grain,
     // quantization, and all multi-pass / inter-frame effects to CPU.

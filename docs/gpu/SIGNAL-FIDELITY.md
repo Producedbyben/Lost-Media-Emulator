@@ -150,3 +150,73 @@ Two notable fixes found via the sweep:
 analysis): generationLoss, copyGeneration, macroBlocking, mediaAging, burnIn, restoration,
 quantization (DCT), OSD (the single biggest unlock, +29), NTSC/PAL format composite, and the
 long tail. datamosh/pixel-sort stay CPU forever.
+
+## Epic 6.3b — screen-space filter chain + quantization (2026-06-28)
+
+Ported the remaining 6.3b screen-space self-composite filters and the resolution-reduction
+effects onto the ping-pong chain. The chain grew a **variable-length tail** (cur tracked,
+always-even pass count → lands on `tPpA`): `… focus → [genLoss/copyGen dub passes] → mediaAge →
+restoration → bloom`, then a **resolution-reduction present chain** (`composite → T_final →
+mbDown → tLowMB → mbUp → tMacro → qDown → tLowQ → qUp → canvas`). Passthrough byte-exact when off.
+
+- **burnIn** (prior, `98fe78f`): pointwise screen+multiply self-blend of T_optics.
+- **generationLoss / copyGen**: each CPU dub sub-draw (`blur() saturate() contrast()` at ±shift,
+  low alpha, reading the previous full frame) is its own ping-pong pass; per-iteration params
+  arrive via a **dynamic-offset `DubParams` buffer** (binding 4). genLoss rounds the shift
+  (integer copy); copyGen keeps it fractional (bilinear). The canvas `blur()` is approximated by
+  a Gaussian (stdDev = radius), as `focusBreathing` does.
+- **restoration**: pointwise revive (pass 1) folded with `invert(blur(pass1))` overlay (pass 2)
+  in one pass, since pass 1 is pointwise.
+- **mediaAging**: yellow multiply tint + saturate/contrast/brightness fade blend + lifted-black
+  screen fill + the CPU's deterministic mulberry-LCG speckle (all pointwise; the dust dots use a
+  hard disk vs the canvas arc's sub-pixel AA — negligible on mean-err).
+- **macroBlocking / quantization**: a low-res render target (full-size texture rendered into a
+  low-res viewport = box-average ≈ the canvas "low"-quality downscale), nearest-upscale
+  composite; quantization adds per-channel level quantization + the 8×8 DCT block-edge grid +
+  mosquito ringing (> 0.18). The width-dependent block math (blockSize/sampleScale/levels) is
+  derived in `buildSignalUniforms`.
+
+### Isolated single-effect verification (mean-err vs CPU, 640×480)
+
+generationLoss 0.38–0.99 · copyGen 0.39–1.45 · restoration 0.61–1.25 · mediaAge 0.76–0.93 ·
+macroBlocking 0.22–1.91 · quantization 0.13–2.82 (incl. the DCT grid + ringing at 1.0). Stacked
+combinations (up to a 9-effect kitchen sink) ≤ 2.4. **All well under the < 6 gate.**
+
+### The pixelSize × 6.3b gate finding
+
+Adding the 6.3b effects to `gpuSignalOK` first surfaced **8 codec presets that fail** (U-matic
+12.6, Video CD 13.6, RealPlayer 240p 22.1, …). Isolation proved the divergence is **not** in the
+6.3b effects (zeroing them all left the failure unchanged) but in **`pixelSize > 1`**: setting
+pixelSize → 1 collapsed every failure (RealPlayer 24.2 → 1.1). `floor((u·W)/pixelSize)` amplifies
+the tiny f32↔f64 difference in a warped sample coordinate into a whole-block colour error; the
+6.3b blur-feedback / downscale passes then magnify it. It was latent through 6.2/6.3a because
+every high-pixelSize preset also carried generationLoss/quantization that gated it to CPU.
+
+The fix is a **surgical gate**: `pixelSize > 1` is routed to CPU **only when a 6.3b effect is
+active**. pixelSize > 1 on its own (pure-display pixelation — Game Boy LCD, Stadium Jumbotron,
+LED Billboard, CRT Viewfinder) was already sound through 6.3a and is byte-exact passthrough under
+the new chain, so it keeps routing (4.3–5.8). The per-pixel sampling-grid match itself is a
+separate 6.2-class fix (the same f32-limit class as grain).
+
+### Result: routed 34 → 40, `allowedFailing: []`
+
+Full-catalogue sweep (`DISPLAY_PRESETS` + the 91 classics, 112 total): every routed preset is
+< 6, **`allowedFailing: []`**, 0 errors. 6.3b unlocks **+6 classics** (more than the back-loaded
+~0 forecast): DSLR Video 2010 (0.91), 4K HDR Streaming 2020s (0.66), Pioneer Plasma TV (3.03),
+Blu-ray Disc Transfer (1.08), CRT Plasma Burn-In (2.01), Restored Archive Master (3.40). No
+preset de-routed; worst routed margin 5.77 (CRT Viewfinder, unchanged).
+
+**Live verification** (production `CRTRendererHybrid`, 1280×720): Restored Archive Master routes
+`activeMode "webgpu"` (17.5 ms vs 787 ms CPU); the gated RealPlayer 240p (pixelSize 5 + 6.3b)
+falls to `"cpu"`; export (`preferGPU` off) bit-identical across renders (maxDiff 0). 153 tests
+green, tsc + `vite build` clean; Epic 1 export parity stays 455/455.
+
+### Notes / still-CPU in 6.3b
+
+- **mediaAging** routes only with `storageCondition: "ideal"` (the gate's existing
+  storage-condition check). Non-ideal severities also match on GPU (humid measured 0.87) but stay
+  CPU pending a wider sweep.
+- **The genLoss/copyGen/macroBlocking/quantization-rich codec presets** stay CPU because they
+  pixelate (pixelSize > 1) — the effects themselves are faithful, the pixelation is the blocker.
+- **Next:** 6.3c OSD (timestamp + style glyph rendering — the +29 unlock), then 6.3d NTSC/PAL
+  composite. datamosh/pixel-sort stay CPU forever.
