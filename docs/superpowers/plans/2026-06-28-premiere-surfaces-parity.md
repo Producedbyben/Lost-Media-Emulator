@@ -147,7 +147,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: the extended `map()` from Task 2.
-- Produces: `presets.data.js` with `LM_PRESETS.length === 102` and 15-element `fx.film` arrays on film-active looks; `js/lme-render.js` matching the desktop `crt-renderer-full.js`.
+- Produces: `presets.data.js` with `LM_PRESETS.length === 91` and 15-element `fx.film` arrays on film-active looks; `js/lme-render.js` matching the desktop `crt-renderer-full.js`.
 
 - [ ] **Step 1: Write the verification script (the automated test for this layer)**
 
@@ -163,7 +163,7 @@ vm.runInNewContext(fs.readFileSync(PANEL + "/presets.data.js", "utf8"), ctx);
 const P = ctx.window.LM_PRESETS || [];
 const fail = (m) => { console.error("FAIL: " + m); process.exit(1); };
 
-if (P.length !== 102) fail(`LM_PRESETS.length = ${P.length}, expected 102`);
+if (P.length !== 91) fail(`LM_PRESETS.length = ${P.length}, expected 91`);
 
 // Every film-active look carries the full 15-slot Film array.
 for (const pr of P) {
@@ -172,7 +172,7 @@ for (const pr of P) {
 }
 
 // The Jun-27 looks are present.
-for (const name of ["Kodachrome 1960s", "Nitrate Newsreel 1930s", "Technicolor Print 1950s"]) {
+for (const name of ["8mm Kodachrome Home Movie", "Nitrate Newsreel 1930s", "Technicolor Print 1950s"]) {
   if (!P.some((p) => p.name === name)) fail(`missing new look: ${name}`);
 }
 
@@ -185,17 +185,17 @@ if (!bundle.includes(appSrc.trim().slice(0, 200))) fail("lme-render.js does not 
 console.log(`OK: ${P.length} presets, all film arrays = 15 slots, new looks present, renderer current`);
 ```
 
-> Note: confirm the exact look names ("Kodachrome 1960s" etc.) against `build-together-desktop/src/lib/presets.js` `PRESETS` keys before running; adjust the array in Step 1 to three real Jun-27 keys if they differ.
+> Note: confirm the exact look names ("8mm Kodachrome Home Movie" etc.) against `build-together-desktop/src/lib/presets.js` `PRESETS` keys before running; adjust the array in Step 1 to three real Jun-27 keys if they differ.
 
 - [ ] **Step 2: Run the generator**
 
 Run: `cd ~/Projects/lost-media-premiere-panel && node tools/gen-presets.cjs`
-Expected: prints `wrote 102 presets, <n> capture, <n> display, <n> recipes …`.
+Expected: prints `wrote 91 presets, <n> capture, <n> display, <n> recipes …`.
 
 - [ ] **Step 3: Run the verification script — expect PASS**
 
 Run: `cd ~/Projects/lost-media-premiere-panel && node tools/verify-presets.cjs`
-Expected: `OK: 102 presets, all film arrays = 15 slots, new looks present, renderer current`.
+Expected: `OK: 91 presets, all film arrays = 15 slots, new looks present, renderer current`.
 (If it fails on look names, fix the names in Step 1 per the note, re-run.)
 
 - [ ] **Step 4: Commit**
@@ -203,7 +203,7 @@ Expected: `OK: 102 presets, all film arrays = 15 slots, new looks present, rende
 ```bash
 cd ~/Projects/lost-media-premiere-panel
 git add tools/verify-presets.cjs presets.data.js js/lme-render.js
-git commit -m "feat: regenerate panel data + renderer from Jun-27 desktop (102 looks, 15-slot Film)
+git commit -m "feat: regenerate panel data + renderer from Jun-27 desktop (91 looks, 15-slot Film)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
@@ -235,7 +235,7 @@ Expected: `IDENTICAL`.
 ```bash
 cd ~/Projects/lost-media-premiere-cep
 git add presets.data.js js/lme-render.js
-git commit -m "feat: sync presets + renderer from panel (Jun-27 desktop, 102 looks)
+git commit -m "feat: sync presets + renderer from panel (Jun-27 desktop, 91 looks)
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```
@@ -799,7 +799,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Modify: `~/Projects/lost-media-premiere-panel/index.js`
 - Modify: `~/Projects/lost-media-premiere-cep/js/main.js`
 
-**Goal:** the look browser shows the regenerated 102-look library (incl. the new film/sensor looks) grouped by family; remove any stale "complete looks" remnants; confirm the apply path sets the new Film slots 7-14.
+**Goal:** the look browser shows the regenerated 91-look library (incl. the new film/sensor looks) grouped by family; remove any stale "complete looks" remnants; confirm the apply path sets the new Film slots 7-14.
 
 - [ ] **Step 1: Read both panels' look-browser + apply code**
 
@@ -813,17 +813,17 @@ Ensure the code that pushes `fx.film` onto the clip iterates all 15 values (not 
 
 Delete any dead "complete looks" UI/handlers found in Step 1 (memory: already removed from CEP previously — confirm none remain in either shell).
 
-- [ ] **Step 4: Verify CEP look browser renders the 102 looks**
+- [ ] **Step 4: Verify CEP look browser renders the 91 looks**
 
-Load the CEP `index.html` in the preview tool; confirm the look list populates from `LM_PRESETS` (102 entries) and the new looks appear. Screenshot.
+Load the CEP `index.html` in the preview tool; confirm the look list populates from `LM_PRESETS` (91 entries) and the new looks appear. Screenshot.
 
 - [ ] **Step 5: Commit (each repo)**
 
 ```bash
-cd ~/Projects/lost-media-premiere-panel && git add index.js && git commit -m "feat(panel): surface 102-look library incl. new film looks; 15-slot Film apply
+cd ~/Projects/lost-media-premiere-panel && git add index.js && git commit -m "feat(panel): surface 91-look library incl. new film looks; 15-slot Film apply
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
-cd ~/Projects/lost-media-premiere-cep && git add js/main.js && git commit -m "feat(cep): surface 102-look library incl. new film looks; 15-slot Film apply
+cd ~/Projects/lost-media-premiere-cep && git add js/main.js && git commit -m "feat(cep): surface 91-look library incl. new film looks; 15-slot Film apply
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 ```

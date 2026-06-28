@@ -24,7 +24,7 @@ real `src/lib/presets.js`, `format-profiles.js`, and `crt-renderer-full.js` (the
 **CPU renderer**), maps every app parameter onto the C++ effect parameter arrays
 via its `map()` function, and writes two generated files:
 
-- `presets.data.js` — `LM_PRESETS` (102 looks) + `LM_CAPTURE` + `LM_DISPLAY` + `LM_RECIPES`, each carrying raw app params + a format profile.
+- `presets.data.js` — `LM_PRESETS` (91 looks) + `LM_CAPTURE` + `LM_DISPLAY` + `LM_RECIPES`, each carrying raw app params + a format profile.
 - `js/lme-render.js` — the desktop CPU renderer bundled as a browser global so panel thumbnails render with the exact desktop fidelity math.
 
 The CEP extension currently carries **byte-identical copies** of those two
@@ -32,7 +32,7 @@ generated files.
 
 ## 2. Staleness / gap (measured 2026-06-28)
 
-- Panel generated files are dated **Jun 26**; the desktop CPU renderer + 102
+- Panel generated files are dated **Jun 26**; the desktop CPU renderer + 91
   presets were updated **Jun 27** (the LOW film/sensor batch + OSD merge). The
   panels are ~1.5 days behind.
 - The Jun-27 film/sensor batch (`46be5e8`) added app params with **no current C++
@@ -69,7 +69,7 @@ also desktop-only — Premiere owns audio and export.
    `js/lme-render.js` from the Jun-27 desktop.
 3. Propagate both generated files to the CEP extension (they are meant to be
    identical copies).
-4. **Verify:** `LM_PRESETS.length === 102`; the new looks (Kodachrome, Aerochrome,
+4. **Verify:** `LM_PRESETS.length === 91`; the new looks (Kodachrome, Aerochrome,
    Nitrate Newsreel, Polaroid, etc.) are present; the bundled renderer matches the
    desktop `crt-renderer-full.js` (size/diff); thumbnails render.
 
@@ -170,7 +170,7 @@ shared generated files identical; only their shells differ.
 ## 10. Success criteria
 
 1. Both panels' preset library, thumbnail renderer, and param mappings match the
-   Jun-27 desktop (102 presets; new looks present and rendering).
+   Jun-27 desktop (91 presets; new looks present and rendering).
 2. The Film effect exposes the 15-param layout and the four algorithm-upgraded
    effects compile clean (universal binary) with the local SDK.
 3. `map()` routes every new param; regenerated panel data is propagated to CEP.
