@@ -5,7 +5,7 @@ const { app, BrowserWindow, Menu, shell, dialog, nativeTheme, ipcMain } = requir
 const path = require("path");
 const applyGpuFlags = require("./gpu-flags.cjs");
 const { locate } = require("./ffmpeg-locate.cjs");
-const { createSession } = require("./ffmpeg-session.cjs");
+const { registerFfmpegIpc } = require("./ffmpeg-ipc.cjs");
 const { getDeviceId, getDeviceName } = require("./license/identity.cjs");
 const licenseStore = require("./license/store.cjs");
 const licenseApi = require("./license/api.cjs");
@@ -220,54 +220,10 @@ ipcMain.handle("license:deactivate", async () => {
 });
 
 // --- Native ffmpeg export pipeline -----------------------------------------
-const ffmpegSessions = new Map();
-
-ipcMain.handle("ffmpeg:available", () => !!locate().ffmpeg);
-
-ipcMain.handle("ffmpeg:begin", (_e, { width, height, fps }) => {
-  const session = createSession({ width, height, fps, tmpRoot: app.getPath("temp") });
-  ffmpegSessions.set(session.id, session);
-  return { sessionId: session.id };
-});
-
-ipcMain.handle("ffmpeg:frame", (_e, { sessionId, index, bytes }) => {
-  const session = ffmpegSessions.get(sessionId);
-  if (!session) throw new Error("unknown ffmpeg session");
-  session.writeFrame(index, bytes);
-  return { ok: true };
-});
-
-ipcMain.handle("ffmpeg:encode", async (e, { sessionId, codec, outPath, audioSourcePath, inSec, outSec }) => {
-  const session = ffmpegSessions.get(sessionId);
-  if (!session) throw new Error("unknown ffmpeg session");
-  const { ffmpeg } = locate();
-  if (!ffmpeg) throw new Error("ffmpeg binary not found");
-  try {
-    await session.encode({
-      ffmpegPath: ffmpeg, codec, outPath, audioSourcePath, inSec, outSec,
-      onProgress: (p) => e.sender.send("ffmpeg:progress", { sessionId, ...p }),
-    });
-    shell.showItemInFolder(outPath);
-    return { ok: true, outPath };
-  } finally {
-    session.cleanup();
-    ffmpegSessions.delete(sessionId);
-  }
-});
-
-ipcMain.handle("ffmpeg:cancel", (_e, { sessionId }) => {
-  const session = ffmpegSessions.get(sessionId);
-  if (session) { session.cancel(); session.cleanup(); ffmpegSessions.delete(sessionId); }
-});
-
-// Write a degraded-audio WAV to a temp file so ffmpeg can mux it (Epic 4 desktop
-// "degrade" export). Returns the absolute temp path; OS temp reclaims it later.
-ipcMain.handle("ffmpeg:write-temp-audio", (_e, { bytes }) => {
-  const fs = require("fs");
-  const file = path.join(app.getPath("temp"), `lme-degraded-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`);
-  fs.writeFileSync(file, Buffer.from(bytes));
-  return { path: file };
-});
+// Session + encode handlers live in ffmpeg-ipc.cjs so the headless render CLI shares them.
+// The interactive app reveals the finished file in Finder; the GUI-only save-dialog / probe-audio
+// handlers below stay here (they need mainWindow / dialog).
+registerFfmpegIpc(ipcMain, { revealOnEncode: true });
 
 // ffmpeg writes the file itself, so the renderer needs a real destination path
 // before encoding. Return the chosen absolute path (or null if cancelled).
