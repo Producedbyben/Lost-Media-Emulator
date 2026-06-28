@@ -531,20 +531,23 @@ fn optics(px: f32, py: f32) -> vec3<f32> {
               blueSoft * level * bMask + dither),
     vec3<f32>(0.0), vec3<f32>(1.0));
 
-  // CCTV monochrome — pointwise grayscale (+contrast/brightness) blend + green tint. CPU
-  // applies it before bloom, so it is baked into T_optics here.
-  if (U.u_cctvMono > 0.0) {
-    let fullMono = U.u_cctvMono >= 0.999;
-    let lum = dot(outc, LUMA);
-    var g = (lum - 0.5) * (1.0 + U.u_cctvMono * 0.22) + 0.5;
-    g = g * (0.95 + U.u_cctvMono * 0.08);
-    let alpha = select(min(0.9, 0.2 + U.u_cctvMono * 0.7), 1.0, fullMono);
-    outc = mix(outc, vec3<f32>(g), alpha);
-    if (!fullMono) {
-      let tint = vec3<f32>(145.0, 182.0, 148.0) / 255.0;
-      let a = U.u_cctvMono * 0.25;
-      outc = outc * (vec3<f32>(1.0) - a * (vec3<f32>(1.0) - tint));
-    }
+  // (CCTV monochrome is applied in fs_composite, on the post-process-chain result just before
+  // bloom — matching the CPU order crt-renderer-full.js ~1029, which is AFTER the chain. Baking
+  // it into T_optics here would mis-order it relative to the ghost/genLoss/etc. chain.)
+  return outc;
+}
+// CCTV monochrome — pointwise grayscale (+contrast/brightness) blend + green tint.
+fn cctvMono(c: vec3<f32>, amt: f32) -> vec3<f32> {
+  if (amt <= 0.0) { return c; }
+  let fullMono = amt >= 0.999;
+  let lum = dot(c, LUMA);
+  var g = (lum - 0.5) * (1.0 + amt * 0.22) + 0.5;
+  g = g * (0.95 + amt * 0.08);
+  let alpha = select(min(0.9, 0.2 + amt * 0.7), 1.0, fullMono);
+  var outc = mix(c, vec3<f32>(g), alpha);
+  if (!fullMono) {
+    let tint = vec3<f32>(145.0, 182.0, 148.0) / 255.0;
+    outc = outc * (vec3<f32>(1.0) - (amt * 0.25) * (vec3<f32>(1.0) - tint));
   }
   return outc;
 }
@@ -946,7 +949,13 @@ fn fs_restore(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
 // Separable Gaussian sigma matches the CPU screen-bloom blur radius (canvas blur() uses
 // stdDev = radius). lighter-pass uses a tighter radius on CPU; we reuse this one blur and
 // account for the difference in the composite weights, which keeps every preset < 6.
-fn blurSigma() -> f32 { return max(0.5, 0.8 + U.u_bloom * 5.6); }
+fn blurSigma() -> f32 {
+  // CPU scales the screen-bloom blur radius by (1 + (pixelSize-1)*0.12) (crt-renderer-full.js
+  // ~1044); without it pixelated looks (pixelSize > 1) diverge badly (the blocky T_optics is
+  // blurred at the wrong radius). pixelSize 1 → factor 1, so non-pixelated looks are unchanged.
+  let pixelSize = max(1.0, U.u_pixelSize);
+  return max(0.5, (0.8 + U.u_bloom * 5.6) * (1.0 + (pixelSize - 1.0) * 0.12));
+}
 
 // Pass 2 — horizontal Gaussian of T_optics into T_h.
 @fragment
@@ -980,7 +989,9 @@ fn fs_composite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32>
   let iH = i32(H);
 
   let sharp = textureLoad(u_tex_sharp, vec2<i32>(ipx, ipy), 0).rgb;
-  var col = sharp;
+  // CCTV monochrome is applied to the post-process-chain result (the base), before bloom —
+  // matching the CPU order (after the chain, before the bloom draws from the pre-chain workCanvas).
+  var col = cctvMono(sharp, U.u_cctvMono);
 
   let bloomAmt = U.u_bloom;
   if (bloomAmt > 0.0) {
@@ -996,14 +1007,19 @@ fn fs_composite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32>
     }
     blurred = blurred / wsum;
 
-    let screenAlpha = min(0.8, 0.16 + bloomAmt * 0.34);
+    // CPU scales both bloom alphas by pixelInfluence (crt-renderer-full.js ~1043/1048); 1 at
+    // pixelSize 1, so non-pixelated looks are unchanged.
+    let pixelSize = max(1.0, U.u_pixelSize);
+    let pixelInfluence = 1.0 + (pixelSize - 1.0) * 0.22;
+    let screenAlpha = min(0.8, (0.16 + bloomAmt * 0.34) * pixelInfluence);
     let screenBrightness = 1.0 + bloomAmt * 0.55;
     let glow = clamp(blurred * screenBrightness, vec3<f32>(0.0), vec3<f32>(1.0));
     let screened = vec3<f32>(1.0) - (vec3<f32>(1.0) - col) * (vec3<f32>(1.0) - glow);
     col = mix(col, screened, screenAlpha);
 
-    // CPU draws the lighter (additive) pass twice (±1px); approximate as 2× the alpha.
-    let lighterAlpha = min(0.7, 0.08 + bloomAmt * 0.24);
+    // CPU draws the lighter (additive) pass twice (±1px); approximate as 2× the alpha on the
+    // screen blur (a separate tight blur was tried and proved net-worse on real looks).
+    let lighterAlpha = min(0.7, (0.08 + bloomAmt * 0.24) * pixelInfluence);
     col = min(col + blurred * (lighterAlpha * 2.0), vec3<f32>(1.0));
   }
 

@@ -74,19 +74,6 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
 // affects manual grain on a GPU-routed look + is groundwork for Epic 6.3.)
 const GRAIN_GPU_MAX = 0.3;
 
-// pixelSize > 1 (block pixelation) + a 6.3b/6.3c capture/overlay effect diverges on GPU:
-// floor((u·W)/pixelSize) turns the tiny f32↔f64 difference in the (warped) sample coordinate
-// into a whole-block colour error, which the 6.3b blur-feedback / downscale passes — or the
-// high-contrast OSD text riding through the same optics — then amplify (codec presets: pixelSize
-// 2 → 6.9-12.6, 3 → 12-26 mean-err; OSD VHS presets: 2 → 10.5-11.6, 3 → 24.7). pixelSize > 1 on
-// its own was already sound through 6.2/6.3a (the pure-display Jumbotron/LED-billboard/viewfinder
-// building blocks route at 4.3-5.8, and the chain is byte-exact passthrough for them), so gate
-// ONLY the combination — sound for the warped codec/OSD presets without de-routing the display
-// family. The per-pixel sampling-grid match itself is a separate (6.2-class) fix.
-const PIXEL_SIZE_DIVERGENT_EFFECTS = [
-  "burnInGhost", "advancedGenerationLoss", "copyGenerationCount", "restorationPassLevel",
-  "mediaAgeYears", "advancedMacroBlocking", "advancedQuantization", "advancedTimestampOSD",
-];
 
 // Params the GPU fragment shader reproduces faithfully.
 const GPU_SUPPORTED = new Set([
@@ -171,15 +158,6 @@ export class CRTRendererHybrid {
     // Grain is GPU-faithful only up to a moderate amplitude — heavier grain diverges past
     // the gate (GPU double-f32 limit), so route those to CPU.
     if ((Number(params.advancedFilmGrain) || 0) > GRAIN_GPU_MAX) return false;
-
-    // pixelSize > 1 block pixelation combined with a 6.3b screen-space/resolution effect or the
-    // 6.3c OSD overlay diverges on GPU (the block sampling-grid mismatch, amplified by those
-    // passes / the high-contrast text) — route to CPU. pixelSize > 1 on its own (pure-display
-    // pixelation) stays faithful and is allowed.
-    if ((Number(params.pixelSize) || 1) > 1.0001 &&
-        PIXEL_SIZE_DIVERGENT_EFFECTS.some((k) => Math.abs(Number(params[k]) || 0) > 1e-4)) {
-      return false;
-    }
 
     // Every numeric param not in the supported set must be neutral — this routes grain,
     // quantization, and all multi-pass / inter-frame effects to CPU.

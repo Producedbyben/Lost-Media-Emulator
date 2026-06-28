@@ -255,8 +255,32 @@ so they stay CPU on the f32 sampling-grid limit — pixelSize, not OSD, is now t
 composited (timestamp band populated); the gated Bootleg Concert Cam (OSD + pixelSize 3) → `cpu`;
 export bit-identical (maxDiff 0). 153 tests / tsc / `vite build` green; parity 455/455.
 
-**The next big lever is the `pixelSize > 1` sampling-grid match** (a 6.2-class f32-limit fix, same
-family as grain): it currently co-blocks ~25 OSD presets + the 8 codec presets. Fixing it would
-unlock the bulk of the remaining catalogue; it likely needs emulated-f64 optics coordinates (the
-warped `u` straddles `floor()` block boundaries in f32). Then 6.3d = NTSC/PAL composite. datamosh/
-pixel-sort stay CPU forever.
+**The next big lever is the `pixelSize > 1` blocker** — resolved next (see 6.3c-pixelSize).
+
+## Epic 6.3c-pixelSize — the pixelSize unlock was two real bugs, not f32 (2026-06-28)
+
+The "pixelSize > 1 sampling-grid" diagnosis was **wrong**. Pure pixelSize matches perfectly
+(synthetic px2/px3/px5 = 0.01-0.03 — the block index was never the problem; an emulated-f64
+block-coordinate attempt was built and **reverted** as it changed nothing). Isolation found two
+genuine GPU correctness bugs that pixelSize merely amplified:
+
+1. **bloom ignored pixelSize.** The CPU scales the bloom blur radius by `(1+(pixelSize-1)*0.12)`
+   and both bloom alphas by `pixelInfluence` (~1043-1048); the GPU did neither, so a pixelated
+   bloomed look diverged wildly (synthetic px5 + bloom 0.3 → **29.06**). Fixed in `blurSigma()` +
+   the composite alphas. (A separate tight blur for the additive pass was tried and **reverted** —
+   net-worse on real looks.) px5+bloom → **0.79**.
+2. **cctvMonochrome was mis-ordered.** The CPU applies it AFTER the post-process chain, before
+   bloom (~1029); the GPU baked it into `T_optics` (inside `optics()`), so any preset with cctvMono
+   + a chain effect (genLoss/ghost/…) mis-ordered it. Moved cctvMono out of optics into the
+   composite base (a `cctvMono()` helper), before bloom. This was the *sole* reason "Damaged
+   Archive Recovery" (cctvMono 0.24 + the full chain) failed: **7.63 → 3.59**.
+
+With both fixed, the `pixelSize > 1` gate (`PIXEL_SIZE_DIVERGENT_EFFECTS`) was **removed entirely** —
+pixelSize is faithful. **Full sweep: routed 42 → 74 (53 classics + 21 display), `allowedFailing: []`,
+0 errors, worst margin 3.98.** That is +32 presets — the bulk of the catalogue the OSD-era forecast
+attributed to OSD was really blocked by these two bugs. Live (production hybrid): RealPlayer 240p
+(pixelSize 5, was gated) and Damaged Archive (cctvMono kitchen-sink, was failing) both route
+`webgpu`; export bit-identical (maxDiff 0). 153 tests / tsc / `vite build` green; parity 455/455.
+
+Remaining un-routed: grain > 0.3, exotic masks (irBloomSpeckle), format composite (6.3d NTSC/PAL),
+chroma subsampling, non-ideal-storage mediaAge, datamosh/pixel-sort (CPU forever). Then 6.3d.
