@@ -9,6 +9,7 @@ import PresetThumbnail from "@/components/PresetThumbnail";
 import {
   loadCustomPresets, saveCustomPreset, deleteCustomPreset,
   exportPresetsJSON, importPresetsJSON, generateShareURL,
+  exportLookJSON, parseLookJSON,
   CustomPreset,
 } from "@/lib/preset-storage";
 import { CRTParams } from "@/hooks/useCRTRenderer";
@@ -109,6 +110,7 @@ const PresetSelector = ({
   const [shareUrl, setShareUrl] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const importRef = useRef<HTMLInputElement>(null);
+  const lookImportRef = useRef<HTMLInputElement>(null);
 
   const presetNames = useMemo(() => Object.keys(PRESETS), []);
 
@@ -188,6 +190,35 @@ const PresetSelector = ({
     };
     reader.readAsText(file);
   }, []);
+
+  // Export the CURRENT settings (the full live look) as a single portable JSON file.
+  const handleExportLook = useCallback(() => {
+    if (!currentParams) return;
+    const json = exportLookJSON(currentParams as Record<string, number | string>, activePreset || "Custom Look");
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lme-look-${(activePreset || "custom").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Look exported as JSON");
+  }, [currentParams, activePreset]);
+
+  // Import a look JSON and APPLY it to the current settings.
+  const handleImportLook = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const look = parseLookJSON(reader.result as string);
+      if (!look) { toast.error("That JSON isn't a valid look file"); return; }
+      onSelectPreset(look.name, look.params as Record<string, number>);
+      toast.success(`Look "${look.name}" imported`);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, [onSelectPreset]);
 
   const handleShareURL = useCallback(() => {
     if (!currentParams) return;
@@ -349,6 +380,15 @@ const PresetSelector = ({
           className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
           <Share2 className="w-3 h-3" />
         </button>
+        <button onClick={handleExportLook} title="Export current look as JSON"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
+          <Download className="w-3 h-3" />
+        </button>
+        <button onClick={() => lookImportRef.current?.click()} title="Import a look from JSON"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
+          <Upload className="w-3 h-3" />
+        </button>
+        <input ref={lookImportRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportLook} />
       </div>
 
       {shareUrl && (

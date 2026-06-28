@@ -44,6 +44,39 @@ export function importPresetsJSON(json: string): CustomPreset[] {
   } catch { return []; }
 }
 
+// ---------------------------------------------------------------------------
+// Single "full look" export/import — the complete current settings (every effect
+// param incl. maskType / scanlineProfile / monochromeTint / OSD / advanced) as a
+// portable JSON the user can save to disk and load back to reproduce the look.
+// ---------------------------------------------------------------------------
+export function exportLookJSON(params: Record<string, number | string>, name = "Custom Look"): string {
+  return JSON.stringify({ schema: "lme-look", version: 1, name, exportedAt: Date.now(), params }, null, 2);
+}
+
+// Robustly parse a look file. Accepts: an lme-look single look, the bulk preset
+// export ({version, presets:[…]} → first look), a bare {name, params} preset, or a
+// raw params object (all values number|string). Returns null if it isn't a look.
+export function parseLookJSON(json: string): { name: string; params: Record<string, number | string> } | null {
+  try {
+    const data = JSON.parse(json);
+    if (!data || typeof data !== "object") return null;
+    if (data.schema === "lme-look" && data.params && typeof data.params === "object") {
+      return { name: String(data.name || "Imported Look"), params: data.params };
+    }
+    if (Array.isArray(data.presets) && data.presets[0] && typeof data.presets[0].params === "object") {
+      return { name: String(data.presets[0].name || "Imported Look"), params: data.presets[0].params };
+    }
+    if (data.params && typeof data.params === "object") {
+      return { name: String(data.name || "Imported Look"), params: data.params };
+    }
+    const vals = Object.values(data);
+    if (vals.length > 0 && vals.every((v) => typeof v === "number" || typeof v === "string")) {
+      return { name: "Imported Look", params: data as Record<string, number | string> };
+    }
+    return null;
+  } catch { return null; }
+}
+
 // URL encoding: compact base64 of numeric params only
 export function encodeParamsToURL(params: CRTParams): string {
   const numericParams: Record<string, number> = {};
