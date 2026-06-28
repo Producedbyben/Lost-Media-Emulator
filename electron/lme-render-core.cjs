@@ -95,6 +95,49 @@ function runHeadlessRender({ app, BrowserWindow, distPath, preloadPath, argv }) 
       log("lmeHeadless ready");
 
       if (args.list) return done(0, await win.webContents.executeJavaScript("window.lmeHeadless.listLooks()"));
+
+      // --batch <manifest.json>: ONE app launch, loop renderStill over many frames (amortizes the
+      // ~startup cost across a whole clip). Manifest = JSON array of {in,out,[look,width,height,frame]}.
+      // Reuses the exact single-still path → output is byte-identical to per-call renders.
+      if (args.batch) {
+        const manifestPath = path.resolve(String(args.batch));
+        if (!fs.existsSync(manifestPath)) return fail(`--batch manifest not found: ${manifestPath}`);
+        const jobs = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        if (!Array.isArray(jobs) || !jobs.length) return fail("--batch manifest must be a non-empty JSON array");
+        const fmt = !args["no-format"];
+        const fps = Number(args.fps) || 30;
+        const lookCache = {};
+        const resolveLook = (lk) => {
+          if (lk == null) return null;
+          const s = String(lk);
+          if (/\.json$/i.test(s) && fs.existsSync(s)) { if (!(s in lookCache)) lookCache[s] = JSON.parse(fs.readFileSync(s, "utf8")); return lookCache[s]; }
+          return s;
+        };
+        let okCount = 0; const results = [];
+        for (let j = 0; j < jobs.length; j++) {
+          const job = jobs[j];
+          try {
+            const payload = {
+              input: fileToDataURL(path.resolve(String(job.in))),
+              look: resolveLook(job.look != null ? job.look : args.look),
+              width: Number(job.width || args.width) || 1280,
+              height: Number(job.height || args.height) || 720,
+              frameIndex: Number(job.frame != null ? job.frame : j) || 0,
+              fps, formatPipeline: fmt,
+            };
+            const dataURL = await win.webContents.executeJavaScript(`window.lmeHeadless.renderStill(${JSON.stringify(payload)})`);
+            const outPath = path.resolve(String(job.out));
+            fs.writeFileSync(outPath, Buffer.from(String(dataURL).replace(/^data:image\/png;base64,/, ""), "base64"));
+            okCount++; results.push({ ok: true, out: outPath });
+          } catch (e) {
+            log(`batch job ${j} failed: ${(e && e.stack) || e}`);
+            results.push({ ok: false, in: job.in, error: String(e) });
+          }
+          watchdog.refresh && watchdog.refresh(); // a long batch must not trip the watchdog
+        }
+        return done(okCount === jobs.length ? 0 : 1, { ok: okCount === jobs.length, type: "batch", total: jobs.length, ok_count: okCount, results });
+      }
+
       if (!args.in) return fail("--in <image> required");
       if (!args.out) return fail("--out <path> required");
 
