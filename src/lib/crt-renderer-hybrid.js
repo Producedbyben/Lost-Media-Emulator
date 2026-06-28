@@ -63,6 +63,9 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
   // but stay CPU pending a wider sweep). See docs/gpu/SIGNAL-FIDELITY.md.
   "burnInGhost", "advancedGenerationLoss", "copyGenerationCount", "restorationPassLevel",
   "mediaAgeYears", "advancedMacroBlocking", "advancedQuantization",
+  // Epic 6.3c: OSD is CPU-rendered onto a transparent overlay and GPU-composited over the graded
+  // signal before optics (pixels identical to CPU), so timestamp/style presets route faithfully.
+  "advancedTimestampOSD", "advancedOSDStyle",
 ]);
 
 // Grain is only perceptually faithful up to a moderate amplitude (measured: 0.3 → ~4.6,
@@ -71,17 +74,18 @@ const WEBGPU_SIGNAL_SUPPORTED = new Set([
 // affects manual grain on a GPU-routed look + is groundwork for Epic 6.3.)
 const GRAIN_GPU_MAX = 0.3;
 
-// pixelSize > 1 (block pixelation) + a 6.3b screen-space/resolution effect diverges on GPU:
+// pixelSize > 1 (block pixelation) + a 6.3b/6.3c capture/overlay effect diverges on GPU:
 // floor((u·W)/pixelSize) turns the tiny f32↔f64 difference in the (warped) sample coordinate
-// into a whole-block colour error, and the 6.3b blur-feedback / downscale passes then amplify it
-// (codec presets: pixelSize 2 → 6.9-12.6, 3 → 12-14, 5 → 22 mean-err). pixelSize > 1 WITHOUT a
-// 6.3b effect was already sound through 6.2/6.3a (the pure-display Jumbotron/LED-billboard/
-// viewfinder building blocks route at 4.3-5.8, and the chain is byte-exact passthrough for them),
-// so gate ONLY the combination — sound for the 8 warped codec presets without de-routing the
-// display family. The per-pixel sampling-grid match itself is a separate (6.2-class) fix.
-const EPIC_6_3B_EFFECTS = [
+// into a whole-block colour error, which the 6.3b blur-feedback / downscale passes — or the
+// high-contrast OSD text riding through the same optics — then amplify (codec presets: pixelSize
+// 2 → 6.9-12.6, 3 → 12-26 mean-err; OSD VHS presets: 2 → 10.5-11.6, 3 → 24.7). pixelSize > 1 on
+// its own was already sound through 6.2/6.3a (the pure-display Jumbotron/LED-billboard/viewfinder
+// building blocks route at 4.3-5.8, and the chain is byte-exact passthrough for them), so gate
+// ONLY the combination — sound for the warped codec/OSD presets without de-routing the display
+// family. The per-pixel sampling-grid match itself is a separate (6.2-class) fix.
+const PIXEL_SIZE_DIVERGENT_EFFECTS = [
   "burnInGhost", "advancedGenerationLoss", "copyGenerationCount", "restorationPassLevel",
-  "mediaAgeYears", "advancedMacroBlocking", "advancedQuantization",
+  "mediaAgeYears", "advancedMacroBlocking", "advancedQuantization", "advancedTimestampOSD",
 ];
 
 // Params the GPU fragment shader reproduces faithfully.
@@ -150,8 +154,7 @@ export class CRTRendererHybrid {
     const maskType = typeof params.maskType === "string" ? params.maskType : "phosphor";
     if (!WEBGPU_SUPPORTED_MASKS.has(maskType)) return false;
 
-    // OSD / source view / format authenticity → CPU.
-    if ((Number(params.advancedTimestampOSD) || 0) > 0.01) return false;
+    // Source view / format authenticity → CPU. (OSD is now GPU-composited — see 6.3c below.)
     if (renderOptions && renderOptions.sourceView) return false;
     if (renderOptions && renderOptions.formatProfile) {
       const fp = renderOptions.formatProfile;
@@ -169,11 +172,12 @@ export class CRTRendererHybrid {
     // the gate (GPU double-f32 limit), so route those to CPU.
     if ((Number(params.advancedFilmGrain) || 0) > GRAIN_GPU_MAX) return false;
 
-    // pixelSize > 1 block pixelation combined with a 6.3b screen-space/resolution effect diverges
-    // on GPU (the block sampling-grid mismatch, amplified by the 6.3b passes) — route to CPU.
-    // pixelSize > 1 on its own (pure-display pixelation) stays faithful and is allowed.
+    // pixelSize > 1 block pixelation combined with a 6.3b screen-space/resolution effect or the
+    // 6.3c OSD overlay diverges on GPU (the block sampling-grid mismatch, amplified by those
+    // passes / the high-contrast text) — route to CPU. pixelSize > 1 on its own (pure-display
+    // pixelation) stays faithful and is allowed.
     if ((Number(params.pixelSize) || 1) > 1.0001 &&
-        EPIC_6_3B_EFFECTS.some((k) => Math.abs(Number(params[k]) || 0) > 1e-4)) {
+        PIXEL_SIZE_DIVERGENT_EFFECTS.some((k) => Math.abs(Number(params[k]) || 0) > 1e-4)) {
       return false;
     }
 
@@ -309,12 +313,34 @@ export class CRTRendererHybrid {
     return this.cpuRenderer.renderOriginal(outCtx, width, height);
   }
 
+  // Render the OSD (timestamp/style text) onto a transparent scratch canvas via the CPU
+  // renderer's renderOSD, for the WebGPU backend to composite over the graded signal. Pure
+  // source-over text, so compositing the overlay is equivalent to the CPU drawing it directly.
+  _renderOsdOverlay(width, height, seconds, params, frameIndex, fps, renderOptions) {
+    if (!this._osdCanvas) {
+      this._osdCanvas = document.createElement("canvas");
+      this._osdCtx = this._osdCanvas.getContext("2d");
+    }
+    if (this._osdCanvas.width !== width) this._osdCanvas.width = width;
+    if (this._osdCanvas.height !== height) this._osdCanvas.height = height;
+    this._osdCtx.clearRect(0, 0, width, height);
+    this.cpuRenderer.renderOSD(this._osdCtx, width, height, seconds, params, frameIndex, fps, renderOptions || {});
+    return this._osdCanvas;
+  }
+
   render(outCtx, width, height, seconds, params, frameIndex, fps, renderOptions) {
     // Preferred path: WebGPU for fidelity-passed CRT/display looks. Any failure
     // (device lost, unsupported) falls through to WebGL2 → CPU below.
     if (this.preferGPU && this.webgpuRenderer && this._lastImg && this.gpuSignalOK(params, renderOptions)) {
       try {
-        this.webgpuRenderer.render(outCtx, this._lastImg, width, height, seconds, params, frameIndex, fps);
+        // OSD is canvas-rendered text — render it on the CPU (it's ~µs) onto a transparent
+        // overlay and hand it to the GPU backend, which composites it over the graded signal
+        // before optics (exactly the CPU's order). Glyph fidelity is then identical.
+        let osdSource = null;
+        if ((Number(params.advancedTimestampOSD) || 0) >= 0.01) {
+          osdSource = this._renderOsdOverlay(width, height, seconds, params, frameIndex, fps, renderOptions);
+        }
+        this.webgpuRenderer.render(outCtx, this._lastImg, width, height, seconds, params, frameIndex, fps, osdSource);
         this.activeMode = "webgpu";
         return;
       } catch (e) {

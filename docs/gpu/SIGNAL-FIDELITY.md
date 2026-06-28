@@ -220,3 +220,43 @@ green, tsc + `vite build` clean; Epic 1 export parity stays 455/455.
   pixelate (pixelSize > 1) — the effects themselves are faithful, the pixelation is the blocker.
 - **Next:** 6.3c OSD (timestamp + style glyph rendering — the +29 unlock), then 6.3d NTSC/PAL
   composite. datamosh/pixel-sort stay CPU forever.
+
+## Epic 6.3c — OSD on GPU (2026-06-28)
+
+The OSD (timestamp/style text) is canvas-rendered (10 styles, procedural bitmap + 7-segment +
+bundled OFL fonts, shadows, blink). **True GPU glyph rendering can't match canvas-text AA to < 6**,
+and the CPU burns the OSD into the signal buffer **after grade / before optics** so the display
+optics ride over it. So the OSD is **CPU-rendered onto a transparent overlay and composited on
+GPU between grade and optics** (`grade → tGraded → fs_osd(over osdTex) → tGradedOsd → optics`):
+the hybrid (which holds `renderOptions`) renders the OSD via `cpuRenderer.renderOSD` onto a
+scratch canvas and passes it to `backend.render(…, osdSource)`; the backend uploads it
+(straight-alpha) to `osdTex` and `fs_osd` source-over composites it. `renderOSD` is pure
+source-over and compositing is associative, so the overlay equals the CPU drawing it directly.
+The OSD text draw is ~µs; the expensive optics stays on GPU. `u_osdActive` makes `fs_osd` a
+byte-exact passthrough when off. Gate: dropped the `advancedTimestampOSD > 0.01 → CPU` block;
+added `advancedTimestampOSD`/`advancedOSDStyle` to the supported set.
+
+**Isolated verification (640×480):** all 10 styles 0.23–0.37; every font path (procedural vhs/
+camcorder, OFL broadcast/lcd, 7-segment film/led) 0.20–0.31; OSD + a CRT look 0.94; passthrough
+(no OSD) byte-exact 0.13. The OSD pixels are the CPU's own, so fidelity is exact bar the optics
+resample.
+
+**Gate finding (same class as 6.3b):** enabling OSD newly-allowed 4 VHS/camcorder presets that
+then failed (Bootleg Concert Cam 24.7, Late-80s Home VHS 11.6, …) — again the pre-existing
+`pixelSize > 1` divergence (the high-contrast OSD text rides through the same block-sampling
+mismatch; `pixelSize → 1` collapsed them, e.g. 24.7 → 5.1), not the OSD (which measured 0.2–0.9).
+Extended the pixelSize gate trigger to include `advancedTimestampOSD` (`PIXEL_SIZE_DIVERGENT_EFFECTS`).
+
+**Result: routed 40 → 42, `allowedFailing: []`, 0 errors.** OSD unlocks **+2** classics
+(Betacam SP ENG 1980s 1.82, S-VHS Master Tape 2.46 — the OSD presets that don't pixelate). The
+roadmap's "+29" forecast does NOT materialise: **of 29 OSD presets, 27 also carry `pixelSize > 1`**,
+so they stay CPU on the f32 sampling-grid limit — pixelSize, not OSD, is now the dominant blocker.
+**Live** (production hybrid, 1280×720): Betacam SP ENG routes `webgpu` with the OSD visibly
+composited (timestamp band populated); the gated Bootleg Concert Cam (OSD + pixelSize 3) → `cpu`;
+export bit-identical (maxDiff 0). 153 tests / tsc / `vite build` green; parity 455/455.
+
+**The next big lever is the `pixelSize > 1` sampling-grid match** (a 6.2-class f32-limit fix, same
+family as grain): it currently co-blocks ~25 OSD presets + the 8 codec presets. Fixing it would
+unlock the bulk of the remaining catalogue; it likely needs emulated-f64 optics coordinates (the
+warped `u` straddles `floor()` block boundaries in f32). Then 6.3d = NTSC/PAL composite. datamosh/
+pixel-sort stay CPU forever.

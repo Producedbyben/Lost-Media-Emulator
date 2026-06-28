@@ -115,6 +115,8 @@ struct Uniforms {
   u_qLowH: f32,         // quantization low-res height
   u_qLevels: f32,       // quantization level count
   u_qAlpha: f32,        // quantization upscale-composite alpha
+  // --- 6.3c OSD overlay ---
+  u_osdActive: f32,     // 1 when a CPU-rendered OSD overlay (osdTex) is to be composited
 };
 
 @group(0) @binding(0) var<uniform> U: Uniforms;
@@ -678,6 +680,23 @@ fn fs_grade(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
   }
 
   return vec4<f32>(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+}
+
+// Pass 0.5 — OSD overlay (6.3c). The CPU renders the OSD (timestamp/style text) onto a
+// transparent canvas which the backend uploads to osdTex (u_tex_sharp); here it is source-over
+// composited over T_graded (u_tex) BEFORE optics, matching the CPU which burns the OSD into the
+// signal buffer after grade / before the display loop (crt-renderer-full.js ~466-467). The OSD
+// pixels are the CPU's own canvas text, so fidelity is exact bar the optics resample (already
+// < 6). Byte-exact passthrough when no OSD (u_osdActive < 0.5). Straight (non-premultiplied)
+// alpha — copyExternalImageToTexture uploads the canvas with premultipliedAlpha:false.
+@fragment
+fn fs_osd(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = i32(floor(fragPos.x));
+  let py = i32(floor(fragPos.y));
+  let base = textureLoad(u_tex, vec2<i32>(px, py), 0).rgb;
+  if (U.u_osdActive < 0.5) { return vec4<f32>(base, 1.0); }
+  let o = textureLoad(u_tex_sharp, vec2<i32>(px, py), 0);
+  return vec4<f32>(o.rgb * o.a + base * (1.0 - o.a), 1.0);
 }
 
 // Pass 1 — the display optics into T_optics.

@@ -32,6 +32,7 @@ const I_MB_LOWW = CRT_SIGNAL_UNIFORMS.indexOf("u_mbLowW");
 const I_MB_LOWH = CRT_SIGNAL_UNIFORMS.indexOf("u_mbLowH");
 const I_Q_LOWW = CRT_SIGNAL_UNIFORMS.indexOf("u_qLowW");
 const I_Q_LOWH = CRT_SIGNAL_UNIFORMS.indexOf("u_qLowH");
+const I_OSD_ACTIVE = CRT_SIGNAL_UNIFORMS.indexOf("u_osdActive");
 
 export class WebGPUBackend {
   private device: GPUDevice;
@@ -42,6 +43,7 @@ export class WebGPUBackend {
   private uniformBuf: GPUBuffer;
 
   private gradePipeline: GPURenderPipeline;
+  private osdPipeline: GPURenderPipeline;
   private opticsPipeline: GPURenderPipeline;
   private ghostPipeline: GPURenderPipeline;
   private burnInPipeline: GPURenderPipeline;
@@ -63,6 +65,8 @@ export class WebGPUBackend {
   // Per-size resources.
   private srcTex: GPUTexture | null = null;
   private tGraded: GPUTexture | null = null;
+  private osdTex: GPUTexture | null = null;        // CPU-rendered OSD overlay (uploaded per frame)
+  private tGradedOsd: GPUTexture | null = null;     // T_graded with the OSD composited in
   private tOptics: GPUTexture | null = null;
   private tPpA: GPUTexture | null = null;   // post-process ping-pong A
   private tPpB: GPUTexture | null = null;   // post-process ping-pong B (= T_filtered)
@@ -74,6 +78,7 @@ export class WebGPUBackend {
   private tLowMB: GPUTexture | null = null;
   private tLowQ: GPUTexture | null = null;
   private bgGrade: GPUBindGroup | null = null;
+  private bgOsd: GPUBindGroup | null = null;
   private bgOptics: GPUBindGroup | null = null;
   private bgGhost: GPUBindGroup | null = null;
   private bgBurnIn: GPUBindGroup | null = null;
@@ -107,6 +112,7 @@ export class WebGPUBackend {
     sampler: GPUSampler;
     uniformBuf: GPUBuffer;
     gradePipeline: GPURenderPipeline;
+    osdPipeline: GPURenderPipeline;
     opticsPipeline: GPURenderPipeline;
     ghostPipeline: GPURenderPipeline;
     burnInPipeline: GPURenderPipeline;
@@ -132,6 +138,7 @@ export class WebGPUBackend {
     this.sampler = parts.sampler;
     this.uniformBuf = parts.uniformBuf;
     this.gradePipeline = parts.gradePipeline;
+    this.osdPipeline = parts.osdPipeline;
     this.opticsPipeline = parts.opticsPipeline;
     this.ghostPipeline = parts.ghostPipeline;
     this.burnInPipeline = parts.burnInPipeline;
@@ -212,6 +219,13 @@ export class WebGPUBackend {
         layout: pl3,
         vertex: { module, entryPoint: "vs_main" },
         fragment: { module, entryPoint: "fs_grade", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      // OSD overlay composite (reads T_graded + the uploaded osdTex).
+      const osdPipeline = await device.createRenderPipelineAsync({
+        layout: plComposite,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_osd", targets: [{ format: INTERMEDIATE_FORMAT }] },
         primitive: { topology: "triangle-list" },
       });
       const opticsPipeline = await device.createRenderPipelineAsync({
@@ -315,7 +329,7 @@ export class WebGPUBackend {
 
       return new WebGPUBackend({
         device, context, canvas, format, sampler, uniformBuf, dubBuf,
-        gradePipeline, opticsPipeline, ghostPipeline, burnInPipeline, focusPipeline,
+        gradePipeline, osdPipeline, opticsPipeline, ghostPipeline, burnInPipeline, focusPipeline,
         dubPipeline, mediaAgePipeline, restorePipeline, blurHPipeline, compositePipeline,
         mbDownPipeline, mbUpPipeline, qDownPipeline, qUpPipeline,
         layout3, layoutComposite, layoutDub,
@@ -333,6 +347,8 @@ export class WebGPUBackend {
 
     this.srcTex?.destroy();
     this.tGraded?.destroy();
+    this.osdTex?.destroy();
+    this.tGradedOsd?.destroy();
     this.tOptics?.destroy();
     this.tPpA?.destroy();
     this.tPpB?.destroy();
@@ -352,6 +368,12 @@ export class WebGPUBackend {
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     });
     this.tGraded = intermediate();
+    this.tGradedOsd = intermediate();
+    this.osdTex = this.device.createTexture({
+      size: [width, height],
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
     this.tOptics = intermediate();
     this.tPpA = intermediate();
     this.tPpB = intermediate();
@@ -370,12 +392,23 @@ export class WebGPUBackend {
         { binding: 2, resource: this.srcTex.createView() },
       ],
     });
+    // OSD overlay: composite osdTex over T_graded → T_gradedOsd (passthrough when no OSD).
+    this.bgOsd = this.device.createBindGroup({
+      layout: this.layoutComposite,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tGraded.createView() },
+        { binding: 3, resource: this.osdTex.createView() },
+      ],
+    });
+    // Optics samples the OSD-composited graded texture (= T_graded when no OSD).
     this.bgOptics = this.device.createBindGroup({
       layout: this.layout3,
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuf } },
         { binding: 1, resource: this.sampler },
-        { binding: 2, resource: this.tGraded.createView() },
+        { binding: 2, resource: this.tGradedOsd.createView() },
       ],
     });
     // Post-process chain (ping-pong, passthrough in-shader when inactive):
@@ -571,6 +604,7 @@ export class WebGPUBackend {
     params: Record<string, number | string>,
     frameIndex: number,
     fps: number,
+    osdSource?: CanvasImageSource | null,
   ): void {
     if (this.dead) throw new Error("WebGPU device lost");
     this.ensureSize(width, height);
@@ -582,7 +616,19 @@ export class WebGPUBackend {
       [width, height],
     );
 
+    // The OSD overlay (a transparent WxH canvas the hybrid rendered with the CPU renderOSD) is
+    // uploaded straight-alpha and composited over T_graded by fs_osd before optics.
+    const osdActive = osdSource != null;
+    if (osdActive) {
+      this.device.queue.copyExternalImageToTexture(
+        { source: osdSource, flipY: false },
+        { texture: this.osdTex!, premultipliedAlpha: false },
+        [width, height],
+      );
+    }
+
     const u = buildSignalUniforms(params, { width, height, seconds, frameIndex, fps });
+    u[I_OSD_ACTIVE] = osdActive ? 1 : 0;
     this.device.queue.writeBuffer(this.uniformBuf, 0, u.buffer, u.byteOffset, u.byteLength);
 
     // Iterative dub schedule (generationLoss / copyGen) — one entry per ping-pong sub-draw,
@@ -606,6 +652,15 @@ export class WebGPUBackend {
     gradePass.setBindGroup(0, this.bgGrade!);
     gradePass.draw(3);
     gradePass.end();
+
+    // OSD overlay composite (passthrough byte-exact when no OSD) → T_gradedOsd, which optics samples.
+    const osdPass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tGradedOsd!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    osdPass.setPipeline(this.osdPipeline);
+    osdPass.setBindGroup(0, this.bgOsd!);
+    osdPass.draw(3);
+    osdPass.end();
 
     const opticsPass = encoder.beginRenderPass({
       colorAttachments: [{ view: this.tOptics!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
@@ -746,6 +801,8 @@ export class WebGPUBackend {
     this.dead = true;
     this.srcTex?.destroy();
     this.tGraded?.destroy();
+    this.osdTex?.destroy();
+    this.tGradedOsd?.destroy();
     this.tOptics?.destroy();
     this.tPpA?.destroy();
     this.tPpB?.destroy();

@@ -85,6 +85,9 @@ export const CRT_SIGNAL_UNIFORMS = [
   "u_macroBlocking",
   // Resolution-reduction derived params (width-dependent block math, mirrors the CPU).
   "u_mbLowW", "u_mbLowH", "u_mbAlpha", "u_qLowW", "u_qLowH", "u_qLevels", "u_qAlpha",
+  // Epic 6.3c: OSD overlay active flag (set by the backend from the supplied osdSource — the
+  // CPU-rendered OSD is composited over T_graded by fs_osd between grade and optics).
+  "u_osdActive",
 ] as const;
 
 // Storage-condition severity factor (CPU crt-renderer-full.js ~535).
