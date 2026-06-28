@@ -330,7 +330,7 @@ const PresetSelector = ({
           className={`p-1 rounded border transition-colors ${
             viewMode === "grid" ? "bg-primary/15 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground hover:text-foreground"
           }`}
-          title="Grid view"
+          title="Grid view" aria-label="Grid view"
         >
           <Grid3X3 className="w-3 h-3" />
         </button>
@@ -339,7 +339,7 @@ const PresetSelector = ({
           className={`p-1 rounded border transition-colors ${
             viewMode === "list" ? "bg-primary/15 border-primary/30 text-primary" : "bg-secondary border-border text-muted-foreground hover:text-foreground"
           }`}
-          title="List view"
+          title="List view" aria-label="List view"
         >
           <List className="w-3 h-3" />
         </button>
@@ -367,24 +367,24 @@ const PresetSelector = ({
         <span className="text-xs text-muted-foreground font-medium">Preset library</span>
         <div className="flex-1" />
         {onRandomize && (
-          <button onClick={onRandomize} title="Surprise me!"
+          <button onClick={onRandomize} title="Surprise me!" aria-label="Surprise me!"
             className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
             <Dice3 className="w-3 h-3" /> Surprise
           </button>
         )}
-        <button onClick={() => setShowSave(!showSave)} title="Save current look"
+        <button onClick={() => setShowSave(!showSave)} title="Save current look" aria-label="Save current look"
           className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
           <Save className="w-3 h-3" />
         </button>
-        <button onClick={handleShareURL} title="Copy share link"
+        <button onClick={handleShareURL} title="Copy share link" aria-label="Copy share link"
           className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
           <Share2 className="w-3 h-3" />
         </button>
-        <button onClick={handleExportLook} title="Export current look as JSON"
+        <button onClick={handleExportLook} title="Export current look as JSON" aria-label="Export current look as JSON"
           className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
           <Download className="w-3 h-3" />
         </button>
-        <button onClick={() => lookImportRef.current?.click()} title="Import a look from JSON"
+        <button onClick={() => lookImportRef.current?.click()} title="Import a look from JSON" aria-label="Import a look from JSON"
           className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
           <Upload className="w-3 h-3" />
         </button>

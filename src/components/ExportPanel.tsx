@@ -548,7 +548,7 @@ const ExportPanel = ({
                     <input type="number" value={inPoint} min={0} max={duration} step={0.1}
                       onChange={(e) => setInPoint(Math.max(0, Math.min(Number(e.target.value), outPoint - 1 / Math.max(1, fps))))}
                       className="w-full px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
-                    <button title="Set in point from the current playhead"
+                    <button title="Set in point from the current playhead" aria-label="Set in point from the current playhead"
                       onClick={() => setInPoint(Math.max(0, Math.min(playhead, outPoint - 1 / Math.max(1, fps))))}
                       className="px-2 py-0.5 text-[11px] rounded border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0">
                       ⇤
@@ -561,7 +561,7 @@ const ExportPanel = ({
                     <input type="number" value={outPoint} min={0} max={duration} step={0.1}
                       onChange={(e) => setOutPoint(Math.max(inPoint + 1 / Math.max(1, fps), Math.min(Number(e.target.value), duration)))}
                       className="w-full px-2.5 py-1.5 text-xs font-mono bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
-                    <button title="Set out point from the current playhead"
+                    <button title="Set out point from the current playhead" aria-label="Set out point from the current playhead"
                       onClick={() => setOutPoint(Math.max(inPoint + 1 / Math.max(1, fps), Math.min(playhead, duration)))}
                       className="px-2 py-0.5 text-[11px] rounded border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0">
                       ⇥
