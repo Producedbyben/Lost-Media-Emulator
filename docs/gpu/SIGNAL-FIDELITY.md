@@ -282,5 +282,33 @@ attributed to OSD was really blocked by these two bugs. Live (production hybrid)
 (pixelSize 5, was gated) and Damaged Archive (cctvMono kitchen-sink, was failing) both route
 `webgpu`; export bit-identical (maxDiff 0). 153 tests / tsc / `vite build` green; parity 455/455.
 
-Remaining un-routed: grain > 0.3, exotic masks (irBloomSpeckle), format composite (6.3d NTSC/PAL),
-chroma subsampling, non-ideal-storage mediaAge, datamosh/pixel-sort (CPU forever). Then 6.3d.
+Remaining un-routed: grain > 0.3, exotic masks (irBloomSpeckle), chroma subsampling,
+non-ideal-storage mediaAge, datamosh/pixel-sort (CPU forever).
+
+## Epic 6.3d — NTSC/PAL format pre-pass on GPU (2026-06-28)
+
+**The format pipeline defaults ON** (`formatPipelineRef = true`), so the real app passes
+`renderOptions.formatProfile` for every preset — and the old gate routed any preset with a
+resolution reduction (`resScale < 0.995`) or NTSC/PAL composite (`composite > 0.001`) to CPU.
+**That was 81/112 presets with an active format, 49 of them otherwise GPU-faithful** — so in the
+default config the GPU only carried ~25 presets despite all the prior work. 6.3d fixes that.
+
+Ported `applyFormatPrePass` (CPU ~250-340) to two GPU passes that run on the source before grade
+(`srcTex → fs_fmtDown → tFmtLow → fs_fmtComposite → tFmt → grade`): **fs_fmtDown** box-averages the
+source into a low-res viewport (the luma/chroma resolution reduction, matching the canvas
+high-quality downscale); **fs_fmtComposite** bilinearly upscales it, then for NTSC/PAL applies the
+composite encode/decode — RGB→YIQ, horizontal chroma box-blur (radius from `chromaScaleX`·composite),
+PAL vertical chroma soften, dot-crawl subcarrier beat into luma, YIQ→RGB. The formatProfile is
+plumbed from the hybrid into `render(…, formatProfile)`; seven `u_fmt*` uniforms are derived in the
+backend exactly as the CPU does. Passthrough byte-exact when the format is clean (low dims = W/H).
+The `formatProfile` gate in `gpuSignalOK` was removed.
+
+**Full sweep WITH the formatProfile active (the real default config): routed 74/112 (53 classics
++ 21 display), `allowedFailing: []`, 0 errors, worst 4.04** — the same count as pipeline-off, i.e.
+6.3d restored all ~49 format-bearing presets to GPU. Per-effect: Consumer TV (NTSC) 1.17, PVM/BVM
+1.24, Off-Air Analog 2.5, Late-80s VHS 3.4, Early Web Rip (digital res-reduce) 2.48. Live
+(production hybrid, pipeline on): Consumer TV (NTSC) + PAL Living Room TV both route `webgpu`;
+export bit-identical (maxDiff 0). 153 tests / tsc / `vite build` green; parity 455/455.
+
+The GPU engine is now ~complete: the only un-routed presets need grain > 0.3 / irBloomSpeckle
+(f32-limit, gated) or datamosh/pixel-sort (CPU forever).

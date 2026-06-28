@@ -33,6 +33,13 @@ const I_MB_LOWH = CRT_SIGNAL_UNIFORMS.indexOf("u_mbLowH");
 const I_Q_LOWW = CRT_SIGNAL_UNIFORMS.indexOf("u_qLowW");
 const I_Q_LOWH = CRT_SIGNAL_UNIFORMS.indexOf("u_qLowH");
 const I_OSD_ACTIVE = CRT_SIGNAL_UNIFORMS.indexOf("u_osdActive");
+const I_FMT_ACTIVE = CRT_SIGNAL_UNIFORMS.indexOf("u_fmtActive");
+const I_FMT_LOWW = CRT_SIGNAL_UNIFORMS.indexOf("u_fmtLowW");
+const I_FMT_LOWH = CRT_SIGNAL_UNIFORMS.indexOf("u_fmtLowH");
+const I_FMT_COMPOSITE = CRT_SIGNAL_UNIFORMS.indexOf("u_fmtComposite");
+const I_FMT_SYSTEM = CRT_SIGNAL_UNIFORMS.indexOf("u_fmtSystem");
+const I_FMT_RADIUS = CRT_SIGNAL_UNIFORMS.indexOf("u_fmtChromaRadius");
+const I_FMT_DOT = CRT_SIGNAL_UNIFORMS.indexOf("u_fmtDotAmt");
 
 export class WebGPUBackend {
   private device: GPUDevice;
@@ -42,6 +49,8 @@ export class WebGPUBackend {
   private sampler: GPUSampler;
   private uniformBuf: GPUBuffer;
 
+  private fmtDownPipeline: GPURenderPipeline;
+  private fmtCompositePipeline: GPURenderPipeline;
   private gradePipeline: GPURenderPipeline;
   private osdPipeline: GPURenderPipeline;
   private opticsPipeline: GPURenderPipeline;
@@ -64,6 +73,8 @@ export class WebGPUBackend {
 
   // Per-size resources.
   private srcTex: GPUTexture | null = null;
+  private tFmtLow: GPUTexture | null = null;        // format resolution-reduction low-res target
+  private tFmt: GPUTexture | null = null;           // format pre-pass output (grade reads this)
   private tGraded: GPUTexture | null = null;
   private osdTex: GPUTexture | null = null;        // CPU-rendered OSD overlay (uploaded per frame)
   private tGradedOsd: GPUTexture | null = null;     // T_graded with the OSD composited in
@@ -77,6 +88,8 @@ export class WebGPUBackend {
   private tMacro: GPUTexture | null = null;
   private tLowMB: GPUTexture | null = null;
   private tLowQ: GPUTexture | null = null;
+  private bgFmtDown: GPUBindGroup | null = null;
+  private bgFmtComposite: GPUBindGroup | null = null;
   private bgGrade: GPUBindGroup | null = null;
   private bgOsd: GPUBindGroup | null = null;
   private bgOptics: GPUBindGroup | null = null;
@@ -111,6 +124,8 @@ export class WebGPUBackend {
     format: GPUTextureFormat;
     sampler: GPUSampler;
     uniformBuf: GPUBuffer;
+    fmtDownPipeline: GPURenderPipeline;
+    fmtCompositePipeline: GPURenderPipeline;
     gradePipeline: GPURenderPipeline;
     osdPipeline: GPURenderPipeline;
     opticsPipeline: GPURenderPipeline;
@@ -137,6 +152,8 @@ export class WebGPUBackend {
     this.format = parts.format;
     this.sampler = parts.sampler;
     this.uniformBuf = parts.uniformBuf;
+    this.fmtDownPipeline = parts.fmtDownPipeline;
+    this.fmtCompositePipeline = parts.fmtCompositePipeline;
     this.gradePipeline = parts.gradePipeline;
     this.osdPipeline = parts.osdPipeline;
     this.opticsPipeline = parts.opticsPipeline;
@@ -215,6 +232,19 @@ export class WebGPUBackend {
       const plDub = device.createPipelineLayout({ bindGroupLayouts: [layoutDub] });
 
       device.pushErrorScope("validation");
+      // Format pre-pass (6.3d): resolution-reduction downscale + composite encode/decode.
+      const fmtDownPipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_fmtDown", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
+      const fmtCompositePipeline = await device.createRenderPipelineAsync({
+        layout: pl3,
+        vertex: { module, entryPoint: "vs_main" },
+        fragment: { module, entryPoint: "fs_fmtComposite", targets: [{ format: INTERMEDIATE_FORMAT }] },
+        primitive: { topology: "triangle-list" },
+      });
       const gradePipeline = await device.createRenderPipelineAsync({
         layout: pl3,
         vertex: { module, entryPoint: "vs_main" },
@@ -329,6 +359,7 @@ export class WebGPUBackend {
 
       return new WebGPUBackend({
         device, context, canvas, format, sampler, uniformBuf, dubBuf,
+        fmtDownPipeline, fmtCompositePipeline,
         gradePipeline, osdPipeline, opticsPipeline, ghostPipeline, burnInPipeline, focusPipeline,
         dubPipeline, mediaAgePipeline, restorePipeline, blurHPipeline, compositePipeline,
         mbDownPipeline, mbUpPipeline, qDownPipeline, qUpPipeline,
@@ -346,6 +377,8 @@ export class WebGPUBackend {
     this.context.configure({ device: this.device, format: this.format, alphaMode: "opaque" });
 
     this.srcTex?.destroy();
+    this.tFmtLow?.destroy();
+    this.tFmt?.destroy();
     this.tGraded?.destroy();
     this.osdTex?.destroy();
     this.tGradedOsd?.destroy();
@@ -367,6 +400,8 @@ export class WebGPUBackend {
       format: INTERMEDIATE_FORMAT,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    this.tFmtLow = intermediate();
+    this.tFmt = intermediate();
     this.tGraded = intermediate();
     this.tGradedOsd = intermediate();
     this.osdTex = this.device.createTexture({
@@ -383,13 +418,31 @@ export class WebGPUBackend {
     this.tLowMB = intermediate();
     this.tLowQ = intermediate();
 
-    // Grade pass samples the raw source; optics then samples the graded texture.
-    this.bgGrade = this.device.createBindGroup({
+    // Format pre-pass (6.3d): fmtDown box-averages srcTex → tFmtLow; fmtComposite upscales +
+    // composite-encodes → tFmt (passthrough byte-exact when inactive). Grade then reads tFmt.
+    this.bgFmtDown = this.device.createBindGroup({
       layout: this.layout3,
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuf } },
         { binding: 1, resource: this.sampler },
         { binding: 2, resource: this.srcTex.createView() },
+      ],
+    });
+    this.bgFmtComposite = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tFmtLow.createView() },
+      ],
+    });
+    // Grade pass samples the format-prepass output; optics then samples the graded texture.
+    this.bgGrade = this.device.createBindGroup({
+      layout: this.layout3,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuf } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.tFmt.createView() },
       ],
     });
     // OSD overlay: composite osdTex over T_graded → T_gradedOsd (passthrough when no OSD).
@@ -605,6 +658,7 @@ export class WebGPUBackend {
     frameIndex: number,
     fps: number,
     osdSource?: CanvasImageSource | null,
+    formatProfile?: { system?: string; resScaleX?: number; resScaleY?: number; chromaScaleX?: number; composite?: number } | null,
   ): void {
     if (this.dead) throw new Error("WebGPU device lost");
     this.ensureSize(width, height);
@@ -629,6 +683,44 @@ export class WebGPUBackend {
 
     const u = buildSignalUniforms(params, { width, height, seconds, frameIndex, fps });
     u[I_OSD_ACTIVE] = osdActive ? 1 : 0;
+
+    // Format pre-pass uniforms (6.3d), derived from the formatProfile exactly as the CPU
+    // applyFormatPrePass does. Inactive (lowW=W, composite=0) when no/clean format → passthrough.
+    let fmtLowW = width;
+    let fmtLowH = height;
+    let fmtActive = 0;
+    let fmtComposite = 0;
+    let fmtSystem = 0;
+    let fmtRadius = 0;
+    let fmtDot = 0;
+    if (formatProfile) {
+      const rsx = Math.max(0.05, Math.min(1, formatProfile.resScaleX ?? 1));
+      const rsy = Math.max(0.05, Math.min(1, formatProfile.resScaleY ?? 1));
+      const resReduce = rsx < 0.995 || rsy < 0.995;
+      const comp = Math.max(0, Math.min(1, formatProfile.composite ?? 0));
+      const compositeActive = (formatProfile.system === "NTSC" || formatProfile.system === "PAL") && comp > 0.001;
+      if (resReduce || compositeActive) {
+        fmtActive = 1;
+        if (resReduce) {
+          fmtLowW = Math.max(2, Math.round(width * rsx));
+          fmtLowH = Math.max(2, Math.round(height * rsy));
+        }
+        if (compositeActive) {
+          fmtComposite = comp;
+          fmtSystem = formatProfile.system === "PAL" ? 2 : 1;
+          const chromaScaleX = Math.max(0, Math.min(1, formatProfile.chromaScaleX ?? 0.4));
+          fmtRadius = Math.max(1, Math.round((1 - chromaScaleX) * 9 * comp));
+          fmtDot = comp * 0.08;
+        }
+      }
+    }
+    u[I_FMT_ACTIVE] = fmtActive;
+    u[I_FMT_LOWW] = fmtLowW;
+    u[I_FMT_LOWH] = fmtLowH;
+    u[I_FMT_COMPOSITE] = fmtComposite;
+    u[I_FMT_SYSTEM] = fmtSystem;
+    u[I_FMT_RADIUS] = fmtRadius;
+    u[I_FMT_DOT] = fmtDot;
     this.device.queue.writeBuffer(this.uniformBuf, 0, u.buffer, u.byteOffset, u.byteLength);
 
     // Iterative dub schedule (generationLoss / copyGen) — one entry per ping-pong sub-draw,
@@ -645,6 +737,26 @@ export class WebGPUBackend {
     }
 
     const encoder = this.device.createCommandEncoder();
+
+    // Format pre-pass (6.3d): fmtDown box-averages srcTex into the low-res region (viewport),
+    // fmtComposite upscales + composite-encodes → tFmt. Passthrough byte-exact when inactive.
+    const fmtDownPass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tFmtLow!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    fmtDownPass.setViewport(0, 0, fmtLowW, fmtLowH, 0, 1);
+    fmtDownPass.setPipeline(this.fmtDownPipeline);
+    fmtDownPass.setBindGroup(0, this.bgFmtDown!);
+    fmtDownPass.draw(3);
+    fmtDownPass.end();
+
+    const fmtCompositePass = encoder.beginRenderPass({
+      colorAttachments: [{ view: this.tFmt!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
+    });
+    fmtCompositePass.setPipeline(this.fmtCompositePipeline);
+    fmtCompositePass.setBindGroup(0, this.bgFmtComposite!);
+    fmtCompositePass.draw(3);
+    fmtCompositePass.end();
+
     const gradePass = encoder.beginRenderPass({
       colorAttachments: [{ view: this.tGraded!.createView(), loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }],
     });
@@ -800,6 +912,8 @@ export class WebGPUBackend {
   dispose(): void {
     this.dead = true;
     this.srcTex?.destroy();
+    this.tFmtLow?.destroy();
+    this.tFmt?.destroy();
     this.tGraded?.destroy();
     this.osdTex?.destroy();
     this.tGradedOsd?.destroy();

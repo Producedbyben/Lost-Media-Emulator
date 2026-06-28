@@ -117,6 +117,14 @@ struct Uniforms {
   u_qAlpha: f32,        // quantization upscale-composite alpha
   // --- 6.3c OSD overlay ---
   u_osdActive: f32,     // 1 when a CPU-rendered OSD overlay (osdTex) is to be composited
+  // --- 6.3d NTSC/PAL format pre-pass (source resolution reduction + composite encode/decode) ---
+  u_fmtActive: f32,     // 1 when the format pre-pass runs (resolution reduction or composite)
+  u_fmtLowW: f32,       // resolution-reduction low-res width  (= W when no luma res reduction)
+  u_fmtLowH: f32,       // resolution-reduction low-res height
+  u_fmtComposite: f32,  // composite strength (0 = no NTSC/PAL composite)
+  u_fmtSystem: f32,     // 1 = NTSC, 2 = PAL (PAL adds a vertical chroma soften)
+  u_fmtChromaRadius: f32, // horizontal chroma box-blur radius
+  u_fmtDotAmt: f32,     // dot-crawl amplitude (= composite * 0.08)
 };
 
 @group(0) @binding(0) var<uniform> U: Uniforms;
@@ -567,6 +575,89 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VSOut {
   var o: VSOut;
   o.pos = vec4<f32>(verts[vid], 0.0, 1.0);
   return o;
+}
+
+// ============================================================================
+// Epic 6.3d — NTSC/PAL format pre-pass (source resolution reduction + composite encode/decode).
+// CPU crt-renderer-full.js applyFormatPrePass ~250 / applyComposite ~289. Runs on the source
+// BEFORE grade: srcTex → fs_fmtDown (box-average → tFmtLow, the luma/chroma resolution
+// reduction) → fs_fmtComposite (bilinear upscale + YIQ chroma-bandwidth-limit + dot crawl) →
+// tFmt, which the grade then reads. Passthrough byte-exact when inactive (u_fmtLowW = W).
+// ============================================================================
+
+// Box-average the source (u_tex) into the resolution-reduction low-res region.
+@fragment
+fn fs_fmtDown(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  return vec4<f32>(boxDown(i32(floor(fragPos.x)), i32(floor(fragPos.y)), U.u_fmtLowW, U.u_fmtLowH), 1.0);
+}
+
+// Bilinear upscale of tFmtLow (u_tex, valid in [0,lowW)×[0,lowH)) at a full-res pixel — the
+// resolution-reduced image (matches the CPU's high-quality drawImage upscale).
+fn fmtSample(px: f32, py: f32) -> vec3<f32> {
+  let lw = U.u_fmtLowW;
+  let lh = U.u_fmtLowH;
+  let sx = (px + 0.5) * lw / U.u_resolutionX - 0.5;
+  let sy = (py + 0.5) * lh / U.u_resolutionY - 0.5;
+  let x0 = floor(sx);
+  let y0 = floor(sy);
+  let fx = sx - x0;
+  let fy = sy - y0;
+  let ix0 = clamp(i32(x0), 0, i32(lw) - 1);
+  let ix1 = clamp(i32(x0) + 1, 0, i32(lw) - 1);
+  let iy0 = clamp(i32(y0), 0, i32(lh) - 1);
+  let iy1 = clamp(i32(y0) + 1, 0, i32(lh) - 1);
+  let c00 = textureLoad(u_tex, vec2<i32>(ix0, iy0), 0).rgb;
+  let c10 = textureLoad(u_tex, vec2<i32>(ix1, iy0), 0).rgb;
+  let c01 = textureLoad(u_tex, vec2<i32>(ix0, iy1), 0).rgb;
+  let c11 = textureLoad(u_tex, vec2<i32>(ix1, iy1), 0).rgb;
+  return mix(mix(c00, c10, fx), mix(c01, c11, fx), fy);
+}
+// Horizontally box-blurred I/Q chroma of the upscaled image at row ry (CPU _boxBlurH).
+fn fmtChromaH(px: f32, ry: f32, R: i32) -> vec2<f32> {
+  var Iacc = 0.0;
+  var Qacc = 0.0;
+  let maxX = U.u_resolutionX - 1.0;
+  for (var i: i32 = -R; i <= R; i = i + 1) {
+    let c = fmtSample(clamp(px + f32(i), 0.0, maxX), ry);
+    Iacc = Iacc + (0.596 * c.r - 0.274 * c.g - 0.322 * c.b);
+    Qacc = Qacc + (0.211 * c.r - 0.523 * c.g + 0.312 * c.b);
+  }
+  let inv = 1.0 / f32(2 * R + 1);
+  return vec2<f32>(Iacc * inv, Qacc * inv);
+}
+
+// Resolution-reduced source + NTSC/PAL composite (chroma bandwidth limit + dot crawl).
+@fragment
+fn fs_fmtComposite(@builtin(position) fragPos: vec4<f32>) -> @location(0) vec4<f32> {
+  let px = floor(fragPos.x);
+  let py = floor(fragPos.y);
+  if (U.u_fmtActive < 0.5) { return vec4<f32>(textureLoad(u_tex, vec2<i32>(i32(px), i32(py)), 0).rgb, 1.0); }
+  let base = fmtSample(px, py);
+  if (U.u_fmtComposite <= 0.001) { return vec4<f32>(base, 1.0); }
+
+  let R = i32(U.u_fmtChromaRadius);
+  var chroma = fmtChromaH(px, py, R);     // horizontally band-limited I/Q
+  if (U.u_fmtSystem > 1.5) {              // PAL: soften chroma vertically (radius 1) over the H-blur
+    let maxY = U.u_resolutionY - 1.0;
+    let up = fmtChromaH(px, clamp(py - 1.0, 0.0, maxY), R);
+    let dn = fmtChromaH(px, clamp(py + 1.0, 0.0, maxY), R);
+    chroma = (up + chroma + dn) / 3.0;
+  }
+  let Ib = chroma.x;
+  let Qb = chroma.y;
+  let Y0 = 0.299 * base.r + 0.587 * base.g + 0.114 * base.b;
+
+  // Dot crawl: chroma subcarrier beat injected into luma, phase alternates per line + frame.
+  let fparity = i32(U.u_frameIndex) & 1;
+  let lineParity = (i32(py) + fparity) & 1;
+  let sign = select(-1.0, 1.0, lineParity != 0);
+  let carrier = select(-1.0, 1.0, (i32(px) & 1) != 0) * sign;
+  let Y = Y0 + carrier * (abs(Ib) + abs(Qb)) * U.u_fmtDotAmt;
+
+  let r = Y + 0.956 * Ib + 0.621 * Qb;
+  let g = Y - 0.272 * Ib - 0.647 * Qb;
+  let b = Y - 1.106 * Ib + 1.703 * Qb;
+  return vec4<f32>(clamp(vec3<f32>(r, g, b), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
 
 // Pass 0 — the grade stage (CPU renderGrade, Stage A): a pointwise colour/tone transform

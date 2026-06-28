@@ -88,6 +88,11 @@ export const CRT_SIGNAL_UNIFORMS = [
   // Epic 6.3c: OSD overlay active flag (set by the backend from the supplied osdSource — the
   // CPU-rendered OSD is composited over T_graded by fs_osd between grade and optics).
   "u_osdActive",
+  // Epic 6.3d: NTSC/PAL format pre-pass (resolution reduction + composite encode/decode),
+  // applied to the source before grade. Set by the backend from the supplied formatProfile
+  // (renderOptions); 0/inactive by default so non-format looks are unchanged.
+  "u_fmtActive", "u_fmtLowW", "u_fmtLowH", "u_fmtComposite", "u_fmtSystem",
+  "u_fmtChromaRadius", "u_fmtDotAmt",
 ] as const;
 
 // Storage-condition severity factor (CPU crt-renderer-full.js ~535).
@@ -215,5 +220,10 @@ export function buildSignalUniforms(
   set("u_qLowH", Math.max(1, Math.floor(ctx.height / sampleScale)));
   set("u_qLevels", Math.max(6, Math.round(72 - q * 60)));
   set("u_qAlpha", Math.min(0.92, 0.35 + q * 0.55));
+  // Format pre-pass (6.3d) defaults to inactive identity (low dims = full size); the backend
+  // overrides these from the formatProfile in render(). lowW/lowH must be non-zero (fmtSample
+  // divides by them) even on the inactive path.
+  set("u_fmtLowW", ctx.width);
+  set("u_fmtLowH", ctx.height);
   return out;
 }

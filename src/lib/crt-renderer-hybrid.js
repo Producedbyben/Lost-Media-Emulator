@@ -141,14 +141,9 @@ export class CRTRendererHybrid {
     const maskType = typeof params.maskType === "string" ? params.maskType : "phosphor";
     if (!WEBGPU_SUPPORTED_MASKS.has(maskType)) return false;
 
-    // Source view / format authenticity → CPU. (OSD is now GPU-composited — see 6.3c below.)
+    // Source view → CPU. (OSD is now GPU-composited — 6.3c; the NTSC/PAL format pre-pass
+    // — resolution reduction + composite encode/decode — is now GPU-ported in 6.3d.)
     if (renderOptions && renderOptions.sourceView) return false;
-    if (renderOptions && renderOptions.formatProfile) {
-      const fp = renderOptions.formatProfile;
-      const needsRes = (fp.resScaleX ?? 1) < 0.995 || (fp.resScaleY ?? 1) < 0.995;
-      const needsComposite = (fp.system === "NTSC" || fp.system === "PAL") && (fp.composite ?? 0) > 0.001;
-      if (needsRes || needsComposite) return false;
-    }
 
     // String effects: scanlineProfile / subpixelLayoutOverride / monochromeTint are now
     // implemented; chroma subsampling + non-ideal storage are multi-pass → CPU.
@@ -318,7 +313,8 @@ export class CRTRendererHybrid {
         if ((Number(params.advancedTimestampOSD) || 0) >= 0.01) {
           osdSource = this._renderOsdOverlay(width, height, seconds, params, frameIndex, fps, renderOptions);
         }
-        this.webgpuRenderer.render(outCtx, this._lastImg, width, height, seconds, params, frameIndex, fps, osdSource);
+        const formatProfile = (renderOptions && renderOptions.formatProfile) || null;
+        this.webgpuRenderer.render(outCtx, this._lastImg, width, height, seconds, params, frameIndex, fps, osdSource, formatProfile);
         this.activeMode = "webgpu";
         return;
       } catch (e) {
