@@ -10,6 +10,7 @@ import { CRTRendererFull } from "./crt-renderer-full.js";
 import { PRESETS } from "./presets.js";
 // @ts-ignore
 import { getFormatProfile } from "./format-profiles.js";
+import { buildHeadlessRenderOptions } from "./headless-render-options";
 import { DEFAULT_PARAMS } from "@/hooks/useCRTRenderer";
 
 type Params = Record<string, number | string>;
@@ -65,7 +66,9 @@ async function renderFrame(
 ): Promise<void> {
   const renderer = new CRTRendererFull();
   renderer.setImage(img, 1);
-  const renderOptions = formatPipeline ? { formatProfile: getFormatProfile(name, undefined) } : {};
+  // Thread the per-look OSD profile (date/font/colours) alongside the format profile so the
+  // burned-in OSD matches the app instead of renderOSD()'s 1998 fallback. See headless-render-options.ts.
+  const renderOptions = buildHeadlessRenderOptions(name, params, formatPipeline);
   renderer.render(ctx, width, height, frameIndex / fps, params, frameIndex, fps, renderOptions);
 }
 

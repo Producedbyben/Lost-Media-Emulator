@@ -777,6 +777,9 @@ const Index = () => {
       osdPrimaryColor: osdProfile.primaryColor,
       osdAccentColor: osdProfile.accentColor,
       osdCountWithExport: osdProfile.countWithExport,
+      // Per-look corner labels (kills the garbled "CAM2"/"CTFID CHANNEL3" default); merge so any
+      // other configured corners survive. Same map the headless/CLI path consumes.
+      osdCornerConfig: { ...prev.osdCornerConfig, ...osdProfile.cornerConfig },
     }));
     if ("advancedOSDStyle" in values) {
       setLocalOSDOptions((prev) => ({ ...prev, osdStyle: values.advancedOSDStyle }));
