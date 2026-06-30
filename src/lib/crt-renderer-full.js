@@ -1,6 +1,6 @@
 // Full CRT Renderer extracted from app.js — includes all mask types, OSD, film effects, etc.
 
-import { bitrotDesyncColor, dctEdgeFactor } from "./effects-core/codec-corruption.js";
+import { dctEdgeFactor } from "./effects-core/codec-corruption.js";
 
 function seededNoise(x, y, frame) {
   const v = Math.sin(x * 12.9898 + y * 78.233 + frame * 19.17) * 43758.5453;
@@ -1330,26 +1330,34 @@ export class CRTRendererFull {
         outCtx.putImageData(img, 0, 0);
       }
 
-      // ---- Bit-rot / DCT block corruption: random macroblocks get replaced
-      // by another block, channel-desynced, or smeared — true data corruption. ----
+      // ---- DCT macroblock corruption: real codec corruption forms CONTIGUOUS CLUSTERS of
+      // SCENE-COLOURED blocks (errors propagate spatially) — displaced reference blocks, smears,
+      // or DC-only blocks that collapse to their region's AVERAGE colour. NOT an isolated
+      // sprinkle of random-hue tiles, which read as salt-and-pepper confetti (NEEDS-BEN #13). ----
       if (bitrotCorruption > 0.01) {
         this.ensureCanvasSize(this.moshSnapCanvas, width, height);
         const sctx = this.moshSnapCtx;
         sctx.clearRect(0, 0, width, height);
         sctx.drawImage(outCtx.canvas, 0, 0);
-        const snapData = sctx.getImageData(0, 0, width, height).data; // for image-derived mode-2 corruption
+        const snapData = sctx.getImageData(0, 0, width, height).data;
         const block = Math.max(8, Math.round(10 + (1 - perfBudget) * 18));
-        const prob = bitrotCorruption * 0.18;
+        // Corruption clusters: a coarse low-frequency field (several blocks across) thresholded
+        // by the strength gives contiguous corrupted regions; a fine term breaks up the patch
+        // edges so they read organic rather than as a hard rectangle.
+        const clusterScale = block * 3;
+        const clusterThresh = 1 - Math.min(0.55, 0.05 + bitrotCorruption * 0.32);
         outCtx.save();
         outCtx.imageSmoothingEnabled = false;
         for (let by = 0; by < height; by += block) {
           for (let bx = 0; bx < width; bx += block) {
-            if (seededNoise(bx + 3, by + 7, frameIndex + 23) > prob) continue;
+            const coarse = seededNoise(Math.floor(bx / clusterScale) * 1.7, Math.floor(by / clusterScale) * 1.3, frameIndex + 23);
+            const fine = seededNoise(bx * 0.09, by * 0.11, frameIndex + 41);
+            if (coarse * 0.82 + fine * 0.18 < clusterThresh) continue; // not in a corrupted cluster
             const bw = Math.min(block, width - bx);
             const bh = Math.min(block, height - by);
             const mode = Math.floor(seededNoise(bx, by, frameIndex) * 3) % 3;
             if (mode === 0) {
-              // Copy a wrong reference block from elsewhere in the frame.
+              // Displaced reference block (wrong motion vector) — the scene's own colours, moved.
               const sx = Math.floor(seededNoise(by, bx, frameIndex + 1) * (width - bw));
               const sy = Math.floor(seededNoise(bx, by, frameIndex + 2) * (height - bh));
               outCtx.drawImage(this.moshSnapCanvas, sx, sy, bw, bh, bx, by, bw, bh);
@@ -1357,20 +1365,18 @@ export class CRTRendererFull {
               // Horizontal smear: stretch the block's first column across it.
               outCtx.drawImage(this.moshSnapCanvas, bx, by, 1, bh, bx, by, bw, bh);
             } else {
-              // Channel-desync corruption DERIVED from the block's own colour (a permutation
-              // of its RGB channels), not a random rainbow hue — so smooth/muted blocks glitch
-              // subtly instead of exploding into garish confetti (NEEDS-BEN #13).
-              const cx = Math.min(width - 1, bx + (bw >> 1));
-              const cy = Math.min(height - 1, by + (bh >> 1));
-              const si = (cy * width + cx) * 4;
-              const [dr, dg, db] = bitrotDesyncColor(
-                snapData[si], snapData[si + 1], snapData[si + 2],
-                seededNoise(bx, by, frameIndex + 5),
-              );
-              outCtx.globalAlpha = 0.55 + bitrotCorruption * 0.4;
-              outCtx.fillStyle = `rgb(${dr}, ${dg}, ${db})`;
+              // DC-only block: AC coefficients lost, so the block collapses to the AVERAGE colour
+              // of its own region — the defining macroblock smear (scene-coloured, contiguous).
+              let rs = 0, gs = 0, bs = 0, n = 0;
+              for (let yy = 0; yy < bh; yy += 2) {
+                const row = (by + yy) * width;
+                for (let xx = 0; xx < bw; xx += 2) {
+                  const si = (row + bx + xx) * 4;
+                  rs += snapData[si]; gs += snapData[si + 1]; bs += snapData[si + 2]; n++;
+                }
+              }
+              outCtx.fillStyle = `rgb(${Math.round(rs / n)}, ${Math.round(gs / n)}, ${Math.round(bs / n)})`;
               outCtx.fillRect(bx, by, bw, bh);
-              outCtx.globalAlpha = 1;
             }
           }
         }
