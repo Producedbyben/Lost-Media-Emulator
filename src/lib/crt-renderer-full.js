@@ -1,5 +1,7 @@
 // Full CRT Renderer extracted from app.js — includes all mask types, OSD, film effects, etc.
 
+import { bitrotDesyncColor, dctEdgeFactor } from "./effects-core/codec-corruption.js";
+
 function seededNoise(x, y, frame) {
   const v = Math.sin(x * 12.9898 + y * 78.233 + frame * 19.17) * 43758.5453;
   return v - Math.floor(v);
@@ -1164,6 +1166,24 @@ export class CRTRendererFull {
         const ringAmt = Math.min(0.38, (quantization - 0.18) * 0.52);
         const qImg = outCtx.getImageData(0, 0, width, height);
         const qd = qImg.data;
+        // Pre-pass: per-block luma contrast (proxy for DCT AC energy). Block edges + ringing
+        // only show where a block carries real high-frequency detail — a flat block has ~no
+        // coefficients to truncate. Unconditional edges painted a uniform wireframe grid over
+        // smooth/AI sources (NEEDS-BEN #13); gating by contrast keeps smooth areas clean and
+        // blocks up only where there is detail.
+        const blocksW = Math.ceil(width / blockPx);
+        const bMin = new Float32Array(blocksW * Math.ceil(height / blockPx)).fill(255);
+        const bMax = new Float32Array(bMin.length);
+        for (let y = 0; y < height; y++) {
+          const brow = Math.floor(y / blockPx) * blocksW;
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const luma = 0.299 * qd[i] + 0.587 * qd[i + 1] + 0.114 * qd[i + 2];
+            const bi = brow + Math.floor(x / blockPx);
+            if (luma < bMin[bi]) bMin[bi] = luma;
+            if (luma > bMax[bi]) bMax[bi] = luma;
+          }
+        }
         for (let y = 0; y < height; y++) {
           const localY = y % blockPx;
           const blockRow = Math.floor(y / blockPx);
@@ -1171,6 +1191,9 @@ export class CRTRendererFull {
             const localX = x % blockPx;
             const blockCol = Math.floor(x / blockPx);
             const i = (y * width + x) * 4;
+            const bi = blockRow * blocksW + blockCol;
+            const edgeFactor = dctEdgeFactor((bMax[bi] - bMin[bi]) / 255);
+            if (edgeFactor < 0.002) continue; // flat block → no visible blocking at all
             // Block-edge darkening: activate on first/last row or column of a block
             const onHorizEdge = localY === 0;
             const onVertEdge = localX === 0;
@@ -1178,7 +1201,7 @@ export class CRTRendererFull {
               // Per-block noise varies the edge shade slightly (different blocks have
               // different DC-coefficient truncation, so edge jumps differ in magnitude).
               const blockNoise = seededNoise(blockCol * 0.41, blockRow * 0.37, frameIndex * 0.0);
-              const alpha = edgeAlpha * (0.6 + blockNoise * 0.4);
+              const alpha = edgeAlpha * (0.6 + blockNoise * 0.4) * edgeFactor;
               qd[i]     = Math.max(0, qd[i]     - qd[i]     * alpha);
               qd[i + 1] = Math.max(0, qd[i + 1] - qd[i + 1] * alpha);
               qd[i + 2] = Math.max(0, qd[i + 2] - qd[i + 2] * alpha);
@@ -1191,7 +1214,7 @@ export class CRTRendererFull {
               const luma = 0.299 * qd[i] + 0.587 * qd[i + 1] + 0.114 * qd[i + 2];
               // Ringing oscillates with a spatial frequency close to the 8-px DCT period.
               const ring = Math.sin((localX + localY) * Math.PI * 0.25) *
-                           ringAmt * (luma / 255) * 28;
+                           ringAmt * (luma / 255) * 28 * edgeFactor;
               qd[i]     = Math.max(0, Math.min(255, qd[i]     + ring));
               qd[i + 1] = Math.max(0, Math.min(255, qd[i + 1] + ring));
               qd[i + 2] = Math.max(0, Math.min(255, qd[i + 2] + ring));
@@ -1314,6 +1337,7 @@ export class CRTRendererFull {
         const sctx = this.moshSnapCtx;
         sctx.clearRect(0, 0, width, height);
         sctx.drawImage(outCtx.canvas, 0, 0);
+        const snapData = sctx.getImageData(0, 0, width, height).data; // for image-derived mode-2 corruption
         const block = Math.max(8, Math.round(10 + (1 - perfBudget) * 18));
         const prob = bitrotCorruption * 0.18;
         outCtx.save();
@@ -1333,10 +1357,18 @@ export class CRTRendererFull {
               // Horizontal smear: stretch the block's first column across it.
               outCtx.drawImage(this.moshSnapCanvas, bx, by, 1, bh, bx, by, bw, bh);
             } else {
-              // Channel-desynced solid corruption tile.
-              const hue = Math.floor(seededNoise(bx, by, frameIndex + 5) * 360);
+              // Channel-desync corruption DERIVED from the block's own colour (a permutation
+              // of its RGB channels), not a random rainbow hue — so smooth/muted blocks glitch
+              // subtly instead of exploding into garish confetti (NEEDS-BEN #13).
+              const cx = Math.min(width - 1, bx + (bw >> 1));
+              const cy = Math.min(height - 1, by + (bh >> 1));
+              const si = (cy * width + cx) * 4;
+              const [dr, dg, db] = bitrotDesyncColor(
+                snapData[si], snapData[si + 1], snapData[si + 2],
+                seededNoise(bx, by, frameIndex + 5),
+              );
               outCtx.globalAlpha = 0.55 + bitrotCorruption * 0.4;
-              outCtx.fillStyle = `hsl(${hue}, 90%, 50%)`;
+              outCtx.fillStyle = `rgb(${dr}, ${dg}, ${db})`;
               outCtx.fillRect(bx, by, bw, bh);
               outCtx.globalAlpha = 1;
             }
