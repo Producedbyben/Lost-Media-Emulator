@@ -1,6 +1,6 @@
 // Full CRT Renderer extracted from app.js — includes all mask types, OSD, film effects, etc.
 
-import { dctEdgeFactor } from "./effects-core/codec-corruption.js";
+import { corruptionSpawnFactor, dctEdgeFactor } from "./effects-core/codec-corruption.js";
 
 function seededNoise(x, y, frame) {
   const v = Math.sin(x * 12.9898 + y * 78.233 + frame * 19.17) * 43758.5453;
@@ -1355,6 +1355,22 @@ export class CRTRendererFull {
             if (coarse * 0.82 + fine * 0.18 < clusterThresh) continue; // not in a corrupted cluster
             const bw = Math.min(block, width - bx);
             const bh = Math.min(block, height - by);
+            // Flat-region gate (PE re-gate 2026-07-05): corruption hides in detail — a lone
+            // block on a flat sky/wall reads as a defect. Sample the block's luma range and
+            // collapse spawn probability on low-variance blocks.
+            let lMin = 255, lMax = 0;
+            for (let yy = 0; yy < bh; yy += 3) {
+              const row = (by + yy) * width;
+              for (let xx = 0; xx < bw; xx += 3) {
+                const si = (row + bx + xx) * 4;
+                const l = 0.299 * snapData[si] + 0.587 * snapData[si + 1] + 0.114 * snapData[si + 2];
+                if (l < lMin) lMin = l;
+                if (l > lMax) lMax = l;
+              }
+            }
+            const spawn = corruptionSpawnFactor((lMax - lMin) / 255);
+            if (spawn <= 0) continue; // flat block — never corrupt
+            if (spawn < 1 && seededNoise(bx + 13, by + 29, frameIndex + 57) > spawn) continue;
             const mode = Math.floor(seededNoise(bx, by, frameIndex) * 3) % 3;
             if (mode === 0) {
               // Displaced reference block (wrong motion vector) — the scene's own colours, moved.

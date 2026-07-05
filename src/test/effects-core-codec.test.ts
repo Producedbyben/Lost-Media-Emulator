@@ -1,11 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { dctEdgeFactor } from "@/lib/effects-core/codec-corruption";
+import { corruptionSpawnFactor, dctEdgeFactor } from "@/lib/effects-core/codec-corruption";
 
 // B6 codec-sim bug (NEEDS-BEN #13): on smooth/AI sources the codec looks emitted garish
 // rainbow "confetti" (random-hue block tiles) + a uniform DCT grid that ignored local
 // content. The fix makes artefacts CONTENT-DEPENDENT: corruption clusters into contiguous
 // scene-coloured / scene-averaged macroblocks (verified visually in the renderer), and block
 // edges only appear where a block has AC energy — which this helper encodes.
+
+describe("corruptionSpawnFactor — corruption avoids flat regions (kills stray blocks on sky/walls)", () => {
+  // PE re-gate (2026-07-05): isolated corrupted blocks still peppered FLAT bright regions
+  // (dog wall, autumn sky). Real corruption is masked by detail; on a flat field a lone
+  // block reads as a defect. Spawn probability must collapse to zero on flat blocks.
+  it("is 0 for a flat block (no corruption on clean sky/walls)", () => {
+    expect(corruptionSpawnFactor(0)).toBe(0);
+  });
+
+  it("stays ~0 below the flatness floor", () => {
+    expect(corruptionSpawnFactor(0.05)).toBe(0);
+  });
+
+  it("reaches full spawn on detailed blocks", () => {
+    expect(corruptionSpawnFactor(0.6)).toBe(1);
+  });
+
+  it("ramps monotonically between floor and full", () => {
+    expect(corruptionSpawnFactor(0.15)).toBeGreaterThan(0);
+    expect(corruptionSpawnFactor(0.15)).toBeLessThan(corruptionSpawnFactor(0.3));
+  });
+});
 
 describe("dctEdgeFactor — block-edge visibility scales with AC energy (kills uniform grid)", () => {
   it("is 0 for a perfectly flat block (no edge on smooth areas)", () => {
