@@ -302,10 +302,14 @@ function buildMenu() {
     {
       label: "View",
       submenu: [
-        { role: "reload" },
-        { role: "forceReload" },
-        { role: "toggleDevTools" },
-        { type: "separator" },
+        // Reload/DevTools are development tools: Cmd+R silently wipes a customer's session
+        // (undo history, unsaved look), so they only appear in unpackaged dev builds.
+        ...(app.isPackaged ? [] : [
+          { role: "reload" },
+          { role: "forceReload" },
+          { role: "toggleDevTools" },
+          { type: "separator" },
+        ]),
         { role: "resetZoom" },
         { role: "zoomIn" },
         { role: "zoomOut" },
@@ -321,8 +325,26 @@ function buildMenu() {
       role: "help",
       submenu: [
         {
-          label: "Lost Media Emulator — Project",
-          click: () => shell.openExternal("https://lovable.dev"),
+          label: "Lost Media Emulator Help",
+          click: () => shell.openExternal("https://lostmediaemulator.com"),
+        },
+        {
+          label: "Looks Library",
+          click: () => shell.openExternal("https://lostmediaemulator.com/looks"),
+        },
+        { type: "separator" },
+        {
+          label: "Keyboard Shortcuts",
+          click: () => mainWindow?.webContents.executeJavaScript('window.dispatchEvent(new Event("shortcuts:open"))').catch(() => {}),
+        },
+        {
+          label: "Show Tutorial",
+          click: () => mainWindow?.webContents.executeJavaScript('window.dispatchEvent(new Event("tutorial:open"))').catch(() => {}),
+        },
+        { type: "separator" },
+        {
+          label: "Contact Support…",
+          click: () => shell.openExternal("https://lostmediaemulator.com/docs"),
         },
       ],
     },

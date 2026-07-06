@@ -280,6 +280,12 @@ const Index = () => {
 
   const { theme, setTheme, density, setDensity } = useTheme();
   const { startTutorial, TutorialComponent } = useTutorial();
+  // Help-menu entry point (menu -> executeJavaScript dispatches this event).
+  useEffect(() => {
+    const open = () => startTutorial();
+    window.addEventListener("tutorial:open", open);
+    return () => window.removeEventListener("tutorial:open", open);
+  }, [startTutorial]);
   const { showTour, setShowTour, startEffectTour } = useEffectTour();
   const [params, setLocalParams] = useState<CRTParams>(DEFAULT_PARAMS);
   const [osdOptions, setLocalOSDOptions] = useState<OSDOptions>(DEFAULT_OSD_OPTIONS);
