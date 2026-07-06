@@ -542,6 +542,10 @@ export class CRTRendererFull {
     const filmGateWeave = Math.max(0, Math.min(1, Number(params.advancedFilmGateWeave) || 0));
     const filmHalation = Math.max(0, Math.min(1, Number(params.advancedFilmHalation) || 0));
     const neonPhosphorBleed = Math.max(0, Math.min(1, Number(params.advancedNeonPhosphorBleed) || 0));
+    // 1.1.5 look signatures (PE-specced): RealVideo watercolour smear, LED-wall capture, plasma burn-in graphic.
+    const watercolorSmear = Math.max(0, Math.min(1, Number(params.advancedWatercolorSmear) || 0));
+    const ledWall = Math.max(0, Math.min(1, Number(params.advancedLedWall) || 0));
+    const burnInStyle = String(params.burnInStyle || "none");
     // ---- v2 film / sensor / signal params (now consumed) ----
     const c01 = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; };
     const grainSize = c01(params.grainSize);
@@ -900,20 +904,57 @@ export class CRTRendererFull {
     // slightly brightened copy of the source at very low opacity using screen blend
     // (so it is only visible in darker areas of the live image, matching real
     // burn-in which is most visible during dark scenes). No Math.random() used. ----
-    if (burnInGhost > 0.001) {
-      // First pass: faint screen-blend ghost — visible in dark image regions only.
+    if (burnInGhost > 0.001 && burnInStyle !== "none") {
+      // Real burn-in is a STATIC retained impression of PREVIOUS on-screen graphics that does
+      // NOT match the live picture (PE 1.1.5): corner station-logo, lower-third ticker, channel
+      // box, menu/HUD frame or bezel. Draw a synthetic period graphic independent of the source.
+      // Plasma = faint bright retention (screen); phosphor wear = faint dark impression (multiply).
+      const plasmaRetain = /plasma|bright|led/.test(burnInStyle);
+      outCtx.save();
+      outCtx.globalCompositeOperation = plasmaRetain ? "screen" : "multiply";
+      const a = Math.min(0.5, 0.12 + burnInGhost * 0.4);
+      outCtx.globalAlpha = a;
+      outCtx.fillStyle = plasmaRetain ? "rgba(240,238,225,1)" : "rgba(6,6,10,1)";
+      const bm = Math.round(Math.min(width, height) * 0.04);
+      const burnRoundRect = (x, y, w, h, r) => {
+        outCtx.beginPath();
+        outCtx.moveTo(x + r, y);
+        outCtx.arcTo(x + w, y, x + w, y + h, r);
+        outCtx.arcTo(x + w, y + h, x, y + h, r);
+        outCtx.arcTo(x, y + h, x, y, r);
+        outCtx.arcTo(x, y, x + w, y, r);
+        outCtx.closePath();
+        outCtx.fill();
+      };
+      if (/ticker|lower/.test(burnInStyle)) {
+        outCtx.fillRect(0, Math.round(height * 0.84), width, Math.round(height * 0.09));
+      } else if (/channel|box|number/.test(burnInStyle)) {
+        const bw = Math.round(width * 0.09);
+        burnRoundRect(width - bm - bw, bm, bw, Math.round(height * 0.08), Math.round(height * 0.015));
+      } else if (/hud|menu|frame/.test(burnInStyle)) {
+        outCtx.globalAlpha = a * 0.8;
+        outCtx.lineWidth = Math.max(2, Math.round(height * 0.006));
+        outCtx.strokeStyle = outCtx.fillStyle;
+        outCtx.beginPath();
+        outCtx.rect(bm * 2, bm * 2, width - bm * 4, height - bm * 4);
+        outCtx.stroke();
+      } else if (/bezel/.test(burnInStyle)) {
+        const bw = Math.round(Math.min(width, height) * 0.05);
+        outCtx.fillRect(0, 0, width, bw);
+        outCtx.fillRect(0, height - bw, width, bw);
+        outCtx.fillRect(0, 0, bw, height);
+        outCtx.fillRect(width - bw, 0, bw, height);
+      } else {
+        // Default: rounded corner station-logo box, top-left.
+        burnRoundRect(bm, bm, Math.round(width * 0.16), Math.round(height * 0.11), Math.round(height * 0.02));
+      }
+      outCtx.restore();
+    } else if (burnInGhost > 0.001) {
+      // Legacy aligned-ghost fallback (no style chosen) — kept for backward compatibility.
       outCtx.save();
       outCtx.globalCompositeOperation = "screen";
       outCtx.globalAlpha = Math.min(0.22, burnInGhost * 0.24);
       outCtx.filter = `grayscale(${(0.6 + burnInGhost * 0.3).toFixed(3)}) brightness(${(0.9 + burnInGhost * 0.15).toFixed(3)}) contrast(0.85)`;
-      outCtx.drawImage(this.workCanvas, 0, 0);
-      outCtx.restore();
-      // Second pass: multiply-blend darkening tint that embeds the ghost into
-      // bright areas too, at even lower opacity — "baked into" the full image range.
-      outCtx.save();
-      outCtx.globalCompositeOperation = "multiply";
-      outCtx.globalAlpha = Math.min(0.11, burnInGhost * 0.12);
-      outCtx.filter = `grayscale(1) brightness(${(1.8 + burnInGhost * 0.4).toFixed(3)})`;
       outCtx.drawImage(this.workCanvas, 0, 0);
       outCtx.restore();
     }
@@ -1564,6 +1605,94 @@ export class CRTRendererFull {
       }
     }
 
+
+    // ---- RealVideo watercolour smear (PE 1.1.5): gradients collapse into rounded, bleeding
+    // posterized blobs — soft, muddy, low-res upscaled; NOT sharp DCT blocks. Downsample small,
+    // blur (rounded bleed), posterize the chroma, then bilinear-upscale for the smeared look. ----
+    if (watercolorSmear > 0.001) {
+      const s = watercolorSmear;
+      const smallW = Math.max(8, Math.round(width * (0.16 - s * 0.10)));   // heavier smear -> smaller
+      const smallH = Math.max(8, Math.round(height * (0.16 - s * 0.10)));
+      this.ensureCanvasSize(this.tempCanvas, smallW, smallH);
+      const wctx = this.tempCtx;
+      wctx.clearRect(0, 0, smallW, smallH);
+      wctx.imageSmoothingEnabled = true; wctx.imageSmoothingQuality = "high";
+      wctx.filter = `blur(${(0.6 + s * 1.2).toFixed(2)}px) saturate(${(1 - s * 0.35).toFixed(2)})`;
+      wctx.drawImage(outCtx.canvas, 0, 0, smallW, smallH);
+      wctx.filter = "none";
+      // Rounded posterization: quantise into few levels so gradients band into blobs.
+      const wimg = wctx.getImageData(0, 0, smallW, smallH);
+      const wd = wimg.data;
+      const levels = Math.max(4, Math.round(10 - s * 5));
+      const inv = 255 / (levels - 1);
+      for (let i = 0; i < wd.length; i += 4) {
+        wd[i] = Math.round((wd[i] / 255) * (levels - 1)) * inv;
+        wd[i + 1] = Math.round((wd[i + 1] / 255) * (levels - 1)) * inv;
+        wd[i + 2] = Math.round((wd[i + 2] / 255) * (levels - 1)) * inv;
+      }
+      wctx.putImageData(wimg, 0, 0);
+      outCtx.save();
+      outCtx.imageSmoothingEnabled = true; outCtx.imageSmoothingQuality = "high"; // bilinear upscale = the bleed
+      outCtx.globalAlpha = Math.min(0.95, 0.5 + s * 0.45);
+      outCtx.drawImage(this.tempCanvas, 0, 0, smallW, smallH, 0, 0, width, height);
+      outCtx.restore();
+    }
+
+    // ---- LED-billboard capture (PE 1.1.5): the scene as if shown on a large LED wall and
+    // photographed — coarse RGB subpixel lattice with dark inter-pixel gaps, a drifting
+    // horizontal refresh band, and bloom on bright LEDs. Deterministic (temporalSeconds). ----
+    if (ledWall > 0.001) {
+      const w = ledWall;
+      const cell = Math.max(4, Math.round(6 + (1 - w) * 10)); // LED pitch in px
+      // Subpixel lattice tile: three vertical R/G/B stripes with a dark gap row/col.
+      if (this._ledTileKey !== cell) {
+        const tile = document.createElement("canvas");
+        tile.width = cell; tile.height = cell;
+        const tctx = tile.getContext("2d");
+        tctx.fillStyle = "#000"; tctx.fillRect(0, 0, cell, cell);
+        const sub = Math.max(1, Math.floor((cell - 1) / 3));
+        const gap = 1;
+        tctx.fillStyle = "#f00"; tctx.fillRect(0, gap, sub, cell - gap * 2);
+        tctx.fillStyle = "#0f0"; tctx.fillRect(sub, gap, sub, cell - gap * 2);
+        tctx.fillStyle = "#00f"; tctx.fillRect(sub * 2, gap, sub, cell - gap * 2);
+        this._ledTile = tile; this._ledTileKey = cell;
+        this._ledPattern = outCtx.createPattern(tile, "repeat");
+      }
+      // Bloom: a brightened, blurred copy screened back so bright LEDs glow.
+      outCtx.save();
+      outCtx.globalCompositeOperation = "screen";
+      outCtx.globalAlpha = w * 0.35;
+      outCtx.filter = `blur(${(1 + w * 2).toFixed(2)}px) brightness(1.3)`;
+      outCtx.drawImage(outCtx.canvas, 0, 0);
+      outCtx.restore();
+      // Subpixel lattice multiply (the RGB-dot grid + dark gaps = moiré against scene detail).
+      if (this._ledPattern) {
+        outCtx.save();
+        outCtx.globalCompositeOperation = "multiply";
+        outCtx.globalAlpha = Math.min(0.9, 0.45 + w * 0.45);
+        outCtx.fillStyle = this._ledPattern;
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.restore();
+        // Restore some brightness the lattice removes.
+        outCtx.save();
+        outCtx.globalCompositeOperation = "screen";
+        outCtx.globalAlpha = w * 0.25;
+        outCtx.drawImage(outCtx.canvas, 0, 0);
+        outCtx.restore();
+      }
+      // Rolling refresh band: a bright horizontal band the camera catches scanning the panel.
+      const bandH = Math.round(height * 0.12);
+      const bandY = ((temporalSeconds * 0.35) % 1) * (height + bandH) - bandH;
+      const grad = outCtx.createLinearGradient(0, bandY, 0, bandY + bandH);
+      grad.addColorStop(0, "rgba(255,255,255,0)");
+      grad.addColorStop(0.5, `rgba(255,255,255,${(w * 0.12).toFixed(3)})`);
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      outCtx.save();
+      outCtx.globalCompositeOperation = "screen";
+      outCtx.fillStyle = grad;
+      outCtx.fillRect(0, bandY, width, bandH);
+      outCtx.restore();
+    }
 
     // ---- Lens/optics vignette (independent of tube curvature) ----
     if (vignetteAmt > 0.001) {

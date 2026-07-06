@@ -1726,6 +1726,8 @@ export const PRESETS = {
     maskType: "oledPentile",
   },
   "Pioneer Plasma TV (2007)": {
+    burnInGhost: 0.7,
+    burnInStyle: "logo",
     scanlineStrength: 0.06,
     phosphorMask: 0.34,
     barrelDistortion: 0,
@@ -1856,6 +1858,7 @@ export const PRESETS = {
     maskType: "aperture",
   },
   "RealPlayer 240p Stream (1999)": {
+    advancedWatercolorSmear: 0.62, // RealVideo blob-smear signature (1.1.5 PE)
     scanlineStrength: 0,
     phosphorMask: 0.14,
     barrelDistortion: 0,
@@ -2283,6 +2286,7 @@ export const PRESETS = {
     maskType: "none",
   },
   "LED Billboard Phone Capture": {
+    advancedLedWall: 0.7, // LED-wall lattice + moiré + rolling band (1.1.5 PE)
     scanlineStrength: 0,
     phosphorMask: 0.28,
     barrelDistortion: -0.018,
@@ -2473,6 +2477,7 @@ export const PRESETS = {
     maskType: "oledPentile",
   },
   "CRT Plasma Burn-In": {
+    burnInStyle: "channel-box",
     schemaVersion: 2,
     scanlineStrength: 0.06, phosphorMask: 0.36, barrelDistortion: 0, bloom: 0.34,
     flicker: 0.02, chromaticAberration: 0.03, noise: 0.08, pixelSize: 1,

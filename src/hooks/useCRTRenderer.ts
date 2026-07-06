@@ -71,6 +71,9 @@ export interface CRTParams {
   advancedFilmGateWeave: number;
   advancedFilmHalation: number;
   advancedNeonPhosphorBleed: number;
+  advancedWatercolorSmear: number;  // RealVideo blob-smear signature (1.1.5)
+  advancedLedWall: number;          // LED-wall lattice + moiré + rolling band (1.1.5)
+  burnInStyle: string;              // synthetic retained-graphic burn-in shape (1.1.5): none|logo|ticker|channel-box|hud|bezel
   // V2: Color & Signal
   lumaNoise: number;
   chromaNoise: number;
@@ -207,6 +210,9 @@ export const DEFAULT_PARAMS: CRTParams = {
   advancedFilmGateWeave: 0,
   advancedFilmHalation: 0,
   advancedNeonPhosphorBleed: 0,
+  advancedWatercolorSmear: 0,
+  advancedLedWall: 0,
+  burnInStyle: "none",
   // V2: Color & Signal — all neutral
   lumaNoise: 0,
   chromaNoise: 0,
