@@ -46,6 +46,7 @@ import { decodeParamsFromURL } from "@/lib/preset-storage";
 import { clampParam, validateEnum } from "@/lib/preset-migration";
 import { KeyframeState, evaluateAllTracks } from "@/lib/keyframe-engine";
 import { AudioAnalyzerState, DEFAULT_AUDIO_ANALYZER_STATE } from "@/lib/audio-analyzer";
+import { DEFAULT_AUDIO_PROFILE } from "@/hooks/useAudioPreview";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
 // @ts-ignore
 import { getFormatProfile, getFormatBadge } from "@/lib/format-profiles.js";
@@ -884,19 +885,41 @@ const Index = () => {
 
   const handleResetParams = useCallback(() => {
     // QoL: non-blocking, undoable reset instead of a hard confirm dialog.
+    // Ben-11 #3: "Reset all" must return to TRUE ZERO — params (DEFAULT_PARAMS is now
+    // genuinely neutral), plus every effect-adjacent state that used to survive: signal-chain
+    // slots/locks/intensities (a locked layer silently re-blended onto the next preset),
+    // stage mutes/solo, keyframe tracks, the mask painter, and the audio profile (which
+    // persisted into exports). All captured in the undo closure.
     const prevParams = params;
     const prevOSD = osdOptions;
     const prevPreset = activePreset;
     const prevIntensity = presetIntensity;
     const prevLastValues = lastPresetValues;
+    const prevChain = { captureSlot, displaySlot, captureIntensity, displayIntensity, captureLocked, displayLocked };
+    const prevMuted = mutedStages;
+    const prevSolo = soloStage;
+    const prevKeyframes = keyframeState;
+    const prevMaskPainter = maskPainterEnabled;
+    const prevAudioProfile = audioProfile;
     setLocalParams(DEFAULT_PARAMS);
     setLocalOSDOptions(DEFAULT_OSD_OPTIONS);
     setActivePreset("");
     setPresetIntensity(1);
     setLastPresetValues(null);
+    setCaptureSlot(null);
+    setDisplaySlot(null);
+    setCaptureIntensity(1);
+    setDisplayIntensity(1);
+    setCaptureLocked(false);
+    setDisplayLocked(false);
+    setMutedStages(new Set());
+    setSoloStage(null);
+    setKeyframeState({ tracks: [], duration: 4 });
+    setMaskPainterEnabled(false);
+    setAudioProfile(DEFAULT_AUDIO_PROFILE);
     setIsDirty(false);
     commit(DEFAULT_PARAMS);
-    toast.success("All parameters reset to defaults", {
+    toast.success("Everything reset — true zero state", {
       action: {
         label: "Undo",
         onClick: () => {
@@ -905,12 +928,25 @@ const Index = () => {
           setActivePreset(prevPreset);
           setPresetIntensity(prevIntensity);
           setLastPresetValues(prevLastValues);
+          setCaptureSlot(prevChain.captureSlot);
+          setDisplaySlot(prevChain.displaySlot);
+          setCaptureIntensity(prevChain.captureIntensity);
+          setDisplayIntensity(prevChain.displayIntensity);
+          setCaptureLocked(prevChain.captureLocked);
+          setDisplayLocked(prevChain.displayLocked);
+          setMutedStages(prevMuted);
+          setSoloStage(prevSolo);
+          setKeyframeState(prevKeyframes);
+          setMaskPainterEnabled(prevMaskPainter);
+          setAudioProfile(prevAudioProfile);
           setIsDirty(true);
           commit(prevParams);
         },
       },
     });
-  }, [commit, params, osdOptions, activePreset, presetIntensity, lastPresetValues]);
+  }, [commit, params, osdOptions, activePreset, presetIntensity, lastPresetValues,
+      captureSlot, displaySlot, captureIntensity, displayIntensity, captureLocked, displayLocked,
+      mutedStages, soloStage, keyframeState, maskPainterEnabled, audioProfile, setAudioProfile]);
 
   /**
    * Reset every effect in one signal-chain slot (Capture/Format or Display/Output)
