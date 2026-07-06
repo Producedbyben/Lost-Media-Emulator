@@ -21,7 +21,7 @@ const TUTORIAL_STEPS = [
   {
     id: "presets",
     title: "2. Choose a Preset",
-    description: "Browse our collection of 60+ authentic presets in the left sidebar. From Consumer TVs to VHS tapes, each preset captures a unique era and aesthetic.",
+    description: "Browse all 91 authentic looks in the left sidebar. From consumer TVs to VHS tapes, each look captures a unique era and aesthetic.",
     icon: Layers,
     highlight: "presets",
     position: "left",
