@@ -13,4 +13,10 @@ void loadOSDFonts();
 // the normal app; lets the asset-creation pipeline drive the real CPU export path without the GUI.
 installHeadlessRenderApi();
 
+// Window-level drop guard (audit #4): a file dropped OUTSIDE a dropzone must never
+// navigate the app away (Chromium's default is to open the file, blanking the workspace).
+// Dropzone components handle their own drops before this bubbles to window.
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => e.preventDefault());
+
 createRoot(document.getElementById("root")!).render(<App />);

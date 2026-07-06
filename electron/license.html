@@ -85,7 +85,7 @@
       }
 
       async function activate() {
-        var key = keyEl.value.trim();
+        var key = keyEl.value.trim().toUpperCase(); // input DISPLAYS uppercase via CSS; normalise what we actually send
         if (!key) { setMsg("Enter your license key.", "err"); keyEl.focus(); return; }
         go.disabled = true; setMsg("Activating…", "");
         try {

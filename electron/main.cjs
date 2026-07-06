@@ -54,6 +54,16 @@ function createWindow() {
     },
   });
 
+  // Never navigate away from the app document (audit #4): a stray file drop or
+  // window.open must not replace the workspace.
+  mainWindow.webContents.on("will-navigate", (e) => e.preventDefault());
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // window.open of an https link (e.g. the licence gate's buy link) goes to the
+    // system browser; everything else (incl. dropped file:// URLs) is denied.
+    if (/^https:\/\//.test(url)) shell.openExternal(url);
+    return { action: "deny" };
+  });
+
   // Avoid a white flash before the dark UI paints.
   mainWindow.once("ready-to-show", () => mainWindow.show());
 
