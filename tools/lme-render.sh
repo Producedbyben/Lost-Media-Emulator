@@ -4,6 +4,9 @@
 #
 #   tools/lme-render.sh --list
 #   tools/lme-render.sh --in src.png --look "Consumer TV" --out out.png [--width 1280 --height 720 --frame 0]
+#     [--anchor X,Y]   subject focus (source fractions) for aspect-conversion crops — e.g. 9:16 from 16:9;
+#                      default 0.5,0.5 = centre-crop. [--view x,y,w,h] = explicit crop window (wins).
+#                      Batch manifests may carry per-job "anchor"/"view".
 #   tools/lme-render.sh --in src.png --look look.json --out clip.mp4 --duration 4 --fps 30 [--codec h264]
 #
 # Prefers the INSTALLED app's self-contained `--lme-render` mode (no repo / node_modules / build

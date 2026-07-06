@@ -33,6 +33,25 @@ function parseArgs(argv) {
   return out;
 }
 
+// B10 framing controls: --anchor "X,Y" (subject focus, source fractions; default = old centre-crop)
+// and --view "x,y,w,h" (explicit crop window, wins over anchor). Batch jobs may carry per-job
+// `anchor`/`view` (same string or object form) overriding the global flags.
+function parseAnchor(v) {
+  if (v == null || v === true) return null;
+  if (typeof v === "object") return (Number.isFinite(v.x) && Number.isFinite(v.y)) ? { x: Number(v.x), y: Number(v.y) } : null;
+  const p = String(v).split(",").map(Number);
+  return (p.length === 2 && p.every(Number.isFinite)) ? { x: p[0], y: p[1] } : null;
+}
+function parseView(v) {
+  if (v == null || v === true) return null;
+  if (typeof v === "object") {
+    const { x, y, width, height } = v;
+    return [x, y, width, height].every(Number.isFinite) ? { x: Number(x), y: Number(y), width: Number(width), height: Number(height) } : null;
+  }
+  const p = String(v).split(",").map(Number);
+  return (p.length === 4 && p.every(Number.isFinite)) ? { x: p[0], y: p[1], width: p[2], height: p[3] } : null;
+}
+
 const MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp" };
 function fileToDataURL(p) {
   const mime = MIME[path.extname(p).toLowerCase()] || "image/png";
@@ -117,6 +136,8 @@ function runHeadlessRender({ app, BrowserWindow, distPath, preloadPath, argv }) 
         for (let j = 0; j < jobs.length; j++) {
           const job = jobs[j];
           try {
+            const jobAnchor = parseAnchor(job.anchor != null ? job.anchor : args.anchor);
+            const jobView = parseView(job.view != null ? job.view : args.view);
             const payload = {
               input: fileToDataURL(path.resolve(String(job.in))),
               look: resolveLook(job.look != null ? job.look : args.look),
@@ -124,6 +145,8 @@ function runHeadlessRender({ app, BrowserWindow, distPath, preloadPath, argv }) 
               height: Number(job.height || args.height) || 720,
               frameIndex: Number(job.frame != null ? job.frame : j) || 0,
               fps, formatPipeline: fmt,
+              ...(jobAnchor ? { anchor: jobAnchor } : {}),
+              ...(jobView ? { view: jobView } : {}),
             };
             const dataURL = await win.webContents.executeJavaScript(`window.lmeHeadless.renderStill(${JSON.stringify(payload)})`);
             const outPath = path.resolve(String(job.out));
@@ -149,17 +172,20 @@ function runHeadlessRender({ app, BrowserWindow, distPath, preloadPath, argv }) 
       const height = Number(args.height) || 720;
       const fps = Number(args.fps) || 30;
       const formatPipeline = !args["no-format"];
+      const anchor = parseAnchor(args.anchor);
+      const view = parseView(args.view);
+      const framing = { ...(anchor ? { anchor } : {}), ...(view ? { view } : {}) };
       const outPath = path.resolve(String(args.out));
       const isVideo = /\.(mp4|mov|m4v)$/i.test(outPath) || args.duration != null;
 
       if (isVideo) {
         log("renderVideo…");
-        const payload = { input: inputURL, look, width, height, fps, durationSec: Number(args.duration) || 4, codec: args.codec ? String(args.codec) : "h264", outPath, formatPipeline };
+        const payload = { input: inputURL, look, width, height, fps, durationSec: Number(args.duration) || 4, codec: args.codec ? String(args.codec) : "h264", outPath, formatPipeline, ...framing };
         const res = await win.webContents.executeJavaScript(`window.lmeHeadless.renderVideo(${JSON.stringify(payload)})`);
         return done(0, { ok: true, type: "video", bytes: fs.existsSync(outPath) ? fs.statSync(outPath).size : 0, ...res });
       }
-      log("renderStill…");
-      const payload = { input: inputURL, look, width, height, frameIndex: Number(args.frame) || 0, fps, formatPipeline };
+      log("renderStill… framing=" + JSON.stringify(framing) + " rawAnchor=" + JSON.stringify(args.anchor));
+      const payload = { input: inputURL, look, width, height, frameIndex: Number(args.frame) || 0, fps, formatPipeline, ...framing };
       const dataURL = await win.webContents.executeJavaScript(`window.lmeHeadless.renderStill(${JSON.stringify(payload)})`);
       fs.writeFileSync(outPath, Buffer.from(String(dataURL).replace(/^data:image\/png;base64,/, ""), "base64"));
       return done(0, { ok: true, type: "still", outPath, width, height, bytes: fs.statSync(outPath).size });

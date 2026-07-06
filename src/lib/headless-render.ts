@@ -10,7 +10,7 @@ import { CRTRendererFull } from "./crt-renderer-full.js";
 import { PRESETS } from "./presets.js";
 // @ts-ignore
 import { getFormatProfile } from "./format-profiles.js";
-import { buildHeadlessRenderOptions } from "./headless-render-options";
+import { buildHeadlessRenderOptions, computeSourceView, type SourceView } from "./headless-render-options";
 import { DEFAULT_PARAMS } from "@/hooks/useCRTRenderer";
 
 type Params = Record<string, number | string>;
@@ -24,6 +24,8 @@ interface StillOpts {
   frameIndex?: number;      // which frame of the temporal effects (default 0)
   fps?: number;
   formatPipeline?: boolean; // apply the NTSC/PAL/resolution format profile (default true)
+  anchor?: { x: number; y: number }; // subject focus (source fractions) for aspect-conversion crops (B10)
+  view?: SourceView;        // explicit crop window (source fractions) — wins over anchor
 }
 interface VideoOpts extends StillOpts {
   durationSec?: number;
@@ -60,15 +62,29 @@ function loadImage(dataURL: string): Promise<HTMLImageElement> {
   });
 }
 
+// Resolve the caller's framing control (B10): an explicit view wins; otherwise an anchor
+// becomes a target-aspect window via computeSourceView; otherwise null = engine default
+// (centre-crop), exactly the old behaviour.
+function resolveSourceView(opts: StillOpts, img: HTMLImageElement, width: number, height: number): SourceView | null {
+  if (opts.view) return opts.view;
+  if (opts.anchor) {
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    return computeSourceView(iw, ih, width, height, opts.anchor.x, opts.anchor.y);
+  }
+  return null;
+}
+
 async function renderFrame(
   img: HTMLImageElement, name: string, params: Params, width: number, height: number,
   frameIndex: number, fps: number, formatPipeline: boolean, ctx: CanvasRenderingContext2D,
+  sourceView: SourceView | null = null,
 ): Promise<void> {
   const renderer = new CRTRendererFull();
   renderer.setImage(img, 1);
   // Thread the per-look OSD profile (date/font/colours) alongside the format profile so the
   // burned-in OSD matches the app instead of renderOSD()'s 1998 fallback. See headless-render-options.ts.
-  const renderOptions = buildHeadlessRenderOptions(name, params, formatPipeline);
+  const renderOptions: Record<string, unknown> = buildHeadlessRenderOptions(name, params, formatPipeline);
+  if (sourceView) renderOptions.sourceView = sourceView; // caller-controlled framing (B10)
   renderer.render(ctx, width, height, frameIndex / fps, params, frameIndex, fps, renderOptions);
 }
 
@@ -82,7 +98,8 @@ async function renderStill(opts: StillOpts): Promise<string> {
   canvas.height = height;
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) throw new Error("headless-render: 2d context unavailable");
-  await renderFrame(img, name, params, width, height, frameIndex, fps, formatPipeline, ctx);
+  await renderFrame(img, name, params, width, height, frameIndex, fps, formatPipeline, ctx,
+    resolveSourceView(opts, img, width, height));
   return canvas.toDataURL("image/png");
 }
 
@@ -113,8 +130,9 @@ async function renderVideo(opts: VideoOpts): Promise<{ outPath: string; frames: 
 
   const { sessionId } = await desktop.ffmpeg.begin({ width, height, fps });
   try {
+    const sourceView = resolveSourceView(opts, img, width, height);
     for (let i = 0; i < total; i++) {
-      await renderFrame(img, name, params, width, height, i, fps, formatPipeline, ctx);
+      await renderFrame(img, name, params, width, height, i, fps, formatPipeline, ctx, sourceView);
       await desktop.ffmpeg.frame({ sessionId, index: i, bytes: await pngBytes() });
     }
     await desktop.ffmpeg.encode({ sessionId, codec, outPath });
