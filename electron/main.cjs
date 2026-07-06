@@ -1,15 +1,16 @@
 // Lost Media Emulator — native macOS (Apple Silicon) shell.
 // Runs the Vite/React effects studio inside a Metal-accelerated Chromium window.
 
-const { app, BrowserWindow, Menu, shell, dialog, nativeTheme, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, nativeTheme, ipcMain, screen } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const applyGpuFlags = require("./gpu-flags.cjs");
 const { locate } = require("./ffmpeg-locate.cjs");
 const { registerFfmpegIpc } = require("./ffmpeg-ipc.cjs");
 const { getDeviceId, getDeviceName } = require("./license/identity.cjs");
 const licenseStore = require("./license/store.cjs");
 const licenseApi = require("./license/api.cjs");
-const { initAutoUpdate } = require("./updater.cjs");
+const { initAutoUpdate, checkForUpdatesInteractive } = require("./updater.cjs");
 
 const isDev = !app.isPackaged;
 // Headless asset-render mode: `… --lme-render --in img --look "Consumer TV" --out out.png`.
@@ -28,10 +29,197 @@ app.setName("Lost Media Emulator");
 
 let mainWindow = null;
 
+// --- Recent files (File ▸ Open Recent, audit #8) -----------------------------
+// Last 5 successfully-opened on-disk paths, persisted to userData so the menu
+// survives relaunches. The renderer reports opens via `recent-files:add`;
+// clicking an item reads the file here and hands the bytes back as a data URL.
+
+const RECENT_LIMIT = 5;
+const RECENT_MAX_BYTES = 300 * 1024 * 1024; // data-URL round-trip cap
+
+const MIME_BY_EXT = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", bmp: "image/bmp", avif: "image/avif", tif: "image/tiff", tiff: "image/tiff",
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+};
+
+let recentFiles = [];
+
+function recentFilesPath() {
+  return path.join(app.getPath("userData"), "recent-files.json");
+}
+
+function loadRecentFiles() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(recentFilesPath(), "utf8"));
+    if (Array.isArray(parsed)) {
+      recentFiles = parsed.filter((p) => typeof p === "string" && p).slice(0, RECENT_LIMIT);
+    }
+  } catch {
+    recentFiles = [];
+  }
+}
+
+function saveRecentFiles() {
+  try {
+    fs.writeFileSync(recentFilesPath(), JSON.stringify(recentFiles, null, 2));
+  } catch {
+    /* non-fatal: the in-memory list still drives the menu this session */
+  }
+}
+
+function addRecentFile(filePath) {
+  if (typeof filePath !== "string" || !filePath || !path.isAbsolute(filePath)) return;
+  recentFiles = [filePath, ...recentFiles.filter((p) => p !== filePath)].slice(0, RECENT_LIMIT);
+  saveRecentFiles();
+  try {
+    app.addRecentDocument(filePath); // macOS Dock / system-level Recent Items too
+  } catch { /* cosmetic */ }
+  buildMenu(); // rebuild so Open Recent reflects the new list
+}
+
+function clearRecentFiles() {
+  recentFiles = [];
+  saveRecentFiles();
+  try {
+    app.clearRecentDocuments();
+  } catch { /* cosmetic */ }
+  buildMenu();
+}
+
+// Menu click → read the file in main, ship it to the renderer as a data URL.
+// The renderer rebuilds a File and runs the exact same import path as a pick.
+function openRecentFile(filePath) {
+  if (!mainWindow) return;
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    dialog.showMessageBox(mainWindow, {
+      type: "error",
+      message: "File not found",
+      detail: `${filePath} no longer exists, so it was removed from Open Recent.`,
+    });
+    recentFiles = recentFiles.filter((p) => p !== filePath);
+    saveRecentFiles();
+    buildMenu();
+    return;
+  }
+  if (stat.size > RECENT_MAX_BYTES) {
+    dialog.showMessageBox(mainWindow, {
+      type: "error",
+      message: "File too large to reopen from the menu",
+      detail: "Files over 300 MB can't be reopened from Open Recent. Use File ▸ Open Media… instead.",
+    });
+    return;
+  }
+  let data;
+  try {
+    data = fs.readFileSync(filePath);
+  } catch (e) {
+    dialog.showMessageBox(mainWindow, {
+      type: "error",
+      message: "Couldn't read file",
+      detail: e.message,
+    });
+    return;
+  }
+  const ext = path.extname(filePath).replace(".", "").toLowerCase();
+  const mime = MIME_BY_EXT[ext] || "application/octet-stream";
+  // JSON.stringify makes the payload a safe JS object-literal to inline.
+  const payload = JSON.stringify({
+    dataURL: `data:${mime};base64,${data.toString("base64")}`,
+    name: path.basename(filePath),
+  });
+  mainWindow.webContents
+    .executeJavaScript(`window.dispatchEvent(new CustomEvent("menu:open-recent", { detail: ${payload} }))`)
+    .catch(() => {});
+  addRecentFile(filePath); // bump to the front, like every mac app
+}
+
+ipcMain.handle("recent-files:add", (_e, args) => {
+  const p = args && args.path;
+  if (typeof p === "string" && p) addRecentFile(p);
+  return { ok: true };
+});
+
+// Menu → renderer bridge (same pattern as the Help menu's shortcuts/tutorial).
+function sendMenuEvent(name) {
+  mainWindow?.webContents
+    .executeJavaScript(`window.dispatchEvent(new Event("${name}"))`)
+    .catch(() => {});
+}
+
+// --- Window state restore (audit #13) ----------------------------------------
+// Bounds + maximized flag persisted to userData (debounced on resize/move, and
+// once more on close). Restored with a display-bounds sanity check so a window
+// last seen on a disconnected monitor comes back centred instead of off-screen.
+
+const DEFAULT_WINDOW_SIZE = { width: 1480, height: 940 };
+const MIN_WINDOW_SIZE = { width: 1080, height: 720 };
+let windowStateSaveTimer = null;
+
+function windowStatePath() {
+  return path.join(app.getPath("userData"), "window-state.json");
+}
+
+function readWindowState() {
+  try {
+    const s = JSON.parse(fs.readFileSync(windowStatePath(), "utf8"));
+    if (s && [s.x, s.y, s.width, s.height].every(Number.isFinite)) return s;
+  } catch { /* first run / corrupt file → defaults */ }
+  return null;
+}
+
+function saveWindowState(win) {
+  if (!win || win.isDestroyed()) return;
+  try {
+    const bounds = win.getNormalBounds(); // un-maximized bounds, even while maximized
+    fs.writeFileSync(
+      windowStatePath(),
+      JSON.stringify({ ...bounds, isMaximized: win.isMaximized() }, null, 2),
+    );
+  } catch { /* non-fatal */ }
+}
+
+function scheduleWindowStateSave(win) {
+  clearTimeout(windowStateSaveTimer);
+  windowStateSaveTimer = setTimeout(() => saveWindowState(win), 400);
+}
+
+// Resolve the BrowserWindow constructor bounds from the saved state.
+// Returns { width, height, x?, y?, maximize } — x/y omitted means "center".
+function restoreWindowState() {
+  const saved = readWindowState();
+  if (!saved) return { ...DEFAULT_WINDOW_SIZE, maximize: false };
+
+  const width = Math.max(MIN_WINDOW_SIZE.width, Math.round(saved.width));
+  const height = Math.max(MIN_WINDOW_SIZE.height, Math.round(saved.height));
+
+  // The saved rect must meaningfully overlap a *current* display's work area
+  // (≥100px in each axis) or we drop the position and let Electron center it.
+  const rect = { x: saved.x, y: saved.y, width, height };
+  const visible = screen.getAllDisplays().some((d) => {
+    const a = d.workArea;
+    const overlapW = Math.min(rect.x + rect.width, a.x + a.width) - Math.max(rect.x, a.x);
+    const overlapH = Math.min(rect.y + rect.height, a.y + a.height) - Math.max(rect.y, a.y);
+    return overlapW >= 100 && overlapH >= 100;
+  });
+
+  return {
+    width,
+    height,
+    ...(visible ? { x: Math.round(saved.x), y: Math.round(saved.y) } : {}),
+    maximize: saved.isMaximized === true,
+  };
+}
+
 function createWindow() {
+  const state = restoreWindowState();
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 940,
+    width: state.width,
+    height: state.height,
+    ...(state.x !== undefined ? { x: state.x, y: state.y } : {}),
     minWidth: 1080,
     minHeight: 720,
     title: "Lost Media Emulator",
@@ -62,6 +250,18 @@ function createWindow() {
     // system browser; everything else (incl. dropped file:// URLs) is denied.
     if (/^https:\/\//.test(url)) shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  // Restore maximized state before first paint so it doesn't visibly jump.
+  if (state.maximize) mainWindow.maximize();
+
+  // Persist bounds/maximized as the user arranges the window (debounced), plus
+  // a final synchronous save on close.
+  mainWindow.on("resize", () => scheduleWindowStateSave(mainWindow));
+  mainWindow.on("move", () => scheduleWindowStateSave(mainWindow));
+  mainWindow.on("close", () => {
+    clearTimeout(windowStateSaveTimer);
+    saveWindowState(mainWindow);
   });
 
   // Avoid a white flash before the dark UI paints.
@@ -272,6 +472,11 @@ function buildMenu() {
       label: "Lost Media Emulator",
       submenu: [
         { role: "about", label: "About Lost Media Emulator" },
+        { label: `Version ${app.getVersion()}`, enabled: false },
+        {
+          label: "Check for Updates…",
+          click: () => checkForUpdatesInteractive(mainWindow),
+        },
         { type: "separator" },
         {
           label: "Deactivate License…",
@@ -295,6 +500,43 @@ function buildMenu() {
         { role: "unhide" },
         { type: "separator" },
         { role: "quit", label: "Quit Lost Media Emulator" },
+      ],
+    },
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "Open Media…",
+          accelerator: "CmdOrCtrl+O",
+          // Same flow as the in-app import button / Cmd+I: the renderer clicks
+          // its hidden file input, so validation + proxy logic stay in one place.
+          click: () => sendMenuEvent("menu:open-media"),
+        },
+        {
+          label: "Open Recent",
+          submenu: [
+            ...recentFiles.map((p) => ({
+              label: path.basename(p),
+              click: () => openRecentFile(p),
+            })),
+            ...(recentFiles.length ? [{ type: "separator" }] : []),
+            {
+              label: "Clear Menu",
+              enabled: recentFiles.length > 0,
+              click: () => clearRecentFiles(),
+            },
+          ],
+        },
+        { type: "separator" },
+        {
+          label: "Export…",
+          accelerator: "CmdOrCtrl+E",
+          // Renderer opens the export dialog only when media is loaded (same
+          // gate as the disabled Export button).
+          click: () => sendMenuEvent("menu:export"),
+        },
+        { type: "separator" },
+        { role: "close", label: "Close Window" },
       ],
     },
     {
@@ -386,6 +628,7 @@ if (HEADLESS) {
 
   app.whenReady().then(async () => {
     nativeTheme.themeSource = "dark";
+    loadRecentFiles();
     await evaluateLicense();
     buildMenu();
     createWindow();
