@@ -152,16 +152,20 @@ export interface CRTParams {
   [key: string]: number | string;
 }
 
+// TRUE PASSTHROUGH (Ben-11 #4): a new clip must enter unedited — every effect param ships
+// neutral; looks come only from an explicit preset/param choice. Presets that relied on the
+// old baked-in CRT baseline (scanlines/mask/bloom/flicker/chromAb/noise) carry those values
+// explicitly (byte-identity guard: src/test/default-passthrough.test.ts).
 export const DEFAULT_PARAMS: CRTParams = {
-  scanlineStrength: 0.5,
-  phosphorMask: 0.5,
+  scanlineStrength: 0,
+  phosphorMask: 0,
   barrelDistortion: 0,
-  bloom: 0.5,
-  flicker: 0.22,
-  chromaticAberration: 0.5,
-  noise: 0.5,
+  bloom: 0,
+  flicker: 0,
+  chromaticAberration: 0,
+  noise: 0,
   pixelSize: 1,
-  maskType: "phosphor",
+  maskType: "none",
   maskScale: 1,
   monochromeTint: "none",
   monochromeTintStrength: 1,

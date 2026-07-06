@@ -41,12 +41,12 @@ describe("Effects Engine v2 — DEFAULT_PARAMS", () => {
     expect(DEFAULT_PARAMS.storageCondition).toBe("ideal");
   });
 
-  it("preserves all v1 defaults unchanged", () => {
-    expect(DEFAULT_PARAMS.scanlineStrength).toBe(0.5);
-    expect(DEFAULT_PARAMS.bloom).toBe(0.5);
-    expect(DEFAULT_PARAMS.flicker).toBe(0.22);
+  it("ships neutral v1 defaults (true passthrough — Ben-11 #4)", () => {
+    expect(DEFAULT_PARAMS.scanlineStrength).toBe(0);
+    expect(DEFAULT_PARAMS.bloom).toBe(0);
+    expect(DEFAULT_PARAMS.flicker).toBe(0);
     expect(DEFAULT_PARAMS.imageBrightness).toBe(1);
-    expect(DEFAULT_PARAMS.maskType).toBe("phosphor");
+    expect(DEFAULT_PARAMS.maskType).toBe("none");
   });
 });
 

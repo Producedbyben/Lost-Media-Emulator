@@ -128,6 +128,7 @@ export const PRESETS = {
     maskType: "slot",
   },
   "Late-80s Home VHS": {
+    maskType: "phosphor", // was inherited from the old CRT default (Ben-11 #4 passthrough change) — kept explicit for byte-identical look
     scanlineStrength: 0.52,
     phosphorMask: 0.26,
     barrelDistortion: -0.094,
@@ -159,6 +160,7 @@ export const PRESETS = {
     advancedMacroBlocking: 0,
   },
   "90s Rental Tape (3rd Gen Dub)": {
+    maskType: "phosphor", // was inherited from the old CRT default (Ben-11 #4 passthrough change) — kept explicit for byte-identical look
     scanlineStrength: 0.59,
     phosphorMask: 0.2,
     barrelDistortion: -0.109,
@@ -190,6 +192,7 @@ export const PRESETS = {
     advancedMacroBlocking: 0.18,
   },
   "Hi8 Vacation Cam": {
+    maskType: "phosphor", // was inherited from the old CRT default (Ben-11 #4 passthrough change) — kept explicit for byte-identical look
     scanlineStrength: 0.41,
     phosphorMask: 0.32,
     barrelDistortion: -0.058,
@@ -221,6 +224,7 @@ export const PRESETS = {
     advancedMacroBlocking: 0,
   },
   "MiniDV Family Cam (2002)": {
+    maskType: "phosphor", // was inherited from the old CRT default (Ben-11 #4 passthrough change) — kept explicit for byte-identical look
     scanlineStrength: 0.3,
     phosphorMask: 0.44,
     barrelDistortion: -0.039,
@@ -252,6 +256,7 @@ export const PRESETS = {
     advancedMacroBlocking: 0.08,
   },
   "Off-Air Analog Broadcast": {
+    maskType: "phosphor", // was inherited from the old CRT default (Ben-11 #4 passthrough change) — kept explicit for byte-identical look
     scanlineStrength: 0.45,
     phosphorMask: 0.38,
     barrelDistortion: -0.082,

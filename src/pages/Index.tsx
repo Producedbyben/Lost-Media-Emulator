@@ -283,7 +283,7 @@ const Index = () => {
   const [params, setLocalParams] = useState<CRTParams>(DEFAULT_PARAMS);
   const [osdOptions, setLocalOSDOptions] = useState<OSDOptions>(DEFAULT_OSD_OPTIONS);
   const [previewSettings, setLocalPreviewSettings] = useState<PreviewSettings>(DEFAULT_PREVIEW_SETTINGS);
-  const [activePreset, setActivePreset] = useState("Consumer TV");
+  const [activePreset, setActivePreset] = useState("True Zero (Neutral)"); // Ben-11 #4: new sessions start as true passthrough (digitalClean format profile, no look)
   const [presetIntensity, setPresetIntensity] = useState(1);
   const [lastPresetValues, setLastPresetValues] = useState<Record<string, number> | null>(null);
   // Two-axis signal chain: a Capture/Format layer × a Display device layer.
