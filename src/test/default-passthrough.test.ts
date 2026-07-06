@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_PARAMS } from "@/hooks/useCRTRenderer";
-// @ts-expect-error -- plain-JS engine module
 import { PRESETS } from "@/lib/presets.js";
 
 // Ben-11 #4: every imported asset used to wear a baked-in CRT look because DEFAULT_PARAMS
