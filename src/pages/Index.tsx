@@ -1017,6 +1017,15 @@ const Index = () => {
     try {
       const info = await loadImage(file);
       toast.dismiss(loadingId);
+      // Desktop: record successfully-opened on-disk files for File ▸ Open Recent.
+      // Only real picked/dropped files carry a path (pasted images and files
+      // rebuilt from a data URL don't — the guard skips those).
+      try {
+        const desktopApi = (window as any).desktop;
+        const realPath: string | null | undefined =
+          desktopApi?.getPathForFile?.(file) || (file as any).path;
+        if (realPath && desktopApi?.recentFiles?.add) desktopApi.recentFiles.add(realPath);
+      } catch { /* recent-files bookkeeping must never break an import */ }
       if (info?.optimized) {
         toast.success("Optimised working copy created", {
           description: `Source ${info.sourceW}×${info.sourceH} → working ${info.workingW}×${info.workingH} for faster, smoother editing. Exports stay sharp.`,
@@ -1029,6 +1038,37 @@ const Index = () => {
       toast.error("Couldn't load file", { description: err?.message || String(err) });
     }
   }, [loadImage]);
+
+  // Native File-menu entry points (menu → executeJavaScript dispatches these,
+  // same pattern as the Help menu's "tutorial:open"). Each one reuses the
+  // existing handler rather than duplicating logic.
+  useEffect(() => {
+    const openMedia = () => handleImport(); // File ▸ Open Media… (⌘O) — same as import button / ⌘I
+    const openExport = () => { if (hasImage) setExportDialogOpen(true); }; // File ▸ Export… (⌘E) — same gate as the disabled Export button
+    const openRecent = (e: Event) => {
+      // File ▸ Open Recent ▸ …: main read the file and shipped it as a data URL;
+      // rebuild a File and run the exact same import path as a picked file.
+      const detail = (e as CustomEvent<{ dataURL?: string; name?: string }>).detail;
+      if (!detail?.dataURL) return;
+      (async () => {
+        try {
+          const blob = await (await fetch(detail.dataURL!)).blob();
+          const file = new File([blob], detail.name || "recent-media", { type: blob.type });
+          handleLoadFile(file);
+        } catch (err: any) {
+          toast.error("Couldn't open recent file", { description: err?.message || String(err) });
+        }
+      })();
+    };
+    window.addEventListener("menu:open-media", openMedia);
+    window.addEventListener("menu:export", openExport);
+    window.addEventListener("menu:open-recent", openRecent as EventListener);
+    return () => {
+      window.removeEventListener("menu:open-media", openMedia);
+      window.removeEventListener("menu:export", openExport);
+      window.removeEventListener("menu:open-recent", openRecent as EventListener);
+    };
+  }, [handleImport, handleLoadFile, hasImage]);
 
 
 

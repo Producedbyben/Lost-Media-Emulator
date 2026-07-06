@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld("desktop", {
   probeAudio: (opts) => ipcRenderer.invoke("ffmpeg:probe-audio", opts),
   // Write a degraded-audio WAV to a temp file; returns { path } for ffmpeg to mux.
   writeTempAudio: (bytes) => ipcRenderer.invoke("ffmpeg:write-temp-audio", { bytes }),
+  // File ▸ Open Recent: the renderer reports each successfully-opened on-disk
+  // path; main persists the list and rebuilds the menu.
+  recentFiles: {
+    add: (filePath) => ipcRenderer.invoke("recent-files:add", { path: filePath }),
+  },
   // License activation. The main process owns the token + device id and does the
   // server calls; the renderer can only ask for status, activate, or deactivate.
   license: {
