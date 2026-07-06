@@ -46,13 +46,25 @@ const EffectSlider = ({ label, value, min, max, step, defaultValue, onChange, on
   }, [onDoubleClick, defaultValue, onChange]);
 
   // QoL: scroll wheel over a slider nudges its value (hold Shift for 10x coarse steps).
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const mult = e.shiftKey ? 10 : 1;
-    const dir = e.deltaY < 0 ? 1 : -1;
-    onChange(snap(value + dir * step * mult, min, max, step));
-  }, [value, step, min, max, onChange]);
+  // Uses a NATIVE non-passive listener — a React onWheel handler is passive, so its
+  // preventDefault() is a no-op and the wheel scrolls the sidebar instead (audit).
+  const rangeRef = useRef<HTMLInputElement>(null);
+  const wheelState = useRef({ value, step, min, max, onChange });
+  wheelState.current = { value, step, min, max, onChange };
+  useEffect(() => {
+    const el = rangeRef.current;
+    if (!el) return;
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const s = wheelState.current;
+      const mult = e.shiftKey ? 10 : 1;
+      const dir = e.deltaY < 0 ? 1 : -1;
+      s.onChange(snap(s.value + dir * s.step * mult, s.min, s.max, s.step));
+    };
+    el.addEventListener("wheel", onWheelNative, { passive: false });
+    return () => el.removeEventListener("wheel", onWheelNative);
+  }, []);
 
   // QoL: Shift+Arrow makes a coarse (10x) step; native arrows already do single steps.
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -142,9 +154,9 @@ const EffectSlider = ({ label, value, min, max, step, defaultValue, onChange, on
           max={max}
           step={step}
           value={value}
+          ref={rangeRef}
           onChange={handleChange}
           onDoubleClick={handleReset}
-          onWheel={handleWheel}
           onKeyDown={handleKeyDown}
           title="Scroll to adjust · Shift+scroll for coarse · double-click to reset"
           className="w-full relative z-10"

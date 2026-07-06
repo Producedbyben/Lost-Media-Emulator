@@ -97,10 +97,18 @@ const HistogramScope = ({ canvasRef, hasImage, mode }: HistogramScopeProps) => {
     ctx.strokeRect(0, 0, SCOPE_WIDTH, SCOPE_HEIGHT);
   }, [canvasRef, hasImage, activeMode]);
 
+  // Only poll while the scope is actually on screen — it lives in a collapsible panel and
+  // previously ran a getImageData readback every 500ms forever, even collapsed (audit).
   useEffect(() => {
-    draw();
-    const interval = setInterval(draw, 500);
-    return () => clearInterval(interval);
+    const el = scopeRef.current;
+    if (!el) return;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (interval == null) { draw(); interval = setInterval(draw, 500); } };
+    const stop = () => { if (interval != null) { clearInterval(interval); interval = null; } };
+    if (typeof IntersectionObserver === "undefined") { start(); return stop; }
+    const io = new IntersectionObserver(([entry]) => { entry.isIntersecting ? start() : stop(); }, { threshold: 0.01 });
+    io.observe(el);
+    return () => { stop(); io.disconnect(); };
   }, [draw]);
 
   return (

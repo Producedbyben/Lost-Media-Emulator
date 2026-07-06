@@ -74,6 +74,9 @@ const TutorialOverlay = ({ forceShow = false, onComplete }: TutorialOverlayProps
 
   const handleComplete = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, "true");
+    // Signal the Effects tour it may chain — but only THIS session, so a cold launch
+    // after skipping this tour never ambushes with a second modal (audit).
+    try { sessionStorage.setItem("lme-general-tour-session", "1"); } catch { /* ignore */ }
     setIsVisible(false);
     onComplete?.();
   }, [onComplete]);

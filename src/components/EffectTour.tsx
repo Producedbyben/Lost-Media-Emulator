@@ -93,9 +93,12 @@ const EffectTour = ({ forceShow = false, onShowStep, onComplete }: EffectTourPro
   useEffect(() => {
     const done = localStorage.getItem(STORAGE_KEY);
     const generalDone = localStorage.getItem(GENERAL_TUTORIAL_KEY);
-    // Auto-open as a first-time experience, but only AFTER the general welcome
-    // tour is finished so the two modals never stack on a brand-new visit.
-    if (forceShow || (!done && generalDone)) {
+    // Auto-open only when the general welcome tour was finished IN THIS SESSION — so the
+    // two chain on a genuine first run, but a cold launch after skipping never ambushes
+    // with a second full-screen modal (audit). Explicit forceShow always opens.
+    let chainedThisSession = false;
+    try { chainedThisSession = sessionStorage.getItem("lme-general-tour-session") === "1"; } catch { /* ignore */ }
+    if (forceShow || (!done && generalDone && chainedThisSession)) {
       setIsVisible(true);
     }
     setHasLoaded(true);
