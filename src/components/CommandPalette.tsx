@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { mod, shiftKey, combo } from "@/lib/platform";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Sparkles, FolderOpen, Image, Undo2, Redo2, RotateCcw, SlidersHorizontal } from "lucide-react";
 // @ts-ignore
@@ -124,7 +125,7 @@ const CommandPalette = ({ onSelectPreset, onJump, onReset, onUndo, onRedo, onImp
           <CommandItem onSelect={() => handleSelect("import")}>
             <FolderOpen className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="text-xs">Import source file…</span>
-            <span className="ml-auto text-[12px] text-muted-foreground font-mono">Ctrl+I</span>
+            <span className="ml-auto text-[12px] text-muted-foreground font-mono">{combo(mod, "I")}</span>
           </CommandItem>
           <CommandItem onSelect={() => handleSelect("export-still")}>
             <Image className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -133,12 +134,12 @@ const CommandPalette = ({ onSelectPreset, onJump, onReset, onUndo, onRedo, onImp
           <CommandItem onSelect={() => handleSelect("undo")}>
             <Undo2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="text-xs">Undo</span>
-            <span className="ml-auto text-[12px] text-muted-foreground font-mono">Ctrl+Z</span>
+            <span className="ml-auto text-[12px] text-muted-foreground font-mono">{combo(mod, "Z")}</span>
           </CommandItem>
           <CommandItem onSelect={() => handleSelect("redo")}>
             <Redo2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="text-xs">Redo</span>
-            <span className="ml-auto text-[12px] text-muted-foreground font-mono">Ctrl+Shift+Z</span>
+            <span className="ml-auto text-[12px] text-muted-foreground font-mono">{combo(mod, shiftKey, "Z")}</span>
           </CommandItem>
           <CommandItem onSelect={() => handleSelect("reset")}>
             <RotateCcw className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />

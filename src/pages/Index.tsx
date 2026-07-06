@@ -42,6 +42,7 @@ import { useExportQueue } from "@/hooks/useExportQueue";
 import { usePresetFavorites } from "@/hooks/usePresetFavorites";
 import { useTheme } from "@/hooks/useTheme";
 import { generateOSDProfile } from "@/lib/osd-profile";
+import { mod, shiftKey, combo } from "@/lib/platform";
 import { decodeParamsFromURL } from "@/lib/preset-storage";
 import { clampParam, validateEnum } from "@/lib/preset-migration";
 import { KeyframeState, evaluateAllTracks } from "@/lib/keyframe-engine";
@@ -1730,11 +1731,11 @@ const Index = () => {
           </div>
           <div className="w-px h-5 bg-border mx-0.5 hidden sm:block" />
           <button onClick={handleUndo} disabled={!canUndo}
-            className="p-1.5 rounded hover:bg-secondary disabled:opacity-30 transition-colors" title="Undo (Ctrl+Z)">
+            className="p-1.5 rounded hover:bg-secondary disabled:opacity-30 transition-colors" title={`Undo (${combo(mod, "Z")})`}>
             <Undo2 className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
           <button onClick={handleRedo} disabled={!canRedo}
-            className="p-1.5 rounded hover:bg-secondary disabled:opacity-30 transition-colors" title="Redo (Ctrl+Shift+Z)">
+            className="p-1.5 rounded hover:bg-secondary disabled:opacity-30 transition-colors" title={`Redo (${combo(mod, shiftKey, "Z")})`}>
             <Redo2 className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
           <div className="w-px h-5 bg-border mx-0.5 hidden lg:block" />
@@ -1755,9 +1756,9 @@ const Index = () => {
               window.dispatchEvent(ev);
             }}
             className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary border border-border text-muted-foreground hover:text-foreground transition-colors text-[12px]"
-            title="Command palette (Ctrl+K)">
+            title={`Command palette (${combo(mod, "K")})`}>
             <Command className="w-3 h-3" />
-            <span className="font-mono">Ctrl+K</span>
+            <span className="font-mono">{combo(mod, "K")}</span>
           </button>
         </div>
       </header>
@@ -2034,7 +2035,7 @@ const Index = () => {
             {previewSettings.animationEnabled ? `${previewSettings.fpsLimit}fps` : "Still"}
           </span>
           <span className="text-border">|</span>
-          <span className="opacity-60">{isVideo ? "K: Play · ←→: Frame step · L: Loop" : "Ctrl+K: Commands · B: Bypass"}</span>
+          <span className="opacity-60">{isVideo ? "K: Play · ←→: Frame step · L: Loop" : `${combo(mod, "K")}: Commands · B: Bypass`}</span>
         </div>
       </footer>
     </div>

@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { mod, shiftKey } from "@/lib/platform";
 
 const SHORTCUTS = [
-  { keys: "Ctrl + Z", action: "Undo" },
-  { keys: "Ctrl + Shift + Z", action: "Redo" },
-  { keys: "Ctrl + K", action: "Command palette" },
-  { keys: "Ctrl + I", action: "Import source" },
+  { keys: `${mod} + Z`, action: "Undo" },
+  { keys: `${mod} + ${shiftKey} + Z`, action: "Redo" },
+  { keys: `${mod} + K`, action: "Command palette" },
+  { keys: `${mod} + I`, action: "Import source" },
   { keys: "B", action: "Toggle bypass (all effects off/on)" },
   { keys: "R", action: "Randomize preset (undoable)" },
   { keys: "Space (hold)", action: "Compare original" },
-  { keys: "Ctrl + V", action: "Paste image from clipboard" },
+  { keys: `${mod} + V`, action: "Paste image from clipboard" },
   { keys: "Scroll wheel", action: "Zoom preview" },
   { keys: "Double-click canvas", action: "Toggle Fit / 2× zoom" },
   { keys: "Click + drag", action: "Pan (when zoomed)" },
