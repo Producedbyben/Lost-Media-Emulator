@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
-import { Lock, Unlock, X, ArrowDown, Camera, MonitorPlay, Search, Sparkles } from "lucide-react";
+import { Lock, Unlock, X, ArrowDown, Camera, MonitorPlay, Search } from "lucide-react";
 import EffectSlider from "./EffectSlider";
 import PresetThumbnail from "./PresetThumbnail";
 // @ts-ignore
 import {
   CAPTURE_PRESETS, DISPLAY_PRESETS,
   CAPTURE_PRESET_CATEGORIES, DISPLAY_PRESET_CATEGORIES,
-  suggestCaptureForDisplay, suggestDisplayForCapture,
 } from "@/lib/presets.js";
 
 type Axis = "capture" | "display";
@@ -39,8 +38,6 @@ interface SlotConfig {
   intensity: number;
   locked: boolean;
   emptyLabel: string;
-  suggestions: string[];
-  suggestionSource: string | null;
   onSelect: (name: string, values: Record<string, number>) => void;
   onIntensity: (v: number) => void;
   onToggleLock: () => void;
@@ -50,7 +47,7 @@ interface SlotConfig {
 const Slot = ({ config }: { config: SlotConfig }) => {
   const {
     title, subtitle, icon: Icon, presets, categories, selected, intensity,
-    locked, emptyLabel, suggestions, suggestionSource, onSelect, onIntensity, onToggleLock, onClear,
+    locked, emptyLabel, onSelect, onIntensity, onToggleLock, onClear,
   } = config;
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
@@ -109,34 +106,6 @@ const Slot = ({ config }: { config: SlotConfig }) => {
         </span>
       </div>
 
-      {suggestions.length > 0 && (
-        <div className="rounded-md bg-primary/5 border border-primary/20 px-2 py-1.5 space-y-1">
-          <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-primary/80">
-            <Sparkles className="w-2.5 h-2.5" />
-            <span className="truncate">Pairs well with {suggestionSource}</span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {suggestions.map((name) => {
-              const isSel = selected === name;
-              return (
-                <button
-                  key={name}
-                  onClick={() => onSelect(name, presets[name])}
-                  title={`Use “${name}” for this layer`}
-                  className={`px-1.5 py-0.5 text-[11px] rounded-full border transition-colors ${
-                    isSel
-                      ? "bg-primary/20 border-primary/40 text-primary font-medium"
-                      : "bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-primary/30"
-                  }`}
-                >
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
 
       <div className="relative">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
@@ -147,21 +116,17 @@ const Slot = ({ config }: { config: SlotConfig }) => {
         />
       </div>
 
-      <div className="flex flex-wrap gap-0.5">
+      {/* Category dropdown (Ben-11 #9 — one consistent pattern; replaces the button row) */}
+      <select
+        value={activeCategory}
+        onChange={(e) => setActiveCategory(e.target.value)}
+        aria-label={`${title} category`}
+        className="w-full px-2 py-1 text-[12px] bg-secondary border border-border rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+      >
         {categoryTabs.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-1.5 py-0.5 text-[11px] rounded border transition-colors ${
-              activeCategory === cat
-                ? "bg-primary/20 border-primary/40 text-primary font-medium"
-                : "bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-border/60"
-            }`}
-          >
-            {cat}
-          </button>
+          <option key={cat} value={cat}>{cat}</option>
         ))}
-      </div>
+      </select>
 
       <div className="max-h-40 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5">
         {visibleNames.map((name) => {
@@ -208,17 +173,6 @@ const Slot = ({ config }: { config: SlotConfig }) => {
  * while browsing the other layer or applying a Classic.
  */
 const SignalChainBuilder = (props: SignalChainBuilderProps) => {
-  // Cross-axis recommendations: each slot suggests options that pair believably
-  // with whatever is selected on the opposite axis.
-  const captureSuggestions = useMemo(
-    () => (props.displaySlot ? (suggestCaptureForDisplay(props.displaySlot) as string[]) : []),
-    [props.displaySlot],
-  );
-  const displaySuggestions = useMemo(
-    () => (props.captureSlot ? (suggestDisplayForCapture(props.captureSlot) as string[]) : []),
-    [props.captureSlot],
-  );
-
   const captureConfig: SlotConfig = {
     axis: "capture",
     title: "Capture / Format",
@@ -230,8 +184,6 @@ const SignalChainBuilder = (props: SignalChainBuilderProps) => {
     intensity: props.captureIntensity,
     locked: props.captureLocked,
     emptyLabel: "Direct Digital (clean source)",
-    suggestions: captureSuggestions,
-    suggestionSource: props.displaySlot,
     onSelect: props.onSelectCapture,
     onIntensity: props.onCaptureIntensity,
     onToggleLock: props.onToggleCaptureLock,
@@ -249,8 +201,6 @@ const SignalChainBuilder = (props: SignalChainBuilderProps) => {
     intensity: props.displayIntensity,
     locked: props.displayLocked,
     emptyLabel: "Direct / No Display (clean panel)",
-    suggestions: displaySuggestions,
-    suggestionSource: props.captureSlot,
     onSelect: props.onSelectDisplay,
     onIntensity: props.onDisplayIntensity,
     onToggleLock: props.onToggleDisplayLock,

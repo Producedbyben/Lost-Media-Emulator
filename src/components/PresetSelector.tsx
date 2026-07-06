@@ -347,21 +347,21 @@ const PresetSelector = ({
         {isDirty && <span className="text-[11px] px-1.5 py-0.5 rounded bg-warning/20 text-warning font-medium">Modified</span>}
       </div>
 
-      <div className="flex flex-wrap gap-0.5">
+      {/* Category dropdown (Ben-11 #9 — one consistent pattern; replaces the button row) */}
+      <select
+        value={activeCategory}
+        onChange={(e) => setActiveCategory(e.target.value)}
+        aria-label="Preset category"
+        className="w-full px-2 py-1.5 text-[12px] bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+      >
         {categoryTabs.map((cat) => (
-          <button key={cat} onClick={() => setActiveCategory(cat)}
-            className={`flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded border transition-colors ${
-              activeCategory === cat
-                ? "bg-primary/20 border-primary/40 text-primary font-medium"
-                : "bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-border/60"
-            }`}>
-            {cat === "Favorites" && <Star className="w-2.5 h-2.5" />}
-            {cat === "Recent" && <Clock className="w-2.5 h-2.5" />}
-            {cat}{cat === "Custom" && customPresets.length > 0 ? ` (${customPresets.length})` : ""}
+          <option key={cat} value={cat}>
+            {cat}
+            {cat === "Custom" && customPresets.length > 0 ? ` (${customPresets.length})` : ""}
             {cat === "Favorites" && favorites.length > 0 ? ` (${favorites.length})` : ""}
-          </button>
+          </option>
         ))}
-      </div>
+      </select>
 
       <div className="flex items-center gap-1 flex-wrap">
         <span className="text-xs text-muted-foreground font-medium">Preset library</span>
