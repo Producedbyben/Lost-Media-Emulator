@@ -486,7 +486,7 @@ const PresetSelector = ({
         </div>
       )}
 
-      <EffectSlider label="Preset intensity" value={presetIntensity} min={0} max={1.5} step={0.01} defaultValue={1} onChange={onIntensityChange} />
+      <EffectSlider label="Preset intensity" value={presetIntensity} min={0} max={2} step={0.01} defaultValue={1} onChange={onIntensityChange} />
       </>
       )}
     </div>

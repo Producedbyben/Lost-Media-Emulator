@@ -550,14 +550,6 @@ const Index = () => {
     setEffectMask(mask);
   }, [maskPainterEnabled]);
 
-  const presetSamples = useMemo(() => [
-    { name: "Consumer TV", values: PRESETS["Consumer TV"] },
-    { name: "PVM/BVM", values: PRESETS["PVM/BVM"] },
-    { name: "Late-80s Home VHS", values: PRESETS["Late-80s Home VHS"] },
-    { name: "Hi8 Vacation Cam", values: PRESETS["Hi8 Vacation Cam"] },
-    { name: "Security Camera Dump", values: PRESETS["Security Camera Dump"] },
-  ], []);
-
   const handlePanChange = useCallback((x: number, y: number) => {
     setPanCenter({ x, y });
     setRendererPanCenter(x, y);
@@ -1728,14 +1720,6 @@ const Index = () => {
           presets: true, grading: gradingEnabled, masks: masksEnabled, display: displayEnabled,
           digital: digitalEnabled, film: filmEnabled, tape: tapeEnabled, osd: osdEnabled, preview: true,
         }} />
-        {/* Output status — render path the preview is running through. */}
-        <div className="hidden xl:flex items-center gap-1.5 shrink-0 px-2 py-1 rounded border border-border/70 bg-secondary/40"
-          title={gpuAvailable ? "GPU-accelerated rendering (Metal)" : "CPU rendering fallback"}>
-          <span className={`led ${gpuAvailable ? "led-on" : "led-off"}`} aria-hidden />
-          <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-muted-foreground">
-            {rendererMode === "gpu" || gpuAvailable ? "GPU" : "CPU"}
-          </span>
-        </div>
       </div>
 
       <nav className="flex lg:hidden border-b border-border bg-card/95 glass-panel shrink-0">
@@ -1774,8 +1758,6 @@ const Index = () => {
                     panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange}
                     compareSplit={previewSettings.compareSplit}
                     onCompareSplitRatioChange={(r) => handlePreviewSettingsChange({ ...previewSettings, compareSplitRatio: r })}
-                    presetSamples={presetSamples}
-                    onApplyPresetSample={handleSelectPreset}
                   />
                 )}
                 <div className="shrink-0 px-1">
@@ -1865,8 +1847,6 @@ const Index = () => {
                   panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange}
                   compareSplit={previewSettings.compareSplit}
                   onCompareSplitRatioChange={(r) => handlePreviewSettingsChange({ ...previewSettings, compareSplitRatio: r })}
-                  presetSamples={presetSamples}
-                  onApplyPresetSample={handleSelectPreset}
                 />
               )}
               <div className="shrink-0 px-1">
@@ -2001,11 +1981,6 @@ const Index = () => {
           <span className="flex items-center gap-1">
             {previewSettings.animationEnabled ? <Play className="w-2.5 h-2.5 fill-current" /> : <Square className="w-2.5 h-2.5 fill-current" />}
             {previewSettings.animationEnabled ? `${previewSettings.fpsLimit}fps` : "Still"}
-          </span>
-          <span className="text-border">|</span>
-          <span className={`flex items-center gap-1 ${rendererMode === "gpu" ? "text-green-400" : rendererMode === "hybrid" || rendererMode === "gpu-ready" ? "text-yellow-400" : ""}`}>
-            {rendererMode === "gpu" || rendererMode === "hybrid" ? <Zap className="w-3 h-3" /> : <Cpu className="w-3 h-3" />}
-            {rendererMode === "gpu" ? "GPU" : rendererMode === "hybrid" ? "Hybrid" : rendererMode === "gpu-ready" ? "GPU Ready" : "CPU"}
           </span>
           <span className="text-border">|</span>
           <span className="opacity-60">{isVideo ? "K: Play · ←→: Frame step · L: Loop" : "Ctrl+K: Commands · B: Bypass"}</span>

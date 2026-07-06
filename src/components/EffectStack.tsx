@@ -58,7 +58,14 @@ interface EffectStackProps {
 }
 
 const EffectStack = ({ mutedStages, soloStage, onToggleMute, onToggleSolo, currentParams, onJump }: EffectStackProps) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { const v = localStorage.getItem("lme-effect-stack-collapsed"); return v === null ? true : v === "1"; }
+    catch { return true; } // collapsed by default (Ben-11 #8); user choice persists
+  });
+  const toggleCollapsed = () => setCollapsed((c) => {
+    try { localStorage.setItem("lme-effect-stack-collapsed", c ? "0" : "1"); } catch { /* ignore */ }
+    return !c;
+  });
 
   const getActiveCount = (stage: EffectStage): number => {
     if (!currentParams) return 0;
@@ -75,7 +82,7 @@ const EffectStack = ({ mutedStages, soloStage, onToggleMute, onToggleSolo, curre
     <div className="bg-card rounded-lg border border-border panel-glow overflow-hidden">
       <button
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-secondary/50 transition-colors"
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={toggleCollapsed}
       >
         <span className="text-[13px] font-semibold text-foreground uppercase tracking-wider flex-1">Effect Stack</span>
         {totalActive > 0 && (

@@ -13,8 +13,6 @@ interface PreviewCanvasProps {
   onPanChange?: (x: number, y: number) => void;
   compareSplit?: boolean;
   onCompareSplitRatioChange?: (ratio: number) => void;
-  presetSamples?: { name: string; values: Record<string, number> }[];
-  onApplyPresetSample?: (name: string, values: Record<string, number>) => void;
 }
 
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.33, 2, 3, 4, 6];
@@ -37,8 +35,6 @@ const PreviewCanvas = ({
   onPanChange,
   compareSplit = false,
   onCompareSplitRatioChange,
-  presetSamples = [],
-  onApplyPresetSample,
 }: PreviewCanvasProps) => {
   const isDraggingPan = useRef(false);
   const isDraggingSplit = useRef(false);
@@ -217,7 +213,7 @@ const PreviewCanvas = ({
   // Zoom/pan as a GPU-composited viewport transform — instant, never re-renders
   // the effect pipeline. transform-origin is the centre; pan shifts the (already
   // scaled) canvas by a fraction of its own box, clamped so no empty borders show.
-  const zoomed = zoom > 1.001;
+  const zoomed = Math.abs(zoom - 1) > 0.001; // <1 zoom must render too (Ben-11 #5): 50%/25% steps were dead
   const viewTransform = zoomed
     ? `scale(${zoom}) translate(${(0.5 - clampPan(panX)) * 100}%, ${(0.5 - clampPan(panY)) * 100}%)`
     : undefined;
@@ -328,24 +324,6 @@ const PreviewCanvas = ({
             </div>
           </div>
 
-          {presetSamples.length > 0 && onApplyPresetSample && (
-            <div className="w-full max-w-2xl flex flex-col items-center gap-3 mt-3 pb-4">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Or try a preset</p>
-              <div className="w-full overflow-x-auto pb-2">
-                <div className="flex gap-2 justify-center min-w-max px-2">
-                  {presetSamples.map((preset) => (
-                    <button
-                      key={preset.name}
-                      onClick={() => onApplyPresetSample(preset.name, preset.values)}
-                      className="px-3 py-2 rounded-lg border-2 border-border bg-secondary/50 text-foreground hover:text-primary hover:bg-secondary hover:border-primary/40 text-xs font-medium whitespace-nowrap transition-all hover:scale-105 shadow-sm"
-                    >
-                      {preset.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

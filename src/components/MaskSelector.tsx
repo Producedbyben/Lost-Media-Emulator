@@ -33,7 +33,7 @@ interface MaskSelectorProps {
 
 const MaskSelector = ({ maskType, maskStrength, maskScale, onMaskTypeChange, onMaskStrengthChange, onMaskScaleChange, enabled = true, onToggleEnabled }: MaskSelectorProps) => {
   return (
-    <CollapsiblePanel title="Mask Effects" badge="2" defaultOpen={false} panelId="masks" enabled={enabled} onToggleEnabled={onToggleEnabled}>
+    <CollapsiblePanel title="Mask Effects" defaultOpen={false} panelId="masks" enabled={enabled} onToggleEnabled={onToggleEnabled}>
       <div className="pt-2 space-y-3">
         <div>
           <span className="text-xs text-muted-foreground mb-1.5 block">Mask pattern</span>
