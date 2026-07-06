@@ -351,6 +351,7 @@ const Index = () => {
   const [osdEnabled, setOsdEnabled] = useState(true);           // On-Screen Display
   // Optional tool panels.
   const [maskPainterEnabled, setMaskPainterEnabled] = useState(false);
+  const [previewFitScale, setPreviewFitScale] = useState(0); // source-px->CSS-px at fit (from PreviewCanvas, Ben-11 #5)
   const [osdTemplateEnabled, setOsdTemplateEnabled] = useState(false);
   const [audioReactiveEnabled, setAudioReactiveEnabled] = useState(false);
   const [batchEnabled, setBatchEnabled] = useState(false);
@@ -1557,7 +1558,7 @@ const Index = () => {
       </CollapsiblePanel>
       <CollapsiblePanel title="Navigator" defaultOpen={true}>
         <div className="pt-2">
-          <PreviewNavigator sourceElement={sourceElement} zoom={previewSettings.previewScale}
+          <PreviewNavigator sourceElement={sourceElement} fitScale={previewFitScale} zoom={previewSettings.previewScale}
             panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange} hasImage={hasImage}
             thumbnailVersion={thumbnailVersion} />
         </div>
@@ -1754,6 +1755,8 @@ const Index = () => {
                   <PreviewCanvas
                     canvasRef={canvasRef} containerRef={containerRef} hasImage={hasImage} onLoadImage={handleLoadFile}
                     zoom={previewSettings.previewScale}
+                    sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
+                    onFitScaleChange={setPreviewFitScale}
                     onZoomChange={(z) => { handlePreviewSettingsChange({ ...previewSettings, previewScale: z }); if (z <= 1.001) handlePanChange(0.5, 0.5); }}
                     panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange}
                     compareSplit={previewSettings.compareSplit}
@@ -1761,7 +1764,7 @@ const Index = () => {
                   />
                 )}
                 <div className="shrink-0 px-1">
-                  <PreviewControls settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
+                  <PreviewControls fitScale={previewFitScale} settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
                 </div>
                 {/* Video Transport — professional playback controls */}
                 {isVideo && (
@@ -1843,6 +1846,8 @@ const Index = () => {
                 <PreviewCanvas
                   canvasRef={canvasRef} containerRef={containerRef} hasImage={hasImage} onLoadImage={handleLoadFile}
                   zoom={previewSettings.previewScale}
+                  sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
+                  onFitScaleChange={setPreviewFitScale}
                   onZoomChange={(z) => { handlePreviewSettingsChange({ ...previewSettings, previewScale: z }); if (z <= 1.001) handlePanChange(0.5, 0.5); }}
                   panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange}
                   compareSplit={previewSettings.compareSplit}
@@ -1850,7 +1855,7 @@ const Index = () => {
                 />
               )}
               <div className="shrink-0 px-1">
-                <PreviewControls settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
+                <PreviewControls fitScale={previewFitScale} settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
               </div>
               {isVideo && (
                 <div className="shrink-0">

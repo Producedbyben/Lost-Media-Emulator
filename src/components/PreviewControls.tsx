@@ -47,6 +47,7 @@ interface RamPreviewState {
 }
 
 interface PreviewControlsProps {
+  fitScale?: number; // source-px->CSS-px fit factor (user-true % display)
   settings: PreviewSettings;
   onChange: (settings: PreviewSettings) => void;
   isVideo: boolean;
@@ -86,6 +87,7 @@ const ZOOM_OPTIONS = [
 const PreviewControls = ({
   settings, onChange, isVideo, gpuAvailable = false,
   rendererMode = "cpu", ramPreview, onBuildRamPreview, onClearRamPreview,
+  fitScale = 0,
 }: PreviewControlsProps) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -161,7 +163,7 @@ const PreviewControls = ({
 
       <div className="flex items-center gap-1 px-2 py-1 rounded border border-border bg-secondary text-muted-foreground">
         <Monitor className="w-3 h-3" />
-        <span className="font-mono">{Math.round(settings.previewScale * 100)}%</span>
+        <span className="font-mono">{Math.round(settings.previewScale * (fitScale > 0 ? fitScale : 1) * 100)}%</span>
       </div>
 
       {isVideo && (onBuildRamPreview || onClearRamPreview) && (

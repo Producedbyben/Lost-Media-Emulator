@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from "react";
 
 interface PreviewNavigatorProps {
+  fitScale?: number; // source-px->CSS-px fit factor from PreviewCanvas (user-true % display)
   /** The loaded source element (image or video) to thumbnail */
   sourceElement: HTMLImageElement | HTMLVideoElement | null;
   /** Current zoom level (1 = fit) */
@@ -29,6 +30,7 @@ const PreviewNavigator = ({
   onZoomChange,
   hasImage,
   thumbnailVersion = 0,
+  fitScale = 0,
 }: PreviewNavigatorProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDragging = useRef(false);
@@ -162,7 +164,7 @@ const PreviewNavigator = ({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider">Navigator</span>
-        <span className="text-[12px] font-mono text-muted-foreground">{Math.round(zoom * 100)}%</span>
+        <span className="text-[12px] font-mono text-muted-foreground">{Math.round(zoom * (fitScale > 0 ? fitScale : 1) * 100)}%</span>
       </div>
       <canvas
         ref={canvasRef}

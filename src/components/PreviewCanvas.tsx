@@ -13,9 +13,13 @@ interface PreviewCanvasProps {
   onPanChange?: (x: number, y: number) => void;
   compareSplit?: boolean;
   onCompareSplitRatioChange?: (ratio: number) => void;
+  sourceWidth?: number;     // natural width of the loaded media — enables Photoshop-style 1:1 zoom (Ben-11 #5)
+  onFitScaleChange?: (fitScale: number) => void; // reports source-px->CSS-px fit factor so sibling readouts can show user-true percentages
 }
 
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.33, 2, 3, 4, 6];
+// User-facing source-pixel percentages (Photoshop-style): 12.5% .. 400%.
+const USER_ZOOM_STEPS = [0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 
 const SAMPLE_IMAGES = [
   "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80",
@@ -35,6 +39,8 @@ const PreviewCanvas = ({
   onPanChange,
   compareSplit = false,
   onCompareSplitRatioChange,
+  sourceWidth = 0,
+  onFitScaleChange,
 }: PreviewCanvasProps) => {
   const isDraggingPan = useRef(false);
   const isDraggingSplit = useRef(false);
@@ -84,8 +90,36 @@ const PreviewCanvas = ({
     setIsDragOver(false);
   }, []);
 
+  // Photoshop-style zoom semantics (Ben-11 #5): the USER-facing percentage is source-pixel
+  // scale — 100% = one source pixel per screen (CSS) pixel — while the internal `zoom` value
+  // stays a transform factor over the fitted canvas box (all pan/drag machinery unchanged).
+  // Conversion: userScale = zoom * fitScale, where fitScale maps source px -> CSS px at fit.
+  const [canvasBaseW, setCanvasBaseW] = useState(0);
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setCanvasBaseW(el.offsetWidth || 0));
+    ro.observe(el);
+    setCanvasBaseW(el.offsetWidth || 0);
+    return () => ro.disconnect();
+  }, [canvasRef, hasImage]);
+  const fitScale = sourceWidth > 0 && canvasBaseW > 0 ? canvasBaseW / sourceWidth : 0;
+  useEffect(() => { onFitScaleChange?.(fitScale); }, [fitScale, onFitScaleChange]);
+
   const stepZoom = useCallback((direction: number) => {
     if (!onZoomChange) return;
+    if (fitScale > 0) {
+      // Step through USER percentages (source-pixel scale), Photoshop-style.
+      const current = zoom * fitScale;
+      let idx = USER_ZOOM_STEPS.findIndex(v => Math.abs(v - current) < 0.01);
+      if (idx < 0) {
+        idx = USER_ZOOM_STEPS.reduce((best, v, i) =>
+          Math.abs(v - current) < Math.abs(USER_ZOOM_STEPS[best] - current) ? i : best, 0);
+      }
+      const nextIdx = Math.max(0, Math.min(USER_ZOOM_STEPS.length - 1, idx + (direction > 0 ? 1 : -1)));
+      onZoomChange(USER_ZOOM_STEPS[nextIdx] / fitScale);
+      return;
+    }
     const current = zoom;
     let idx = ZOOM_STEPS.findIndex(v => Math.abs(v - current) < 0.01);
     if (idx < 0) {
@@ -94,7 +128,7 @@ const PreviewCanvas = ({
     }
     const nextIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, idx + (direction > 0 ? 1 : -1)));
     onZoomChange(ZOOM_STEPS[nextIdx]);
-  }, [zoom, onZoomChange]);
+  }, [zoom, onZoomChange, fitScale]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!hasImage) return;
@@ -181,7 +215,8 @@ const PreviewCanvas = ({
   // QoL: double-click canvas toggles between Fit and 2x zoom for quick inspection.
   const handleDoubleClick = useCallback(() => {
     if (!hasImage || !onZoomChange || compareSplit) return;
-    onZoomChange(zoom > 1.001 ? 1 : 2);
+    // Toggle Fit <-> 100% (1:1 source pixels), Photoshop-style.
+    onZoomChange(Math.abs(zoom - 1) > 0.001 ? 1 : (fitScale > 0 ? 1 / fitScale : 2));
   }, [hasImage, onZoomChange, compareSplit, zoom]);
 
   // QoL: recenter the pan without leaving the current zoom level.
@@ -262,8 +297,11 @@ const PreviewCanvas = ({
           <button onClick={() => stepZoom(-1)} className="p-1 hover:bg-secondary rounded transition-colors" title="Zoom out (scroll down)">
             <ZoomOut className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
-          <span className="text-[12px] font-mono text-foreground min-w-[3rem] text-center">
-            {zoom === 1 ? "Fit" : `${(zoom * 100).toFixed(0)}%`}
+          <span className="text-[12px] font-mono text-foreground min-w-[3rem] text-center"
+            title={fitScale > 0 ? "Source-pixel scale — 100% = one source pixel per screen pixel" : undefined}>
+            {fitScale > 0
+              ? (zoom === 1 ? `Fit · ${(zoom * fitScale * 100).toFixed(0)}%` : `${(zoom * fitScale * 100).toFixed(0)}%`)
+              : (zoom === 1 ? "Fit" : `${(zoom * 100).toFixed(0)}%`)}
           </span>
           <button onClick={() => stepZoom(1)} className="p-1 hover:bg-secondary rounded transition-colors" title="Zoom in (scroll up)">
             <ZoomIn className="w-3.5 h-3.5 text-muted-foreground" />
@@ -277,8 +315,12 @@ const PreviewCanvas = ({
           <button onClick={() => onZoomChange?.(1)} className="p-1 hover:bg-secondary rounded transition-colors" title="Fit to view (double-click canvas)">
             <Maximize className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
-          <button onClick={() => onZoomChange?.(2)} className="p-1 hover:bg-secondary rounded transition-colors" title="2× zoom (double-click canvas)">
-            <Square className="w-3 h-3 text-muted-foreground" />
+          <button
+            onClick={() => onZoomChange?.(fitScale > 0 ? 1 / fitScale : 2)}
+            className="px-1 py-0.5 hover:bg-secondary rounded transition-colors text-[10px] font-mono font-semibold text-muted-foreground"
+            title="100% — one source pixel per screen pixel (double-click canvas)"
+          >
+            1:1
           </button>
         </div>
       )}
