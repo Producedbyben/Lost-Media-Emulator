@@ -256,10 +256,15 @@ const ExportPanel = ({
     const fmt: "mp4" | "gif" = isGif ? "gif" : "mp4";
     const jobFps = fmt === "gif" ? Math.min(15, fps) : fps;
     const ar = aspectRatio !== "original" ? aspectRatio : undefined;
-    const name = `${lookName || "Custom look"} · ${fmt.toUpperCase()}${ar ? ` ${ar}` : ""} · ${duration}s`;
+    // Carry the FULL chosen settings so a queued job matches the one-off export (audit):
+    // codec (ProRes/HEVC no longer silently downgraded to H.264), reframe mode, audio mode,
+    // and the trim window.
+    const jobCodec = isGif ? undefined : (codec as "h264" | "hevc" | "prores422" | "prores4444");
+    const codecLabel = jobCodec === "prores422" ? " ProRes" : jobCodec === "prores4444" ? " ProRes 4444" : jobCodec === "hevc" ? " HEVC" : "";
+    const name = `${lookName || "Custom look"} · ${fmt.toUpperCase()}${codecLabel}${ar ? ` ${ar}` : ""} · ${duration}s`;
     onEnqueueExport({
       name,
-      fileName: ensureFilename(effectiveBase, fmt, "lme-export"),
+      fileName: ensureFilename(effectiveBase, isGif ? "gif" : videoExt, "lme-export"),
       format: fmt,
       fps: jobFps,
       duration,
@@ -269,6 +274,10 @@ const ExportPanel = ({
         quality,
         aspectRatio: ar,
         includeAudio: effectiveAudioOn ? true : undefined,
+        codec: jobCodec,
+        frameMode: ar && frameMode !== "none" ? frameMode : undefined,
+        audioMode: isGif ? undefined : audioMode,
+        ...(isTrimmed ? { inSec: trimIn, outSec: trimOut } : {}),
       },
     });
   };

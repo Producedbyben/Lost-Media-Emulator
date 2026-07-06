@@ -118,7 +118,11 @@ export async function exportViaFfmpeg(opts: {
 
   const { sessionId } = await b.begin({ width, height, fps });
   const unsub = b.onProgress((d) => {
-    if (d.sessionId === sessionId && opts.onProgress) opts.onProgress(d.frame / totalFrames);
+    // Encode phase reports its OWN frame counter from 0; map it into the reserved last
+    // 10% so the bar advances 90% -> 100% instead of snapping back to 0% (audit).
+    if (d.sessionId === sessionId && opts.onProgress) {
+      opts.onProgress(0.9 + Math.min(1, d.frame / Math.max(1, totalFrames)) * 0.1);
+    }
   });
 
   try {

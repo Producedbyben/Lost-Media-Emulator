@@ -5,6 +5,7 @@ import { CRTRendererHybrid } from "@/lib/crt-renderer-hybrid.js";
 import { exportMp4, exportWebm, getVideoExportCapabilities } from "@/lib/exporter.js";
 // @ts-ignore
 import { exportGif } from "@/lib/gif-exporter.js";
+import { toast } from "sonner";
 import { saveBlob, ensureFilename } from "@/lib/save-file.js";
 import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
 import { computeExportSize } from "@/lib/export-size";
@@ -1417,9 +1418,10 @@ export function useCRTRenderer() {
       }
     } catch (err: any) {
       if (err?.name === "AbortError") {
-        console.log("Export cancelled");
+        toast.info("Export cancelled");
       } else {
         console.error("Export failed:", err);
+        toast.error("Export failed", { description: err?.message || String(err) });
       }
     } finally {
       if (prevPreferGPU && rendererRef.current?.setPreferGPU) rendererRef.current.setPreferGPU(true);
@@ -1478,6 +1480,8 @@ export function useCRTRenderer() {
 
     setIsExporting(true);
     setExportProgress(0);
+    const controller = new AbortController();
+    exportControllerRef.current = controller; // so the Cancel button actually aborts a GIF (audit)
     const prevPreferGPU = rendererRef.current.preferGPU;
     if (prevPreferGPU && rendererRef.current.setPreferGPU) rendererRef.current.setPreferGPU(false);
     try {
@@ -1493,11 +1497,18 @@ export function useCRTRenderer() {
         videoElement: isVideoRef.current ? videoElementRef.current : undefined,
         sourceScale: previewSettingsRef.current.sourceScale,
         renderOptions: buildExportRenderOptsRef.current(),
+        signal: controller.signal,
         fileName,
       });
     } catch (err: any) {
-      console.error("GIF export failed:", err);
+      if (err?.name === "AbortError" || /abort/i.test(err?.message || "")) {
+        toast.info("GIF export cancelled");
+      } else {
+        console.error("GIF export failed:", err);
+        toast.error("GIF export failed", { description: err?.message || String(err) });
+      }
     } finally {
+      exportControllerRef.current = null;
       if (prevPreferGPU && rendererRef.current?.setPreferGPU) rendererRef.current.setPreferGPU(true);
       setIsExporting(false);
       setExportProgress(0);
@@ -1524,7 +1535,8 @@ export function useCRTRenderer() {
       fps: number;
       duration: number;
       params: CRTParams;
-      options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean };
+      options?: { resolution?: number; quality?: number; aspectRatio?: string; includeAudio?: boolean; degradeAudio?: boolean;
+        codec?: "h264" | "hevc" | "prores422" | "prores4444"; frameMode?: string; audioMode?: "off" | "original" | "degrade"; inSec?: number; outSec?: number };
     },
     onProgress: (ratio: number, frame: number, total: number, status?: string) => void,
     signal: AbortSignal,
@@ -1600,18 +1612,25 @@ export function useCRTRenderer() {
             } catch { /* fall back to muxing the original track */ }
           }
 
+          const jobFull = Math.max(0.5, job.duration);
+          const jobTrimmed = job.options?.inSec != null || job.options?.outSec != null;
+          const jobIn = Math.max(0, Math.min(job.options?.inSec ?? 0, jobFull));
+          const jobOut = Math.max(jobIn + 1 / Math.max(1, job.fps), Math.min(job.options?.outSec ?? jobFull, jobFull));
           await exportViaFfmpeg({
             canvas, renderer,
             params: job.params,
             fps: Math.max(1, job.fps),
-            duration: Math.max(0.5, job.duration),
+            duration: jobFull,
+            ...(jobTrimmed ? { inSec: jobIn, outSec: jobOut } : {}),
             codec: job.options?.codec || "h264",
             outPath,
             audioSourcePath,
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
             targetWidth,
             targetHeight,
-            frameMode: job.options?.aspectRatio && job.options.aspectRatio !== "original" ? "crop" : undefined,
+            // Honour the chosen reframe mode (crop/pad) instead of always cropping (audit).
+            frameMode: job.options?.aspectRatio && job.options.aspectRatio !== "original"
+              ? (job.options?.frameMode || "crop") : undefined,
             renderOptions,
             onProgress: (r) => progress(r, Math.round(r * Math.max(1, Math.floor(job.fps * job.duration))), Math.max(1, Math.floor(job.fps * job.duration))),
             signal,

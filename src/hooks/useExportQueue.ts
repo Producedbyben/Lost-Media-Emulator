@@ -9,6 +9,13 @@ export interface ExportJobOptions {
   aspectRatio?: string;
   includeAudio?: boolean;
   degradeAudio?: boolean;
+  // Queued jobs must honour the SAME choices as a one-off export (audit): codec, reframe
+  // mode, audio mode and trim window were previously dropped -> every job became H.264/MP4.
+  codec?: "h264" | "hevc" | "prores422" | "prores4444";
+  frameMode?: string;
+  audioMode?: "off" | "original" | "degrade";
+  inSec?: number;
+  outSec?: number;
 }
 
 export interface ExportJob {
