@@ -79,7 +79,7 @@ const Slot = ({ config }: { config: SlotConfig }) => {
         </div>
         <button
           onClick={onToggleLock}
-          title={locked ? "Locked — kept when switching the other layer or applying a Classic. Click to unlock." : "Lock this layer"}
+          title={locked ? "Locked — kept when switching the other layer or applying a look. Click to unlock." : "Lock this layer"}
           className={`p-1 rounded border transition-colors ${
             locked
               ? "bg-primary/15 border-primary/40 text-primary"

@@ -167,7 +167,7 @@ const PresetSelector = ({
     setCustomPresets(updated);
     setSaveName("");
     setShowSave(false);
-    toast.success(`Preset "${saveName.trim()}" saved`);
+    toast.success(`Look "${saveName.trim()}" saved`);
   }, [saveName, currentParams]);
 
   const handleDeleteCustom = useCallback((name: string) => {
@@ -313,7 +313,7 @@ const PresetSelector = ({
               mode === "library" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Sparkles className="w-3 h-3" /> Classics
+            <Sparkles className="w-3 h-3" /> Looks
           </button>
         </div>
       )}
@@ -325,7 +325,7 @@ const PresetSelector = ({
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
         <input
-          type="text" placeholder="Search presets..."
+          type="text" placeholder="Search looks…"
           value={search} onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-8 pr-3 py-1.5 text-xs bg-secondary border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
         />
@@ -359,7 +359,7 @@ const PresetSelector = ({
       <select
         value={activeCategory}
         onChange={(e) => setActiveCategory(e.target.value)}
-        aria-label="Preset category"
+        aria-label="Look category"
         className="w-full px-2 py-1.5 text-[12px] bg-secondary border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
       >
         {categoryTabs.map((cat) => (
@@ -372,7 +372,7 @@ const PresetSelector = ({
       </select>
 
       <div className="flex items-center gap-1 flex-wrap">
-        <span className="text-xs text-muted-foreground font-medium">Preset library</span>
+        <span className="text-xs text-muted-foreground font-medium">Look library</span>
         <div className="flex-1" />
         {onRandomize && (
           <button onClick={onRandomize} title="Surprise me!" aria-label="Surprise me!"
@@ -388,7 +388,7 @@ const PresetSelector = ({
           className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
           <Share2 className="w-3 h-3" />
         </button>
-        <button onClick={handleExportLook} title="Export current look as JSON" aria-label="Export current look as JSON"
+        <button onClick={handleExportLook} title="Export this look (single-look JSON)" aria-label="Export this look (single-look JSON)"
           className="flex items-center gap-1 px-1.5 py-0.5 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 transition-colors">
           <Download className="w-3 h-3" />
         </button>
@@ -412,7 +412,7 @@ const PresetSelector = ({
       {showSave && (
         <div className="flex gap-1">
           <input type="text" value={saveName} onChange={(e) => setSaveName(e.target.value)}
-            placeholder="Preset name…" maxLength={40}
+            placeholder="Look name…" maxLength={40}
             className="flex-1 px-2 py-1 text-xs bg-secondary border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
             onKeyDown={(e) => { if (e.key === "Enter") handleSaveCustom(); }} />
           <button onClick={handleSaveCustom} disabled={!saveName.trim()}
@@ -440,7 +440,7 @@ const PresetSelector = ({
               </button>
             </div>
           ))}
-          {customPresets.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">No custom presets saved yet</p>}
+          {customPresets.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">No custom looks saved yet</p>}
         </div>
       ) : viewMode === "grid" ? (
         <div className="max-h-56 overflow-y-auto pr-1 grid grid-cols-2 gap-1.5">
@@ -476,25 +476,25 @@ const PresetSelector = ({
 
       <p className="text-[12px] text-muted-foreground">
         {activeCategory === "Custom"
-          ? `${customPresets.length} custom preset${customPresets.length !== 1 ? "s" : ""}`
-          : `${filteredPresets.length} of ${presetNames.length} presets`}
+          ? `${customPresets.length} custom look${customPresets.length !== 1 ? "s" : ""}`
+          : `${filteredPresets.length} of ${presetNames.length} looks`}
       </p>
 
       {activeCategory === "Custom" && (
         <div className="flex gap-1">
           <button onClick={handleExportJSON} disabled={customPresets.length === 0}
             className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80 disabled:opacity-40">
-            <Download className="w-3 h-3" /> Export JSON
+            <Download className="w-3 h-3" /> Export library (JSON)
           </button>
           <button onClick={() => importRef.current?.click()}
             className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80">
-            <Upload className="w-3 h-3" /> Import JSON
+            <Upload className="w-3 h-3" /> Import library (JSON)
           </button>
           <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
         </div>
       )}
 
-      <EffectSlider label="Preset intensity" value={presetIntensity} min={0} max={2} step={0.01} defaultValue={1} onChange={onIntensityChange} />
+      <EffectSlider label="Look intensity" value={presetIntensity} min={0} max={2} step={0.01} defaultValue={1} onChange={onIntensityChange} />
       </>
       )}
     </div>

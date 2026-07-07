@@ -13,7 +13,7 @@ const TUTORIAL_STEPS = [
   {
     id: "import",
     title: "1. Import Your Media",
-    description: "Drag and drop an image or video onto the preview area, or click 'Import source' to get started. We support JPG, PNG, MP4, WebM, and MOV files.",
+    description: "Drag and drop an image or video onto the preview area, or click 'Import source' to get started. We support JPG, PNG, MP4, WebM, and H.264 MOV files (convert ProRes to H.264 first).",
     icon: Upload,
     highlight: "preview",
     position: "right",

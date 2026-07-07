@@ -12,7 +12,7 @@ const SHORTCUTS = [
   { keys: "Space (hold)", action: "Compare original" },
   { keys: `${mod} + V`, action: "Paste image from clipboard" },
   { keys: "Scroll wheel", action: "Zoom preview" },
-  { keys: "Double-click canvas", action: "Toggle Fit / 2× zoom" },
+  { keys: "Double-click canvas", action: "Toggle Fit / 100% (1:1) zoom" },
   { keys: "Click + drag", action: "Pan (when zoomed)" },
   { keys: "Scroll on slider", action: "Adjust value (Shift = coarse)" },
   { keys: "Click slider value", action: "Type an exact number" },

@@ -35,7 +35,7 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     id: "saturation",
-    title: "Colour & Grade — Saturation",
+    title: "Color & Grade — Saturation",
     panelKey: "grading",
     paramKey: "advancedSaturation",
     intro: "Start with exposure and colour. Saturation is the fastest way to swing between bold and washed-out.",

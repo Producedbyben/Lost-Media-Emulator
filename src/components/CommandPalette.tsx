@@ -19,9 +19,9 @@ interface CommandPaletteProps {
 }
 
 const PANELS = [
-  { id: "presets", label: "Jump to Presets" },
+  { id: "presets", label: "Jump to Looks" },
   { id: "grading", label: "Jump to Color & Grade" },
-  { id: "masks", label: "Jump to Masks & Geometry" },
+  { id: "masks", label: "Jump to Mask Effects" },
   { id: "display", label: "Jump to Display & CRT" },
   { id: "tape", label: "Jump to Tape & Dropouts" },
   { id: "film", label: "Jump to Film" },

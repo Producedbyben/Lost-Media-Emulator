@@ -14,12 +14,12 @@ export interface EffectStage {
 }
 
 export const EFFECT_STAGES: EffectStage[] = [
-  { id: "grading", label: "Image Controls", paramKeys: ["imageBrightness", "imageContrast", "advancedSaturation", "imageGamma", "imageTemperature", "imageTint"], icon: Palette },
+  { id: "grading", label: "Color & Grade", paramKeys: ["imageBrightness", "imageContrast", "advancedSaturation", "imageGamma", "imageTemperature", "imageTint"], icon: Palette },
   { id: "masks", label: "Mask Effects", paramKeys: ["phosphorMask", "maskScale"], icon: Grid3X3 },
   { id: "crt", label: "CRT Effects", paramKeys: ["scanlineStrength", "barrelDistortion", "chromaticAberration", "bloom", "flicker"], icon: Tv },
   { id: "signal", label: "Signal & Noise", paramKeys: ["noise", "advancedLineJitter", "advancedTimebaseWobble", "advancedRfInterference"], icon: Radio },
   { id: "tape", label: "Tape Artifacts", paramKeys: ["advancedHeadSwitching", "advancedChromaDelay", "advancedCrossColor", "advancedDropouts", "advancedGhosting", "advancedInterlacing", "advancedTapeCrease"], icon: Rewind },
-  { id: "digital", label: "Digital Effects", paramKeys: ["advancedQuantization", "advancedGenerationLoss", "advancedMacroBlocking", "advancedCctvMonochrome"], icon: Cpu },
+  { id: "digital", label: "Digital & Compression", paramKeys: ["advancedQuantization", "advancedGenerationLoss", "advancedMacroBlocking", "advancedCctvMonochrome"], icon: Cpu },
   { id: "film", label: "Film Effects", paramKeys: ["advancedFilmGrain", "advancedFilmDust", "advancedFilmScratches", "advancedFilmGateWeave", "advancedFilmHalation"], icon: Film },
   { id: "temporal", label: "Temporal", paramKeys: ["advancedFrameStutter", "advancedExposurePump", "advancedWhiteBalanceDrift", "advancedFocusBreathing"], icon: Timer },
   { id: "osd", label: "Overlays & OSD", paramKeys: ["advancedTimestampOSD", "advancedOSDStyle", "advancedNeonPhosphorBleed"], icon: MessageSquare },

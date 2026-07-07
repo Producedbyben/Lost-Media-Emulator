@@ -1081,7 +1081,7 @@ const Index = () => {
     const prevLastValues = lastPresetValues;
     const { name, values } = getRandomPreset();
     handleSelectPreset(name, values);
-    toast.info(`Random preset: ${name}`, {
+    toast.info(`Random look: ${name}`, {
       action: {
         label: "Undo",
         onClick: () => {
@@ -1773,7 +1773,7 @@ const Index = () => {
       <nav className="flex lg:hidden border-b border-border bg-card/95 glass-panel shrink-0">
         {([
           { id: "preview" as const, label: "Preview", icon: Monitor },
-          { id: "presets" as const, label: "Presets", icon: Layers },
+          { id: "presets" as const, label: "Looks", icon: Layers },
           { id: "effects" as const, label: "Effects", icon: Settings2 },
           { id: "export" as const, label: "Export", icon: Download },
         ]).map(({ id, label, icon: Icon }) => (
