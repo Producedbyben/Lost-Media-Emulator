@@ -74,6 +74,35 @@ export interface CRTParams {
   advancedWatercolorSmear: number;  // RealVideo blob-smear signature (1.1.5)
   advancedLedWall: number;          // LED-wall lattice + moiré + rolling band (1.1.5)
   burnInStyle: string;              // retained-graphic burn-in (1.1.5): none|logo|ticker|channel-box|hud|bezel; "plasma-" prefix = bright retention (screen blend, reads on dark fields), else dark phosphor wear (multiply)
+  // 1.1.6 display-type looks (PE spec agency/display-looks-spec-1.1.6.md). All default
+  // 0 = neutral (byte-identity safe; hybrid GPU gate auto-declines when active).
+  crtProjConvergence: number;       // tri-tube radial R/B splay, 0 at centre -> max at corners
+  crtProjCenterX: number;           // convergence sweet-spot X (0 = auto 0.5)
+  crtProjCenterY: number;           // convergence sweet-spot Y (0 = auto 0.5)
+  crtProjEdgeSoftness: number;      // projection-lens focus falloff toward edges
+  crtProjBloom: number;             // screen-gain highlight halation
+  crtProjBlackLift: number;         // lit-room lifted blacks
+  stnDither: number;                // passive-matrix ordered dither strength
+  stnLevels: number;                // quantization levels (0 = off; ~6 = mono STN)
+  stnTint: number;                  // blue-grey STN fluid cast strength
+  stnContrast: number;              // milky low-contrast floor/ceiling
+  stnGhostTrail: number;            // directional response smear (edge-echo on stills)
+  stnGhostDir: number;              // trail direction, degrees
+  stnCrosstalk: number;             // row/column shadowing from strong cells
+  dlpRainbow: number;               // colour-wheel R->G->B edge-sequential fringe
+  dlpRainbowThreshold: number;      // luma gate: fringe only above this (0 = auto 0.7)
+  dlpScreenDoor: number;            // fine inter-mirror lattice
+  dlpDither: number;                // micromirror mid-tone shimmer
+  einkGrey: number;                 // matte paper greyscale (reflective, no glow)
+  einkLevels: number;               // grey quantization levels (0 = auto 16)
+  einkGhost: number;                // refresh-ghost: faint dark residue of offset content
+  einkDither: number;               // microcapsule grain (static spatial)
+  einkFlash: number;                // opt-in 1-frame full refresh invert (video)
+  dmgGreen: number;                 // 4-shade green-olive ramp quantize
+  dmgPixelate: number;              // chunky downsample + pixel-gap grid
+  dmgReflectiveShadow: number;      // reflective (unbacklit) ambient diagonal shadow
+  dmgShadowAngle: number;           // shadow direction, degrees (0 = auto 135)
+  dmgGhost: number;                 // slow-LCD directional edge blur
   // V2: Color & Signal
   lumaNoise: number;
   chromaNoise: number;
@@ -213,6 +242,34 @@ export const DEFAULT_PARAMS: CRTParams = {
   advancedWatercolorSmear: 0,
   advancedLedWall: 0,
   burnInStyle: "none",
+  // 1.1.6 display-type looks — all neutral
+  crtProjConvergence: 0,
+  crtProjCenterX: 0,
+  crtProjCenterY: 0,
+  crtProjEdgeSoftness: 0,
+  crtProjBloom: 0,
+  crtProjBlackLift: 0,
+  stnDither: 0,
+  stnLevels: 0,
+  stnTint: 0,
+  stnContrast: 0,
+  stnGhostTrail: 0,
+  stnGhostDir: 0,
+  stnCrosstalk: 0,
+  dlpRainbow: 0,
+  dlpRainbowThreshold: 0,
+  dlpScreenDoor: 0,
+  dlpDither: 0,
+  einkGrey: 0,
+  einkLevels: 0,
+  einkGhost: 0,
+  einkDither: 0,
+  einkFlash: 0,
+  dmgGreen: 0,
+  dmgPixelate: 0,
+  dmgReflectiveShadow: 0,
+  dmgShadowAngle: 0,
+  dmgGhost: 0,
   // V2: Color & Signal — all neutral
   lumaNoise: 0,
   chromaNoise: 0,

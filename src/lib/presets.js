@@ -2622,6 +2622,13 @@ export const DISPLAY_PARAM_KEYS = [
   "barrelDistortion", "chromaticAberration", "bloom", "flicker", "pixelSize",
   "phosphorPersistence", "beamSpotSizeX", "beamSpotSizeY", "pixelResponseTime",
   "scanlineProfile", "subpixelLayoutOverride",
+  // 1.1.6 display-type looks (PE spec)
+  "crtProjConvergence", "crtProjCenterX", "crtProjCenterY", "crtProjEdgeSoftness",
+  "crtProjBloom", "crtProjBlackLift",
+  "stnDither", "stnLevels", "stnTint", "stnContrast", "stnGhostTrail", "stnGhostDir", "stnCrosstalk",
+  "dlpRainbow", "dlpRainbowThreshold", "dlpScreenDoor", "dlpDither",
+  "einkGrey", "einkLevels", "einkGhost", "einkDither", "einkFlash",
+  "dmgGreen", "dmgPixelate", "dmgReflectiveShadow", "dmgShadowAngle", "dmgGhost",
 ];
 
 const DISPLAY_KEY_SET = new Set(DISPLAY_PARAM_KEYS);
@@ -2665,6 +2672,13 @@ export const NEUTRAL_DISPLAY = {
   barrelDistortion: 0, chromaticAberration: 0, bloom: 0.04, flicker: 0, pixelSize: 1,
   phosphorPersistence: 0, beamSpotSizeX: 0, beamSpotSizeY: 0, pixelResponseTime: 0,
   scanlineProfile: "off", subpixelLayoutOverride: "none",
+  // 1.1.6 display-type looks — all neutral
+  crtProjConvergence: 0, crtProjCenterX: 0, crtProjCenterY: 0, crtProjEdgeSoftness: 0,
+  crtProjBloom: 0, crtProjBlackLift: 0,
+  stnDither: 0, stnLevels: 0, stnTint: 0, stnContrast: 0, stnGhostTrail: 0, stnGhostDir: 0, stnCrosstalk: 0,
+  dlpRainbow: 0, dlpRainbowThreshold: 0, dlpScreenDoor: 0, dlpDither: 0,
+  einkGrey: 0, einkLevels: 0, einkGhost: 0, einkDither: 0, einkFlash: 0,
+  dmgGreen: 0, dmgPixelate: 0, dmgReflectiveShadow: 0, dmgShadowAngle: 0, dmgGhost: 0,
 };
 
 /** An untouched digital source — used when no capture format is chosen. */
@@ -2744,8 +2758,51 @@ export const DISPLAY_PRESETS = {
   "Handheld LCD Screen": {
     scanlineStrength: 0, phosphorMask: 0.12, maskScale: 0.85, maskType: "dot",
     barrelDistortion: 0, chromaticAberration: 0.03, bloom: 0.06, flicker: 0, pixelSize: 1,
-    phosphorPersistence: 0, beamSpotSizeX: 0, beamSpotSizeY: 0,
     pixelResponseTime: 0.46, scanlineProfile: "off", subpixelLayoutOverride: "RGB",
+    phosphorPersistence: 0, beamSpotSizeX: 0, beamSpotSizeY: 0,
+  },
+
+  /* ---- 1.1.6 display-type looks (PE spec agency/display-looks-spec-1.1.6.md) ---- */
+
+  // Tri-tube front projector: radial RGB convergence splay worsening toward corners,
+  // soft lens edges, screen-gain bloom, lit-room lifted blacks, wide soft raster.
+  "CRT Front Projector (Tri-Tube)": {
+    ...NEUTRAL_DISPLAY,
+    crtProjConvergence: 0.5, crtProjEdgeSoftness: 0.4, crtProjBloom: 0.35, crtProjBlackLift: 0.25,
+    scanlineStrength: 0.2, scanlineProfile: "soft", maskType: "none", bloom: 0.08,
+  },
+
+  // Passive-matrix STN laptop: ordered dither to a tiny blue-grey palette, milky
+  // contrast, row/column crosstalk, directional response ghost. The anti-IPS.
+  "STN Laptop LCD (Passive-Matrix)": {
+    ...NEUTRAL_DISPLAY,
+    stnDither: 0.7, stnLevels: 6, stnTint: 0.6, stnContrast: 0.5,
+    stnGhostTrail: 0.4, stnGhostDir: 0, stnCrosstalk: 0.2,
+    maskType: "none", pixelResponseTime: 0.5, bloom: 0,
+  },
+
+  // Single-chip DLP: colour-wheel rainbow fringe on bright-on-dark edges only,
+  // fine inter-mirror screen-door, micromirror mid-tone shimmer.
+  "DLP Projector (Rainbow)": {
+    ...NEUTRAL_DISPLAY,
+    dlpRainbow: 0.5, dlpRainbowThreshold: 0.7, dlpScreenDoor: 0.3, dlpDither: 0.2,
+    maskType: "none", bloom: 0.06,
+  },
+
+  // E-ink reader: matte warm paper greys, quantized, microcapsule grain, and the
+  // faint refresh-ghost of offset content. Reflective — never any glow.
+  "E-Ink Reader (Refresh Ghost)": {
+    ...NEUTRAL_DISPLAY,
+    einkGrey: 1.0, einkLevels: 16, einkGhost: 0.4, einkDither: 0.3, einkFlash: 0,
+    maskType: "none", bloom: 0,
+  },
+
+  // Reflective handheld "DMG green": 4-shade olive ramp, chunky pixel grid, and the
+  // unbacklit diagonal ambient shadow. Not the generic Retro Pixel LCD.
+  "Reflective Handheld (DMG Green)": {
+    ...NEUTRAL_DISPLAY,
+    dmgGreen: 1.0, dmgPixelate: 0.6, dmgReflectiveShadow: 0.4, dmgShadowAngle: 135, dmgGhost: 0.25,
+    maskType: "none", bloom: 0,
   },
 };
 
@@ -2758,12 +2815,15 @@ export const DISPLAY_PRESET_CATEGORIES = {
   "Flat Panel": [
     "IPS Office LCD", "OLED PenTile Smartphone", "Pioneer Plasma", "Cyberpunk OLED",
     "E-Paper Display", "Handheld Pixel LCD (Game Boy)",
+    "STN Laptop LCD (Passive-Matrix)", "E-Ink Reader (Refresh Ghost)",
   ],
   "Large / Public": [
     "LED Billboard", "Stadium Jumbotron", "Cinema Projector", "IMAX Large-Format Screen",
+    "CRT Front Projector (Tri-Tube)", "DLP Projector (Rainbow)",
   ],
   "Portable / Retro": [
     "Portable Pocket TV", "CRT Viewfinder", "Handheld LCD Screen",
+    "Reflective Handheld (DMG Green)",
   ],
 };
 

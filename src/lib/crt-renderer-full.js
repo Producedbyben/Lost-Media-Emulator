@@ -2,6 +2,10 @@
 
 import { corruptionSpawnFactor, dctEdgeFactor } from "./effects-core/codec-corruption.js";
 
+// 4x4 Bayer matrix (ordered dither) + the canonical DMG 4-shade green-olive ramp (1.1.6 looks).
+const BAYER4 = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+const DMG_RAMP = [[15, 56, 15], [48, 98, 48], [139, 172, 15], [155, 188, 15]];
+
 function seededNoise(x, y, frame) {
   const v = Math.sin(x * 12.9898 + y * 78.233 + frame * 19.17) * 43758.5453;
   return v - Math.floor(v);
@@ -546,6 +550,36 @@ export class CRTRendererFull {
     const watercolorSmear = Math.max(0, Math.min(1, Number(params.advancedWatercolorSmear) || 0));
     const ledWall = Math.max(0, Math.min(1, Number(params.advancedLedWall) || 0));
     const burnInStyle = String(params.burnInStyle || "none");
+    // 1.1.6 display-type looks (PE-specced): all default 0/neutral; the hybrid dispatcher's
+    // catch-all routes any active look to this CPU path automatically.
+    const n01 = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; };
+    const crtProjConvergence = n01(params.crtProjConvergence);
+    const crtProjEdgeSoftness = n01(params.crtProjEdgeSoftness);
+    const crtProjBloom = n01(params.crtProjBloom);
+    const crtProjBlackLift = n01(params.crtProjBlackLift);
+    const crtProjCenterX = n01(params.crtProjCenterX) || 0.5; // 0 = auto-centre
+    const crtProjCenterY = n01(params.crtProjCenterY) || 0.5;
+    const stnDither = n01(params.stnDither);
+    const stnLevels = Math.max(0, Math.round(Number(params.stnLevels) || 0)); // 0 = off (auto 6 when dithering)
+    const stnTint = n01(params.stnTint);
+    const stnContrast = n01(params.stnContrast);
+    const stnGhostTrail = n01(params.stnGhostTrail);
+    const stnGhostDir = Number(params.stnGhostDir) || 0; // degrees
+    const stnCrosstalk = n01(params.stnCrosstalk);
+    const dlpRainbow = n01(params.dlpRainbow);
+    const dlpRainbowThreshold = n01(params.dlpRainbowThreshold) || 0.7; // 0 = default gate
+    const dlpScreenDoor = n01(params.dlpScreenDoor);
+    const dlpDither = n01(params.dlpDither);
+    const einkGrey = n01(params.einkGrey);
+    const einkLevels = Math.max(0, Math.round(Number(params.einkLevels) || 0)); // 0 = auto 16
+    const einkGhost = n01(params.einkGhost);
+    const einkDither = n01(params.einkDither);
+    const einkFlash = n01(params.einkFlash);
+    const dmgGreen = n01(params.dmgGreen);
+    const dmgPixelate = n01(params.dmgPixelate);
+    const dmgReflectiveShadow = n01(params.dmgReflectiveShadow);
+    const dmgShadowAngle = Number(params.dmgShadowAngle) || 135; // degrees; 0 = auto 135
+    const dmgGhost = n01(params.dmgGhost);
     // ---- v2 film / sensor / signal params (now consumed) ----
     const c01 = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; };
     const grainSize = c01(params.grainSize);
@@ -1692,6 +1726,393 @@ export class CRTRendererFull {
       outCtx.fillStyle = grad;
       outCtx.fillRect(0, bandY, width, bandH);
       outCtx.restore();
+    }
+
+    // ---- STN passive-matrix laptop LCD (PE 1.1.6): ordered dither to a tiny blue-grey
+    // palette, milky low contrast, passive-matrix row/column crosstalk, and a directional
+    // response ghost (subtle edge-echo on stills; trails on motion). ----
+    const stnActive = stnDither > 0.001 || stnLevels >= 2 || stnTint > 0.001 || stnContrast > 0.001 || stnCrosstalk > 0.001;
+    if (stnActive) {
+      const img = outCtx.getImageData(0, 0, width, height);
+      const d = img.data;
+      const levels = stnLevels >= 2 ? stnLevels : 6;
+      const step = 255 / (levels - 1);
+      const lo = stnContrast * 54, hi = 255 - stnContrast * 64, span = (hi - lo) / 255;
+      const rowBright = stnCrosstalk > 0.001 ? new Float32Array(height) : null;
+      const colBright = stnCrosstalk > 0.001 ? new Float32Array(width) : null;
+      for (let y = 0; y < height; y++) {
+        const by = y & 3;
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          let r = d[i], g = d[i + 1], b = d[i + 2];
+          // Milky floor/ceiling: STN cells never reach true black or white.
+          if (stnContrast > 0.001) { r = lo + r * span; g = lo + g * span; b = lo + b * span; }
+          // STN fluid cast: collapse chroma toward a blue-grey ramp of the luma.
+          if (stnTint > 0.001) {
+            const l = r * 0.299 + g * 0.587 + b * 0.114;
+            const tt = stnTint * 0.7;
+            r = r * (1 - tt) + l * 0.90 * tt;
+            g = g * (1 - tt) + l * 0.96 * tt;
+            b = b * (1 - tt) + l * 1.10 * tt;
+          }
+          // Ordered (Bayer 4x4) dither into the quantized palette.
+          const th = ((BAYER4[by][x & 3] + 0.5) / 16 - 0.5) * step * (0.25 + stnDither * 0.9);
+          r = Math.round(Math.max(0, Math.min(255, r + th)) / step) * step;
+          g = Math.round(Math.max(0, Math.min(255, g + th)) / step) * step;
+          b = Math.round(Math.max(0, Math.min(255, b + th)) / step) * step;
+          d[i] = r; d[i + 1] = g; d[i + 2] = b;
+          if (rowBright) {
+            const lum = r * 0.299 + g * 0.587 + b * 0.114;
+            if (lum > 170) { rowBright[y] += 1; colBright[x] += 1; }
+          }
+        }
+      }
+      // Passive-matrix crosstalk: rows/columns holding strong cells shadow their whole line.
+      if (rowBright) {
+        for (let y = 0; y < height; y++) rowBright[y] /= width;
+        for (let x = 0; x < width; x++) colBright[x] /= height;
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const shade = (rowBright[y] * 0.6 + colBright[x] * 0.4) * stnCrosstalk * 26;
+            d[i] -= shade; d[i + 1] -= shade; d[i + 2] -= shade;
+          }
+        }
+      }
+      outCtx.putImageData(img, 0, 0);
+      // Response ghost: a faint darker echo displaced along stnGhostDir (edge-echo on a
+      // still; on motion each frame's echo reads as the classic cursor smear).
+      if (stnGhostTrail > 0.001) {
+        const rad = (stnGhostDir * Math.PI) / 180;
+        const dist = 3 + stnGhostTrail * 5;
+        this.ensureCanvasSize(this.tempCanvas, width, height);
+        this.tempCtx.clearRect(0, 0, width, height);
+        this.tempCtx.drawImage(outCtx.canvas, 0, 0);
+        outCtx.save();
+        outCtx.globalCompositeOperation = "darken";
+        outCtx.globalAlpha = Math.min(0.45, stnGhostTrail * 0.35);
+        outCtx.drawImage(this.tempCanvas, Math.round(Math.cos(rad) * dist), Math.round(Math.sin(rad) * dist));
+        outCtx.restore();
+      }
+    }
+
+    // ---- E-Ink / EPD reader (PE 1.1.6): reflective matte paper — warm-grey white point,
+    // quantized greys, microcapsule grain, and a faint dark-neutral refresh-ghost of
+    // offset content. No glow, ever (reflective, not emissive). ----
+    if (einkGrey > 0.001) {
+      const img = outCtx.getImageData(0, 0, width, height);
+      const d = img.data;
+      const levels = einkLevels >= 2 ? einkLevels : 16;
+      const step = 255 / (levels - 1);
+      // Paper ramp: warm near-black ink -> warm paper white (never blue-white).
+      const inkR = 30, inkG = 28, inkB = 26, papR = 238, papG = 234, papB = 222;
+      for (let y = 0; y < height; y++) {
+        const by = y & 3;
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          let l = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+          // Microcapsule grain: STATIC spatial noise (paper texture), not temporal shimmer.
+          if (einkDither > 0.001) {
+            const noise = (seededNoise(x, y, 977) - 0.5) * einkDither * 26
+              + ((BAYER4[by][x & 3] + 0.5) / 16 - 0.5) * step * einkDither * 0.8;
+            l += noise;
+          }
+          l = Math.round(Math.max(0, Math.min(255, l)) / step) * step;
+          const ln = l / 255;
+          d[i] = d[i] * (1 - einkGrey) + (inkR + ln * (papR - inkR)) * einkGrey;
+          d[i + 1] = d[i + 1] * (1 - einkGrey) + (inkG + ln * (papG - inkG)) * einkGrey;
+          d[i + 2] = d[i + 2] * (1 - einkGrey) + (inkB + ln * (papB - inkB)) * einkGrey;
+        }
+      }
+      outCtx.putImageData(img, 0, 0);
+      // Refresh ghost: faint dark-neutral residue of OFFSET content, full-frame, multiply —
+      // recreates the previous-page echo (copy honesty rule: "recreates the residue",
+      // never "shows your last page").
+      if (einkGhost > 0.001) {
+        this.ensureCanvasSize(this.tempCanvas, width, height);
+        this.tempCtx.clearRect(0, 0, width, height);
+        this.tempCtx.filter = "grayscale(1) contrast(1.5) brightness(1.45)";
+        this.tempCtx.drawImage(outCtx.canvas, 0, 0);
+        this.tempCtx.filter = "none";
+        outCtx.save();
+        outCtx.globalCompositeOperation = "multiply";
+        outCtx.globalAlpha = Math.min(0.4, einkGhost * 0.3);
+        outCtx.drawImage(this.tempCanvas, Math.round(width * 0.012), Math.round(height * 0.02));
+        outCtx.restore();
+      }
+      // Optional full-refresh flash: one inverted frame every few seconds (video, opt-in).
+      if (einkFlash > 0.001 && fps > 0) {
+        const period = 3.5;
+        if ((temporalSeconds % period) < (1 / fps)) {
+          outCtx.save();
+          outCtx.globalCompositeOperation = "difference";
+          outCtx.globalAlpha = einkFlash;
+          outCtx.fillStyle = "#fff";
+          outCtx.fillRect(0, 0, width, height);
+          outCtx.restore();
+        }
+      }
+    }
+
+    // ---- Reflective handheld "DMG green" LCD (PE 1.1.6): 4-shade olive-green ramp,
+    // chunky pixels with a visible gap grid, and the reflective (unbacklit) diagonal
+    // ambient shadow. Distinct from the generic Retro Pixel LCD by green + reflectivity. ----
+    if (dmgGreen > 0.001) {
+      // Chunky downsample FIRST so the 4-shade quantize happens on fat pixels.
+      const block = dmgPixelate > 0.001 ? Math.max(2, Math.round(2 + dmgPixelate * 7)) : 1;
+      if (block > 1) {
+        const sw = Math.max(16, Math.round(width / block));
+        const sh = Math.max(16, Math.round(height / block));
+        this.ensureCanvasSize(this.tempCanvas, sw, sh);
+        this.tempCtx.imageSmoothingEnabled = true;
+        this.tempCtx.imageSmoothingQuality = "high";
+        this.tempCtx.clearRect(0, 0, sw, sh);
+        this.tempCtx.drawImage(outCtx.canvas, 0, 0, sw, sh);
+        outCtx.save();
+        outCtx.imageSmoothingEnabled = false; // nearest-neighbour = hard chunky pixels
+        outCtx.drawImage(this.tempCanvas, 0, 0, sw, sh, 0, 0, width, height);
+        outCtx.restore();
+      }
+      const img = outCtx.getImageData(0, 0, width, height);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const l = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+        const shade = DMG_RAMP[Math.min(3, Math.floor(l / 64))];
+        d[i] = d[i] * (1 - dmgGreen) + shade[0] * dmgGreen;
+        d[i + 1] = d[i + 1] * (1 - dmgGreen) + shade[1] * dmgGreen;
+        d[i + 2] = d[i + 2] * (1 - dmgGreen) + shade[2] * dmgGreen;
+      }
+      outCtx.putImageData(img, 0, 0);
+      // Pixel-gap grid over the chunky blocks.
+      if (block > 1) {
+        if (this._dmgGridKey !== block) {
+          const tile = document.createElement("canvas");
+          tile.width = block; tile.height = block;
+          const gctx = tile.getContext("2d");
+          gctx.fillStyle = "#fff"; gctx.fillRect(0, 0, block, block);
+          gctx.fillStyle = "#c8d4c0";
+          gctx.fillRect(block - 1, 0, 1, block);
+          gctx.fillRect(0, block - 1, block, 1);
+          this._dmgGrid = tile; this._dmgGridKey = block;
+          this._dmgGridPattern = outCtx.createPattern(tile, "repeat");
+        }
+        if (this._dmgGridPattern) {
+          outCtx.save();
+          outCtx.globalCompositeOperation = "multiply";
+          outCtx.globalAlpha = Math.min(0.85, (0.3 + dmgPixelate * 0.4) * dmgGreen);
+          outCtx.fillStyle = this._dmgGridPattern;
+          outCtx.fillRect(0, 0, width, height);
+          outCtx.restore();
+        }
+      }
+      // Light directional response blur (edge softness of the slow LCD).
+      if (dmgGhost > 0.001) {
+        this.ensureCanvasSize(this.tempCanvas, width, height);
+        this.tempCtx.imageSmoothingEnabled = true;
+        this.tempCtx.clearRect(0, 0, width, height);
+        this.tempCtx.drawImage(outCtx.canvas, 0, 0);
+        outCtx.save();
+        outCtx.globalCompositeOperation = "darken";
+        outCtx.globalAlpha = Math.min(0.35, dmgGhost * 0.3);
+        outCtx.drawImage(this.tempCanvas, Math.max(1, Math.round(1 + dmgGhost * 2)), 0);
+        outCtx.restore();
+      }
+      // Reflective ambient shadow: no backlight — luminance falls off along the shadow
+      // angle like a screen lit from one side of the room.
+      if (dmgReflectiveShadow > 0.001) {
+        const rad = (dmgShadowAngle * Math.PI) / 180;
+        const dx = Math.cos(rad), dy = Math.sin(rad);
+        const cx = width / 2, cy = height / 2, ext = Math.max(width, height) * 0.72;
+        const grad = outCtx.createLinearGradient(cx - dx * ext, cy - dy * ext, cx + dx * ext, cy + dy * ext);
+        grad.addColorStop(0, "rgba(255,255,255,0)");
+        grad.addColorStop(0.55, "rgba(0,0,0,0)");
+        grad.addColorStop(1, `rgba(18,30,16,${Math.min(0.6, dmgReflectiveShadow * 0.55).toFixed(3)})`);
+        outCtx.save();
+        outCtx.fillStyle = grad;
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.restore();
+      }
+    }
+
+    // ---- CRT front projector, tri-tube (PE 1.1.6): RADIAL per-channel convergence splay
+    // (zero at the sweet-spot, growing toward corners — a pure per-channel scale about the
+    // convergence centre), lens focus falloff at the edges, screen-gain bloom, lifted blacks. ----
+    if (crtProjConvergence > 0.001 || crtProjEdgeSoftness > 0.001 || crtProjBloom > 0.001 || crtProjBlackLift > 0.001) {
+      const pcx = crtProjCenterX * width, pcy = crtProjCenterY * height;
+      if (crtProjConvergence > 0.001) {
+        // R scaled up / B scaled down about the sweet-spot: displacement is exactly radial
+        // and proportional to distance (0px at centre, max at corners). G anchors geometry.
+        const k = crtProjConvergence * 0.009;
+        if (!this._projCanvas) {
+          this._projCanvas = document.createElement("canvas");
+          this._projCtx = this._projCanvas.getContext("2d");
+          this._projChan = document.createElement("canvas");
+          this._projChanCtx = this._projChan.getContext("2d");
+        }
+        this.ensureCanvasSize(this._projCanvas, width, height);
+        this.ensureCanvasSize(this._projChan, width, height);
+        const pctx = this._projCtx, cctx = this._projChanCtx;
+        pctx.save();
+        pctx.globalCompositeOperation = "source-over";
+        pctx.fillStyle = "#000"; pctx.fillRect(0, 0, width, height);
+        const CHANNELS = [["#f00", 1 + k], ["#0f0", 1], ["#00f", 1 - k]];
+        for (const [color, scale] of CHANNELS) {
+          cctx.save();
+          cctx.globalCompositeOperation = "source-over";
+          cctx.drawImage(outCtx.canvas, 0, 0);
+          cctx.globalCompositeOperation = "multiply";
+          cctx.fillStyle = color; cctx.fillRect(0, 0, width, height);
+          cctx.restore();
+          pctx.globalCompositeOperation = "lighter";
+          pctx.setTransform(scale, 0, 0, scale, pcx * (1 - scale), pcy * (1 - scale));
+          pctx.imageSmoothingEnabled = true; pctx.imageSmoothingQuality = "high";
+          pctx.drawImage(this._projChan, 0, 0);
+          pctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+        pctx.restore();
+        outCtx.drawImage(this._projCanvas, 0, 0);
+      }
+      // Projection-lens focus falloff: blurred copy masked to the edges only.
+      if (crtProjEdgeSoftness > 0.001) {
+        this.ensureCanvasSize(this.tempCanvas, width, height);
+        const sctx = this.tempCtx;
+        sctx.save();
+        sctx.globalCompositeOperation = "source-over";
+        sctx.clearRect(0, 0, width, height);
+        sctx.filter = `blur(${(1.5 + crtProjEdgeSoftness * 5).toFixed(2)}px)`;
+        sctx.drawImage(outCtx.canvas, 0, 0);
+        sctx.filter = "none";
+        sctx.globalCompositeOperation = "destination-in";
+        const mgrad = sctx.createRadialGradient(pcx, pcy, Math.min(width, height) * 0.22, pcx, pcy, Math.max(width, height) * 0.7);
+        mgrad.addColorStop(0, "rgba(0,0,0,0)");
+        mgrad.addColorStop(1, `rgba(0,0,0,${Math.min(1, 0.35 + crtProjEdgeSoftness * 0.65).toFixed(3)})`);
+        sctx.fillStyle = mgrad; sctx.fillRect(0, 0, width, height);
+        sctx.restore();
+        outCtx.drawImage(this.tempCanvas, 0, 0);
+      }
+      // Screen-gain bloom: highlights halate on the projection screen.
+      if (crtProjBloom > 0.001) {
+        outCtx.save();
+        outCtx.globalCompositeOperation = "screen";
+        outCtx.globalAlpha = crtProjBloom * 0.45;
+        outCtx.filter = `blur(${(2 + crtProjBloom * 8).toFixed(2)}px) brightness(1.25)`;
+        outCtx.drawImage(outCtx.canvas, 0, 0);
+        outCtx.restore();
+      }
+      // Lit-room contrast: projected blacks are only as dark as the screen.
+      if (crtProjBlackLift > 0.001) {
+        const lift = Math.round(crtProjBlackLift * 58);
+        outCtx.save();
+        outCtx.globalCompositeOperation = "lighten";
+        outCtx.fillStyle = `rgb(${lift},${lift},${lift})`;
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.restore();
+      }
+    }
+
+    // ---- DLP single-chip projector (PE 1.1.6): colour-wheel rainbow — an R->G->B
+    // sequential fringe trailing off BRIGHT-ON-DARK edges only (never a global split) —
+    // plus the fine inter-mirror screen-door and micromirror mid-tone shimmer. ----
+    if (dlpRainbow > 0.001 || dlpScreenDoor > 0.001 || dlpDither > 0.001) {
+      if (dlpRainbow > 0.001) {
+        const thr = dlpRainbowThreshold * 255;
+        if (!this._dlpMask) {
+          this._dlpMask = document.createElement("canvas");
+          this._dlpMaskCtx = this._dlpMask.getContext("2d");
+          this._dlpFringe = document.createElement("canvas");
+          this._dlpFringeCtx = this._dlpFringe.getContext("2d");
+          this._dlpChan = document.createElement("canvas");
+          this._dlpChanCtx = this._dlpChan.getContext("2d");
+        }
+        this.ensureCanvasSize(this._dlpMask, width, height);
+        this.ensureCanvasSize(this._dlpFringe, width, height);
+        this.ensureCanvasSize(this._dlpChan, width, height);
+        // Bright mask: only pixels above the luma gate (the colour-wheel tell needs
+        // bright-on-dark; mid-tone edges never fringe).
+        const src = outCtx.getImageData(0, 0, width, height);
+        const sd = src.data;
+        const mask = this._dlpMaskCtx.createImageData(width, height);
+        const md = mask.data;
+        for (let i = 0; i < sd.length; i += 4) {
+          const l = sd[i] * 0.299 + sd[i + 1] * 0.587 + sd[i + 2] * 0.114;
+          if (l > thr) { md[i] = 255; md[i + 1] = 255; md[i + 2] = 255; md[i + 3] = 255; }
+        }
+        this._dlpMaskCtx.putImageData(mask, 0, 0);
+        // Sequential fringe: R, G, B copies of the mask at increasing trail offsets,
+        // additive, then punch out the source-bright region so only the TRAIL remains.
+        const fctx = this._dlpFringeCtx;
+        fctx.save();
+        fctx.globalCompositeOperation = "source-over";
+        fctx.clearRect(0, 0, width, height);
+        const dstep = Math.max(1, Math.round(1.5 + dlpRainbow * 3.5));
+        const SEQ = [["#f00", dstep], ["#0f0", dstep * 2], ["#00f", dstep * 3]];
+        for (const [color, off] of SEQ) {
+          const cctx = this._dlpChanCtx;
+          cctx.save();
+          cctx.globalCompositeOperation = "source-over";
+          cctx.clearRect(0, 0, width, height);
+          cctx.drawImage(this._dlpMask, 0, 0);
+          cctx.globalCompositeOperation = "source-in";
+          cctx.fillStyle = color; cctx.fillRect(0, 0, width, height);
+          cctx.restore();
+          fctx.globalCompositeOperation = "lighter";
+          fctx.drawImage(this._dlpChan, off, 0);
+        }
+        fctx.globalCompositeOperation = "destination-out";
+        fctx.drawImage(this._dlpMask, 0, 0);
+        fctx.restore();
+        outCtx.save();
+        outCtx.globalCompositeOperation = "screen";
+        outCtx.globalAlpha = Math.min(0.75, dlpRainbow * 0.55);
+        outCtx.drawImage(this._dlpFringe, 0, 0);
+        outCtx.restore();
+      }
+      // Fine inter-mirror lattice: lower duty-cycle (thinner gaps) than an LCD grid.
+      if (dlpScreenDoor > 0.001) {
+        const cell = 3;
+        if (this._dlpDoorKey !== cell) {
+          const tile = document.createElement("canvas");
+          tile.width = cell; tile.height = cell;
+          const gctx = tile.getContext("2d");
+          gctx.fillStyle = "#fff"; gctx.fillRect(0, 0, cell, cell);
+          gctx.fillStyle = "#b8b8b8";
+          gctx.fillRect(cell - 1, 0, 1, cell);
+          gctx.fillRect(0, cell - 1, cell, 1);
+          this._dlpDoor = tile; this._dlpDoorKey = cell;
+          this._dlpDoorPattern = outCtx.createPattern(tile, "repeat");
+        }
+        if (this._dlpDoorPattern) {
+          outCtx.save();
+          outCtx.globalCompositeOperation = "multiply";
+          outCtx.globalAlpha = Math.min(0.7, 0.2 + dlpScreenDoor * 0.4);
+          outCtx.fillStyle = this._dlpDoorPattern;
+          outCtx.fillRect(0, 0, width, height);
+          outCtx.restore();
+          outCtx.save();
+          outCtx.globalCompositeOperation = "screen";
+          outCtx.globalAlpha = dlpScreenDoor * 0.15;
+          outCtx.drawImage(outCtx.canvas, 0, 0);
+          outCtx.restore();
+        }
+      }
+      // Micromirror temporal dither: a faint shimmer strongest in the mid-tones.
+      if (dlpDither > 0.001) {
+        const img = outCtx.getImageData(0, 0, width, height);
+        const d = img.data;
+        const amp = dlpDither * 10;
+        const fseed = (temporalFrame % 4) * 131;
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const l = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+            const mid = 1 - Math.abs(l - 128) / 128; // 1 at mid-tones, 0 at extremes
+            if (mid <= 0.05) continue;
+            const nz = (seededNoise(x, y, 401 + fseed) - 0.5) * amp * mid;
+            d[i] += nz; d[i + 1] += nz; d[i + 2] += nz;
+          }
+        }
+        outCtx.putImageData(img, 0, 0);
+      }
     }
 
     // ---- Lens/optics vignette (independent of tube curvature) ----
