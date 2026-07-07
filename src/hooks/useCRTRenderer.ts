@@ -372,6 +372,7 @@ export function useCRTRenderer() {
     compareSplit: false,
     compareSplitRatio: 0.5,
     gpuAcceleration: false,
+    previewFit: true,
   });
   const lastFrameTimeRef = useRef<number>(0);
   const previewDirtyRef = useRef<boolean>(true);
@@ -459,16 +460,40 @@ export function useCRTRenderer() {
     return buildOSDRenderOptions(osdOptionsRef.current, { elapsed });
   }, []);
 
-  // Preview zoom/pan are a pure viewport transform applied in CSS by
-  // PreviewCanvas (instant, GPU-composited, magnifies the rendered output). The
-  // render pipeline intentionally ignores zoom/pan: it always renders the full
-  // frame at its natural resolution and the GPU shader path stays engaged (a
-  // crop here would force the slow CPU fallback and re-render on every pan).
+  // Pixel-true zoom (1.1.6 #1): when not in Fit, the preview renders the VISIBLE WINDOW of
+  // the source (renderOptions.sourceView) at full canvas density — zoom is never a CSS
+  // stretch, so 100% shows true source pixels and stays correct during playback (this runs
+  // per frame at every preview render site). The hybrid dispatcher declines GPU paths when
+  // sourceView is set, so the crop always goes through the CPU pipeline that honors it.
+  const computePreviewSourceView = useCallback(() => {
+    const s = previewSettingsRef.current;
+    const src = sourceDimsRef.current;
+    const canvas = canvasRef.current;
+    if (s.previewFit || !src || src.w <= 0 || src.h <= 0 || !canvas) return null;
+    const cssW = canvas.offsetWidth || 1;
+    const cssH = canvas.offsetHeight || 1;
+    const z = Math.max(0.05, s.previewScale); // user scale: 1 = one source px per CSS px
+    const wFrac = (cssW / z) / src.w;
+    const hFrac = (cssH / z) / src.h;
+    if (wFrac >= 1 && hFrac >= 1) return null; // zoomed out to (or past) fit — show everything
+    const w = Math.min(1, wFrac);
+    const h = Math.min(1, hFrac);
+    const cx = panCenterRef.current.x;
+    const cy = panCenterRef.current.y;
+    return {
+      x: Math.max(0, Math.min(1 - w, cx - w / 2)),
+      y: Math.max(0, Math.min(1 - h, cy - h / 2)),
+      width: w,
+      height: h,
+    };
+  }, []);
+
   const buildRenderOpts = useCallback((elapsed: number, params: CRTParams) => {
     const osdOpts = buildOSDOpts(elapsed, params) || {};
     const formatProfile = formatPipelineRef.current ? formatProfileRef.current : null;
-    return { ...osdOpts, formatProfile };
-  }, [buildOSDOpts]);
+    const sourceView = computePreviewSourceView();
+    return { ...osdOpts, formatProfile, ...(sourceView ? { sourceView } : {}) };
+  }, [buildOSDOpts, computePreviewSourceView]);
 
   // Export/offscreen render options: identical to preview EXCEPT the OSD clock is
   // left to the renderer to derive per-frame from frameIndex/fps (so the burned
@@ -498,7 +523,7 @@ export function useCRTRenderer() {
 
   // Apply device-pixel-ratio sharpening and the adaptive performance multiplier,
   // then clamp to the user's max-pixel budget.
-  const applyQualityScale = useCallback((w: number, h: number, _settings: PreviewSettings) => {
+  const applyQualityScale = useCallback((w: number, h: number) => {
     // WYSIWYG: render exactly the displayed pixels at device density — no adaptive
     // multiplier, no max-pixel budget. The preview IS the final quality (1.1.6 Ben).
     const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
@@ -509,8 +534,6 @@ export function useCRTRenderer() {
     const container = containerRef.current;
     if (!container) return { width: 960, height: 540 };
     const rect = container.getBoundingClientRect();
-    const settings = previewSettingsRef.current;
-    const zoom = settings.previewScale;
     const cw = Math.round(rect.width);
     const ch = Math.round(rect.height);
     if (cw < 10 || ch < 10) return { width: 960, height: 540 };
@@ -527,14 +550,14 @@ export function useCRTRenderer() {
         h = ch;
         w = Math.round(ch * srcAR);
       }
-      // (zoom is applied as a CSS viewport transform, not by inflating the render)
+      // (zoom renders a source WINDOW via renderOptions.sourceView — the canvas box stays at fit size)
     } else {
       w = cw;
       h = ch;
-      // (zoom is applied as a CSS viewport transform, not by inflating the render)
+      // (zoom renders a source WINDOW via renderOptions.sourceView — the canvas box stays at fit size)
     }
 
-    return applyQualityScale(w, h, settings);
+    return applyQualityScale(w, h);
   }, [applyQualityScale]);
 
   // Seek a video to a time and resolve once the frame is presented. Every wait
@@ -714,7 +737,6 @@ export function useCRTRenderer() {
           const cw = Math.round(rect.width);
           const ch = Math.round(rect.height);
           if (cw >= 10 && ch >= 10) {
-            const zoom = settings.previewScale;
             const src = sourceDimsRef.current;
             let w: number, h: number;
             if (src && src.w > 0 && src.h > 0) {
@@ -722,7 +744,7 @@ export function useCRTRenderer() {
               const containerAR = cw / ch;
               if (srcAR > containerAR) { w = cw; h = Math.round(cw / srcAR); }
               else { h = ch; w = Math.round(ch * srcAR); }
-              // (zoom is applied as a CSS viewport transform, not by inflating the render)
+              // (zoom renders a source WINDOW via renderOptions.sourceView — the canvas box stays at fit size)
             } else {
               w = cw; h = ch;
             }
@@ -928,8 +950,12 @@ export function useCRTRenderer() {
       }
     }
 
-    // previewScale (zoom) is a CSS viewport transform now, so it no longer
-    // affects the render resolution or invalidates caches.
+    // Pixel-true zoom (1.1.6): the view window is baked into every rendered frame,
+    // so a zoom/fit change must re-render and invalidates RAM-cached frames.
+    if (settings.previewScale !== prev.previewScale || settings.previewFit !== prev.previewFit) {
+      previewDirtyRef.current = true;
+      invalidateRamCache();
+    }
     if (settings.maxPixels !== prev.maxPixels) {
       pendingResizeRef.current = true;
       invalidateRamCache();
@@ -1687,6 +1713,8 @@ rendererRef.current?.setImage(proxy.source, sourceScale);
 
   const setPanCenter = useCallback((x: number, y: number) => {
     panCenterRef.current = { x, y };
+    invalidateRamCache(); // RAM frames bake the view window — a pan means they're stale
+    previewDirtyRef.current = true;
     markDirty();
   }, [markDirty]);
 

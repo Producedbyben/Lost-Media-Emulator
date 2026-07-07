@@ -12,6 +12,8 @@ export interface PreviewSettings {
   compareSplit: boolean;
   compareSplitRatio: number;
   gpuAcceleration: boolean;
+  /** Fit-to-window mode; when false, previewScale is the USER scale (1 = 100%, one source px per CSS px). */
+  previewFit: boolean;
 }
 
 export const DEFAULT_PREVIEW_SETTINGS: PreviewSettings = {
@@ -20,6 +22,7 @@ export const DEFAULT_PREVIEW_SETTINGS: PreviewSettings = {
   fpsLimit: 30,
   animationEnabled: false,
   previewScale: 1,
+  previewFit: true,
   compareMode: "off",
   compareSplit: false,
   compareSplitRatio: 0.5,
@@ -61,13 +64,13 @@ interface PreviewControlsProps {
 
 const FPS_OPTIONS = [15, 30, 60];
 
+// USER scales: 1 = 100% = one source pixel per CSS pixel. Fit is a mode, not a scale.
 const ZOOM_OPTIONS = [
+  { label: "Fit", value: null as number | null },
   { label: "50%", value: 0.5 },
-  { label: "Fit", value: 1 },
-  { label: "133%", value: 1.33 },
-  { label: "2×", value: 2 },
-  { label: "3×", value: 3 },
-  { label: "4×", value: 4 },
+  { label: "100%", value: 1 },
+  { label: "200%", value: 2 },
+  { label: "400%", value: 4 },
 ];
 
 const PreviewControls = ({
@@ -150,7 +153,9 @@ const PreviewControls = ({
 
       <div className="flex items-center gap-1 px-2 py-1 rounded border border-border bg-secondary text-muted-foreground">
         <Monitor className="w-3 h-3" />
-        <span className="font-mono">{Math.round(settings.previewScale * (fitScale > 0 ? fitScale : 1) * 100)}%</span>
+        <span className="font-mono">{settings.previewFit
+          ? `Fit${fitScale > 0 ? ` · ${Math.round(fitScale * 100)}%` : ""}`
+          : `${Math.round(settings.previewScale * 100)}%`}</span>
       </div>
 
       {isVideo && (onBuildRamPreview || onClearRamPreview) && (
@@ -200,10 +205,10 @@ const PreviewControls = ({
               <div className="flex flex-wrap gap-1">
                 {ZOOM_OPTIONS.map(({ label, value }) => (
                   <button
-                    key={value}
-                    onClick={() => update({ previewScale: value })}
+                    key={label}
+                    onClick={() => update(value === null ? { previewFit: true } : { previewFit: false, previewScale: value })}
                     className={`px-1.5 py-0.5 rounded font-mono transition-colors ${
-                      Math.abs(settings.previewScale - value) < 0.01
+                      (value === null ? settings.previewFit : !settings.previewFit && Math.abs(settings.previewScale - value) < 0.01)
                         ? "bg-primary/15 text-primary"
                         : "bg-secondary text-muted-foreground hover:text-foreground"
                     }`}

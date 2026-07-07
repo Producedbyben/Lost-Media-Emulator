@@ -603,8 +603,11 @@ const Index = () => {
           if (saved.osdOptions) setLocalOSDOptions(prev => ({ ...prev, ...saved.osdOptions }));
           if (saved.previewSettings) setLocalPreviewSettings(prev => ({
             ...prev, ...saved.previewSettings,
-            // 1.1.6 WYSIWYG migration: persisted degraded-preview settings are retired.
+            // 1.1.6 WYSIWYG migration: persisted degraded-preview settings are retired,
+            // and zoom semantics changed (previewScale is now the USER scale) — reset to Fit.
             sourceScale: 1,
+            previewScale: 1,
+            previewFit: true,
           }));
           if (typeof saved.activePreset === "string") setActivePreset(saved.activePreset);
           if (typeof saved.presetIntensity === "number") setPresetIntensity(saved.presetIntensity);
@@ -1204,6 +1207,15 @@ const Index = () => {
       if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
         e.preventDefault(); handleRandomize();
       }
+      if (e.key === "1" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+        e.preventDefault();
+        setLocalPreviewSettings(s => ({ ...s, previewFit: false, previewScale: 1 }));
+      }
+      if (e.key === "0" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+        e.preventDefault();
+        setLocalPreviewSettings(s => ({ ...s, previewFit: true }));
+        handlePanChange(0.5, 0.5);
+      }
       if (e.code === "Space" && !e.repeat && previewSettings.compareMode !== "lock") {
         e.preventDefault();
         setLocalPreviewSettings(s => ({ ...s, compareMode: "hold" }));
@@ -1218,7 +1230,7 @@ const Index = () => {
     window.addEventListener("keydown", handler);
     window.addEventListener("keyup", upHandler);
     return () => { window.removeEventListener("keydown", handler); window.removeEventListener("keyup", upHandler); };
-  }, [handleUndo, handleRedo, handleImport, handleMasterBypass, handleRandomize, previewSettings.compareMode]);
+  }, [handleUndo, handleRedo, handleImport, handleMasterBypass, handleRandomize, handlePanChange, previewSettings.compareMode]);
 
 
   const isCompact = density === "compact";
@@ -1609,7 +1621,8 @@ const Index = () => {
       </CollapsiblePanel>
       <CollapsiblePanel title="Navigator" defaultOpen={true}>
         <div className="pt-2">
-          <PreviewNavigator sourceElement={sourceElement} fitScale={previewFitScale} zoom={previewSettings.previewScale}
+          <PreviewNavigator sourceElement={sourceElement} fitScale={previewFitScale}
+            zoom={previewSettings.previewFit ? 1 : Math.max(1, previewSettings.previewScale / (previewFitScale || 1))}
             panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange} hasImage={hasImage}
             thumbnailVersion={thumbnailVersion} />
         </div>
@@ -1806,9 +1819,11 @@ const Index = () => {
                   <PreviewCanvas
                     canvasRef={canvasRef} containerRef={containerRef} hasImage={hasImage} onLoadImage={handleLoadFile}
                     zoom={previewSettings.previewScale}
+                    fit={previewSettings.previewFit}
                     sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
                     onFitScaleChange={setPreviewFitScale}
-                    onZoomChange={(z) => { handlePreviewSettingsChange({ ...previewSettings, previewScale: z }); if (z <= 1.001) handlePanChange(0.5, 0.5); }}
+                    onZoomChange={(z) => handlePreviewSettingsChange({ ...previewSettings, previewScale: z, previewFit: false })}
+                    onFitChange={(f) => { handlePreviewSettingsChange({ ...previewSettings, previewFit: f }); if (f) handlePanChange(0.5, 0.5); }}
                     panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange}
                     compareSplit={previewSettings.compareSplit}
                     onCompareSplitRatioChange={(r) => handlePreviewSettingsChange({ ...previewSettings, compareSplitRatio: r })}
@@ -1897,9 +1912,11 @@ const Index = () => {
                 <PreviewCanvas
                   canvasRef={canvasRef} containerRef={containerRef} hasImage={hasImage} onLoadImage={handleLoadFile}
                   zoom={previewSettings.previewScale}
+                  fit={previewSettings.previewFit}
                   sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
                   onFitScaleChange={setPreviewFitScale}
-                  onZoomChange={(z) => { handlePreviewSettingsChange({ ...previewSettings, previewScale: z }); if (z <= 1.001) handlePanChange(0.5, 0.5); }}
+                  onZoomChange={(z) => handlePreviewSettingsChange({ ...previewSettings, previewScale: z, previewFit: false })}
+                  onFitChange={(f) => { handlePreviewSettingsChange({ ...previewSettings, previewFit: f }); if (f) handlePanChange(0.5, 0.5); }}
                   panX={panCenter.x} panY={panCenter.y} onPanChange={handlePanChange}
                   compareSplit={previewSettings.compareSplit}
                   onCompareSplitRatioChange={(r) => handlePreviewSettingsChange({ ...previewSettings, compareSplitRatio: r })}
