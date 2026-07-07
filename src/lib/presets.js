@@ -2785,7 +2785,9 @@ export const DISPLAY_PRESETS = {
   // fine inter-mirror screen-door, micromirror mid-tone shimmer.
   "DLP Projector (Rainbow)": {
     ...NEUTRAL_DISPLAY,
-    dlpRainbow: 0.5, dlpRainbowThreshold: 0.7, dlpScreenDoor: 0.3, dlpDither: 0.2,
+    // dlpRainbow 0.75 per PE gate 2026-07-08: mechanism passed at 0.5 but the rainbow
+    // break-up was too subtle to READ as the DLP discriminator — cranked into PE's band.
+    dlpRainbow: 0.75, dlpRainbowThreshold: 0.7, dlpScreenDoor: 0.3, dlpDither: 0.2,
     maskType: "none", bloom: 0.06,
   },
 
