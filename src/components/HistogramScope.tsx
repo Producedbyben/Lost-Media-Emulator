@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, memo } from "react";
 
 interface HistogramScopeProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -146,4 +146,6 @@ const HistogramScope = ({ canvasRef, hasImage, mode }: HistogramScopeProps) => {
   );
 };
 
-export default HistogramScope;
+// Memoised (audit #15, safe subset): props are identity-stable during param slider drags
+// (named handlers + settings objects), so these skip the per-tick re-render entirely.
+export default memo(HistogramScope);

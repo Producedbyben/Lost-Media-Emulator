@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ListVideo, X, Trash2, Loader2, CheckCircle2, AlertCircle, Clock, Ban } from "lucide-react";
 import type { ExportJob } from "@/hooks/useExportQueue";
 
@@ -113,4 +114,6 @@ const ExportQueue = ({ jobs, etaMs, activeCount, onCancelJob, onCancelAll, onCle
   );
 };
 
-export default ExportQueue;
+// Memoised (audit #15, safe subset): props are identity-stable during param slider drags
+// (named handlers + settings objects), so these skip the per-tick re-render entirely.
+export default memo(ExportQueue);

@@ -406,6 +406,7 @@ export function useCRTRenderer() {
   const frameTimeAvgRef = useRef<number>(16);
   const lastRenderMsRef = useRef<number>(0); // cost of the most recent frame
   const adaptiveCooldownRef = useRef<number>(0);
+  const dirtyStreakRef = useRef<number>(0); // consecutive back-to-back renders = interactive burst (slider drag on a still)
   const activeRenderModeRef = useRef<string>("cpu");
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   // Format authenticity pipeline (native resolution + composite colour).
@@ -860,7 +861,16 @@ export function useCRTRenderer() {
             // scale down one notch. Here we drive the resolution scale directly
             // from the measured frame cost so playback recovers within a frame
             // or two. GPU-accelerated looks (~0.3 ms) naturally pull scale to 1.
-            if (settings.adaptiveQuality && (isVideoPlaying || shouldAnimate)) {
+            // Interactive-burst detection (audit #16): a slider drag on a STILL re-renders
+            // back-to-back with no playback/animation flag, so the governor never engaged and
+            // heavy CPU looks froze the UI. Frames arriving as fast as they can render
+            // (gap ≲ renderDuration + 300ms slack) = continuous interaction -> govern it.
+            {
+              const gap = now - (lastFrameTimeRef.current || 0);
+              dirtyStreakRef.current = gap < renderDuration + 300 ? dirtyStreakRef.current + 1 : 0;
+            }
+            const interactiveBurst = dirtyStreakRef.current >= 1;
+            if (settings.adaptiveQuality && (isVideoPlaying || shouldAnimate || interactiveBurst)) {
               frameTimeAvgRef.current = frameTimeAvgRef.current * 0.7 + renderDuration * 0.3;
               const budget = 1000 / settings.fpsLimit;
               // Aggressive floor during ANY continuous render (playback or

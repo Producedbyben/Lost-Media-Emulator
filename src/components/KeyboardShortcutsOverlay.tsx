@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { X } from "lucide-react";
 import { mod, shiftKey } from "@/lib/platform";
 
@@ -74,4 +74,6 @@ const KeyboardShortcutsOverlay = () => {
   );
 };
 
-export default KeyboardShortcutsOverlay;
+// Memoised (audit #15, safe subset): props are identity-stable during param slider drags
+// (named handlers + settings objects), so these skip the per-tick re-render entirely.
+export default memo(KeyboardShortcutsOverlay);

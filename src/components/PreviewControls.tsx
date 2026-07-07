@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, memo } from "react";
 import { Monitor, Eye, Pause, Play, SlidersHorizontal, Cpu, Zap, Database, Loader2, X, Lock, LockOpen } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -324,4 +324,6 @@ const PreviewControls = ({
   );
 };
 
-export default PreviewControls;
+// Memoised (audit #15, safe subset): props are identity-stable during param slider drags
+// (named handlers + settings objects), so these skip the per-tick re-render entirely.
+export default memo(PreviewControls);

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, memo } from "react";
 
 interface PreviewNavigatorProps {
   fitScale?: number; // source-px->CSS-px fit factor from PreviewCanvas (user-true % display)
@@ -181,4 +181,6 @@ const PreviewNavigator = ({
   );
 };
 
-export default PreviewNavigator;
+// Memoised (audit #15, safe subset): props are identity-stable during param slider drags
+// (named handlers + settings objects), so these skip the per-tick re-render entirely.
+export default memo(PreviewNavigator);
