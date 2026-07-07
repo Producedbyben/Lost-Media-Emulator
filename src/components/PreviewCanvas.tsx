@@ -27,9 +27,10 @@ const USER_ZOOM_STEPS = [0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 // neon night / bright daylight action / warm subject / foliage landscape.
 const SAMPLE_IMAGES = [
   { url: "samples/neon-sign.jpg", name: "Neon sign (night)" },
-  { url: "samples/harbor-helicopter.jpg", name: "Harbour helicopter (daylight)" },
+  { url: "samples/cliff-dawn.jpg", name: "Cliff at dawn (landscape)" },
   { url: "samples/dog-portrait.jpg", name: "Dog portrait (indoor)" },
-  { url: "samples/tea-plantation.jpg", name: "Tea plantation (landscape)" },
+  { url: "samples/cafe-still-life.jpg", name: "Café still life (macro)" },
+  { url: "samples/harbor-helicopter.jpg", name: "Harbour helicopter (daylight)" },
 ];
 
 const PreviewCanvas = ({
