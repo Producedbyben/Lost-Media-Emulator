@@ -1129,7 +1129,6 @@ export function useCRTRenderer() {
         return info;
       }
 
-      // Static image — decode then build an optimised working copy if oversized.
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.src = url;
@@ -1138,12 +1137,20 @@ export function useCRTRenderer() {
         img.onerror = () => reject(new Error("Image load failed"));
       });
       if (typeof img.decode === "function") {
-        try { await img.decode(); } catch { /* decode hint only */ }
+        // decode() is only a pre-decode HINT (the image is already loaded) — but Chromium
+        // can leave its promise PERMANENTLY unsettled (neither resolve nor reject), which
+        // froze imports at the "Loading…" toast. Race it against a short timeout.
+        try {
+          await Promise.race([
+            img.decode().catch(() => { /* hint only */ }),
+            new Promise<void>((r) => setTimeout(r, 1500)),
+          ]);
+        } catch { /* hint only */ }
       }
 
       const srcW = img.naturalWidth || img.width;
       const srcH = img.naturalHeight || img.height;
-      const proxy = buildWorkingProxy(img);
+const proxy = buildWorkingProxy(img);
 
       isVideoRef.current = false;
       videoPlayingRef.current = false;
@@ -1166,7 +1173,7 @@ export function useCRTRenderer() {
 
       rendererRef.current?.reset?.();
       adaptiveScaleRef.current = 1;
-      rendererRef.current?.setImage(proxy.source, sourceScale);
+rendererRef.current?.setImage(proxy.source, sourceScale);
       pendingResizeRef.current = true;
       startTimeRef.current = performance.now();
       markDirty();

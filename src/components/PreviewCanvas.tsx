@@ -21,10 +21,15 @@ const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.33, 2, 3, 4, 6];
 // User-facing source-pixel percentages (Photoshop-style): 12.5% .. 400%.
 const USER_ZOOM_STEPS = [0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 
+// Bundled sample sources (Ben-11 #6): Ben's own raw captures shipped with the app —
+// no remote hotlinks (the old Unsplash URLs broke offline and weren't ours). Licence
+// provenance: public/samples/PROVENANCE.md. Chosen to span the demo registers:
+// neon night / bright daylight action / warm subject / foliage landscape.
 const SAMPLE_IMAGES = [
-  "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80",
-  "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800&q=80",
-  "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=800&q=80",
+  { url: "samples/neon-sign.jpg", name: "Neon sign (night)" },
+  { url: "samples/harbor-helicopter.jpg", name: "Harbour helicopter (daylight)" },
+  { url: "samples/dog-portrait.jpg", name: "Dog portrait (indoor)" },
+  { url: "samples/tea-plantation.jpg", name: "Tea plantation (landscape)" },
 ];
 
 const PreviewCanvas = ({
@@ -225,12 +230,12 @@ const PreviewCanvas = ({
   }, [onPanChange]);
   const isPanned = zoom > 1.001 && (Math.abs(panX - 0.5) > 0.001 || Math.abs(panY - 0.5) > 0.001);
 
-  const loadSampleImage = useCallback(async (url: string, idx: number) => {
+  const loadSampleImage = useCallback(async (sample: { url: string; name: string }, idx: number) => {
     setLoadingSample(idx);
     try {
-      const resp = await fetch(url);
+      const resp = await fetch(sample.url);
       const blob = await resp.blob();
-      const file = new File([blob], "sample.jpg", { type: "image/jpeg" });
+      const file = new File([blob], `${sample.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.jpg`, { type: "image/jpeg" });
       onLoadImage(file);
     } catch (err) {
       console.error("Failed to load sample image", err);
@@ -350,17 +355,17 @@ const PreviewCanvas = ({
           <div className="flex flex-col items-center gap-3 mt-2">
             <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Quick start</p>
             <div className="flex gap-3">
-              {SAMPLE_IMAGES.map((url, i) => (
+              {SAMPLE_IMAGES.map((sample, i) => (
                 <button
-                  key={i}
-                  onClick={() => loadSampleImage(url, i)}
+                  key={sample.url}
+                  onClick={() => loadSampleImage(sample, i)}
                   disabled={loadingSample !== null}
                   className={`w-20 h-16 rounded-lg overflow-hidden border-2 border-border hover:border-primary/60 transition-all shadow-sm ${
                     loadingSample === i ? "opacity-50 animate-pulse" : "opacity-80 hover:opacity-100 hover:scale-105"
                   }`}
-                  title={`Load sample image ${i + 1}`}
+                  title={`Load sample: ${sample.name}`}
                 >
-                  <img src={url} alt={`Sample ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  <img src={sample.url} alt={sample.name} className="w-full h-full object-cover" loading="lazy" />
                 </button>
               ))}
             </div>
