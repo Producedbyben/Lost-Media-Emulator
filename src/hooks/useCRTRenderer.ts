@@ -811,6 +811,8 @@ export function useCRTRenderer() {
               canvas.width = fitted.width;
               canvas.height = fitted.height;
               previewDirtyRef.current = true;
+              // RAM frames are baked at canvas size — a resized canvas would stretch them.
+              if (ramCacheRef.current) invalidateRamCache();
             }
           }
           pendingResizeRef.current = false;

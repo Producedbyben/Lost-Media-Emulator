@@ -1,5 +1,5 @@
-import { useMemo, useState, memo } from "react";
-import { Monitor, Eye, Pause, Play, SlidersHorizontal, Cpu, Zap, Database, Loader2, X, Lock, LockOpen } from "lucide-react";
+import { useMemo, useRef, useState, memo } from "react";
+import { Monitor, Eye, Pause, Play, SlidersHorizontal, Cpu, Zap, Database, Loader2, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export interface PreviewSettings {
@@ -80,6 +80,8 @@ const PreviewControls = ({
   renderLagging = false,
 }: PreviewControlsProps) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Compare press bookkeeping: distinguishes a quick click (toggle) from a hold (peek).
+  const comparePressRef = useRef<{ t: number; wasOn: boolean } | null>(null);
 
   const update = (patch: Partial<PreviewSettings>) => {
     onChange({ ...settings, ...patch });
@@ -125,9 +127,25 @@ const PreviewControls = ({
       </button>
 
       <button
-        onPointerDown={() => update({ compareMode: "hold" })}
-        onPointerUp={() => { if (settings.compareMode === "hold") update({ compareMode: "off" }); }}
-        onPointerLeave={() => { if (settings.compareMode === "hold") update({ compareMode: "off" }); }}
+        onPointerDown={() => {
+          comparePressRef.current = { t: performance.now(), wasOn: settings.compareMode !== "off" };
+          if (settings.compareMode === "off") update({ compareMode: "hold" });
+        }}
+        onPointerUp={() => {
+          const press = comparePressRef.current;
+          comparePressRef.current = null;
+          if (!press) return;
+          // Click while comparing = back to the processed look. Quick click = toggle the
+          // comparison ON (sticky). A long press was a peek - release ends it.
+          if (press.wasOn) { update({ compareMode: "off" }); return; }
+          update({ compareMode: performance.now() - press.t < 300 ? "lock" : "off" });
+        }}
+        onPointerLeave={() => {
+          const press = comparePressRef.current;
+          comparePressRef.current = null;
+          if (press && !press.wasOn && settings.compareMode === "hold") update({ compareMode: "off" });
+        }}
+        title="Compare with the original - click to toggle, press and hold to peek (Space)"
         className={`flex items-center gap-1 px-2 py-1 rounded border transition-colors ${
           settings.compareMode !== "off"
             ? "bg-primary/15 text-primary border-primary/30"
@@ -135,20 +153,7 @@ const PreviewControls = ({
         }`}
       >
         <Eye className="w-3 h-3" />
-        <span className="font-medium">Compare</span>
-      </button>
-
-      <button
-        onClick={() => update({ compareMode: settings.compareMode === "lock" ? "off" : "lock" })}
-        className={`flex items-center gap-1 px-2 py-1 rounded border transition-colors ${
-          settings.compareMode === "lock"
-            ? "bg-primary/15 text-primary border-primary/30"
-            : "bg-secondary text-muted-foreground border-border"
-        }`}
-      >
-        {settings.compareMode === "lock"
-          ? <><LockOpen className="w-3 h-3" /><span className="font-medium">Unlock</span></>
-          : <><Lock className="w-3 h-3" /><span className="font-medium">Lock</span></>}
+        <span className="font-medium">{settings.compareMode !== "off" ? "Original" : "Compare"}</span>
       </button>
 
       <div className="flex items-center gap-1 px-2 py-1 rounded border border-border bg-secondary text-muted-foreground">

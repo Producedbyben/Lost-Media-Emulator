@@ -1025,6 +1025,12 @@ const Index = () => {
     try {
       const info = await loadImage(file);
       toast.dismiss(loadingId);
+      // New source = fresh framing: always come back to Fit (a zoom held over from the
+      // previous media reads as "my video is cropped").
+      if (info) {
+        setLocalPreviewSettings(s => ({ ...s, previewFit: true, previewScale: 1 }));
+        handlePanChange(0.5, 0.5);
+      }
       // Desktop: record successfully-opened on-disk files for File ▸ Open Recent.
       // Only real picked/dropped files carry a path (pasted images and files
       // rebuilt from a data URL don't — the guard skips those).
@@ -1045,7 +1051,7 @@ const Index = () => {
       toast.dismiss(loadingId);
       toast.error("Couldn't load file", { description: err?.message || String(err) });
     }
-  }, [loadImage]);
+  }, [loadImage, handlePanChange]);
 
   // Native File-menu entry points (menu → executeJavaScript dispatches these,
   // same pattern as the Help menu's "tutorial:open"). Each one reuses the

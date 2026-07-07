@@ -131,11 +131,6 @@ const PreviewCanvas = ({
     onZoomChange(USER_ZOOM_STEPS[nextIdx]);
   }, [zoom, fit, onZoomChange, onFitChange, fitScale]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (!hasImage) return;
-    e.preventDefault();
-    stepZoom(e.deltaY < 0 ? 1 : -1);
-  }, [hasImage, stepZoom]);
 
   // Clamp the pan centre so the view window stays inside the source: with a visible
   // fraction f the centre can move ±(1-f)/2 from 0.5.
@@ -143,6 +138,29 @@ const PreviewCanvas = ({
     const m = Math.max(0, (1 - viewFrac) / 2);
     return Math.max(0.5 - m, Math.min(0.5 + m, v));
   }, [viewFrac]);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!hasImage) return;
+    // Zoom ONLY on an explicit gesture: Cmd/Ctrl+scroll or trackpad pinch (Chromium
+    // delivers pinch as wheel+ctrlKey). A plain two-finger scroll must never silently
+    // zoom - that left users stuck on a "cropped" video with no idea why.
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      stepZoom(e.deltaY < 0 ? 1 : -1);
+      return;
+    }
+    // Zoomed in: plain scroll pans the view window (Photoshop-style). At fit: inert.
+    if (viewFrac < 0.999 && onPanChange) {
+      e.preventDefault();
+      const canvas = canvasRef.current;
+      const r = canvas ? canvas.getBoundingClientRect() : null;
+      if (!r || !r.width) return;
+      onPanChange(
+        clampPan(panX + (e.deltaX / r.width) * viewFrac),
+        clampPan(panY + (e.deltaY / r.height) * viewFrac)
+      );
+    }
+  }, [hasImage, stepZoom, viewFrac, onPanChange, clampPan, panX, panY, canvasRef]);
 
   // Relative grab-drag: capture the pan centre and the on-screen canvas size at
   // pointer-down, then translate 1:1 with pointer movement (image follows the
