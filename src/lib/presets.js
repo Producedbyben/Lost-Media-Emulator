@@ -665,10 +665,10 @@ export const PRESETS = {
     advancedFilmDust: 0.14,
     advancedFilmScratches: 0.08,
     advancedFilmGateWeave: 0.2,
-    advancedFilmHalation: 0.5,
+    advancedFilmHalation: 0.40,
     // Technicolor's signature: dense subtractive saturation + deep blacks, with
     // 3-strip RGB mis-registration fringing (now via technicolorFringe renderer param).
-    advancedSaturation: 1.4,
+    advancedSaturation: 1.28,
     imageContrast: 1.14,
     imageBrightness: 0.96,
     technicolorFringe: 0.54,
@@ -695,12 +695,12 @@ export const PRESETS = {
     advancedFilmDust: 0.38,
     advancedFilmScratches: 0.28,
     advancedFilmGateWeave: 0.46,
-    advancedFilmHalation: 0.4,
+    advancedFilmHalation: 0.34,
     // Super-8 home reels read warm & golden (Kodachrome/Ektachrome) — add a warm
     // cast + gentle saturation/contrast so it isn't a neutral grainy image.
-    imageTemperature: 0.2,
+    imageTemperature: 0.12,
     imageTint: 0.05,
-    advancedSaturation: 1.14,
+    advancedSaturation: 1.08,
     imageContrast: 1.05,
     maskType: "filmSuper8",
   },
@@ -2413,16 +2413,16 @@ export const PRESETS = {
     scanlineStrength: 0, phosphorMask: 0, bloom: 0.38, flicker: 0.16,
     chromaticAberration: 0.14, noise: 0.26, pixelSize: 2,
     advancedFilmGrain: 0.72, advancedFilmDust: 0.42, advancedFilmScratches: 0.32,
-    advancedFilmGateWeave: 0.44, advancedFilmHalation: 0.36,
+    advancedFilmGateWeave: 0.44, advancedFilmHalation: 0.30,
     grainSize: 0.58, grainChromaticity: 0.64,
     gateJitterX: 0.32, gateJitterY: 0.38, gateRotation: 0.14,
     shutterJudder: 0.46,
-    printFadeCyan: 0.28, printFadeMagenta: 0.14, printFadeYellow: 0.52,
+    printFadeCyan: 0.32, printFadeMagenta: 0.14, printFadeYellow: 0.34,
     vignette: 0.38, cornerSharpnessFalloff: 0.32,
     mediaAgeYears: 45, storageCondition: "ideal",
     // Kodachrome = rich, dense saturation + deep blacks + golden warmth.
     // Added blackLevelCrush for the signature punchy shadow depth.
-    advancedSaturation: 1.38, imageTemperature: 0.18, imageContrast: 1.12,
+    advancedSaturation: 1.20, imageTemperature: 0.10, imageContrast: 1.12,
     blackLevelCrush: 0.42,
     maskType: "filmSuper8",
   },
