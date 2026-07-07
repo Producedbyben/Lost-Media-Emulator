@@ -12,7 +12,6 @@ export interface PreviewSettings {
   compareSplit: boolean;
   compareSplitRatio: number;
   gpuAcceleration: boolean;
-  adaptiveQuality: boolean;
 }
 
 export const DEFAULT_PREVIEW_SETTINGS: PreviewSettings = {
@@ -29,7 +28,6 @@ export const DEFAULT_PREVIEW_SETTINGS: PreviewSettings = {
   gpuAcceleration:
     typeof window !== "undefined" &&
     (window as unknown as { desktop?: { isDesktop?: boolean } }).desktop?.isDesktop === true,
-  adaptiveQuality: true,
 };
 
 // True when running inside the native (Electron) desktop shell.
@@ -48,6 +46,7 @@ interface RamPreviewState {
 
 interface PreviewControlsProps {
   fitScale?: number; // source-px->CSS-px fit factor (user-true % display)
+  renderLagging?: boolean; // full-quality render behind the frame budget: frames drop, never fidelity
   settings: PreviewSettings;
   onChange: (settings: PreviewSettings) => void;
   isVideo: boolean;
@@ -59,19 +58,6 @@ interface PreviewControlsProps {
 }
 
 
-const SOURCE_SCALES = [
-  { label: "100%", value: 1 },
-  { label: "75%", value: 0.75 },
-  { label: "50%", value: 0.5 },
-  { label: "33%", value: 0.33 },
-];
-
-const QUALITY_OPTIONS = [
-  { label: "Fast", value: 307200 },
-  { label: "Balanced", value: 921600 },
-  { label: "High", value: 2073600 },
-  { label: "Unlimited", value: 0 },
-];
 
 const FPS_OPTIONS = [15, 30, 60];
 
@@ -88,17 +74,13 @@ const PreviewControls = ({
   settings, onChange, isVideo, gpuAvailable = false,
   rendererMode = "cpu", ramPreview, onBuildRamPreview, onClearRamPreview,
   fitScale = 0,
+  renderLagging = false,
 }: PreviewControlsProps) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const update = (patch: Partial<PreviewSettings>) => {
     onChange({ ...settings, ...patch });
   };
-
-  const qualityLabel = useMemo(
-    () => QUALITY_OPTIONS.find((o) => o.value === settings.maxPixels)?.label ?? "Custom",
-    [settings.maxPixels]
-  );
 
   const modeInfo = useMemo(() => {
     switch (rendererMode) {
@@ -119,6 +101,11 @@ const PreviewControls = ({
       >
         {rendererMode === "gpu" || rendererMode === "hybrid" ? <Zap className="w-3 h-3" /> : <Cpu className="w-3 h-3" />}
         <span className="font-medium">{modeInfo.label}</span>
+          {renderLagging && (
+            <span title="Rendering at full quality — playback drops frames rather than quality" className="flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-mono font-semibold text-amber-300 border-amber-400/30 bg-amber-400/10">
+              <Loader2 className="w-3 h-3 animate-spin" /> Rendering…
+            </span>
+          )}
       </div>
 
 
@@ -227,43 +214,6 @@ const PreviewControls = ({
               </div>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-muted-foreground font-medium">Source scale</p>
-              <div className="flex flex-wrap gap-1">
-                {SOURCE_SCALES.map(({ label, value }) => (
-                  <button
-                    key={value}
-                    onClick={() => update({ sourceScale: value })}
-                    className={`px-1.5 py-0.5 rounded font-mono transition-colors ${
-                      settings.sourceScale === value
-                        ? "bg-primary/15 text-primary"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-muted-foreground font-medium">Preview quality ({qualityLabel})</p>
-              <div className="flex flex-wrap gap-1">
-                {QUALITY_OPTIONS.map(({ label, value }) => (
-                  <button
-                    key={value}
-                    onClick={() => update({ maxPixels: value })}
-                    className={`px-1.5 py-0.5 rounded font-mono transition-colors ${
-                      settings.maxPixels === value
-                        ? "bg-primary/15 text-primary"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             {(settings.animationEnabled || isVideo) && (
               <div className="space-y-1">
@@ -296,15 +246,6 @@ const PreviewControls = ({
               Split compare handle
             </label>
 
-            <label className="flex items-center gap-1 text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={settings.adaptiveQuality}
-                onChange={(e) => update({ adaptiveQuality: e.target.checked })}
-                className="w-3 h-3 rounded accent-primary"
-              />
-              Adaptive quality (auto resolution + sharpness)
-            </label>
 
             <label className={`flex items-center gap-1 ${gpuAvailable ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
               <input

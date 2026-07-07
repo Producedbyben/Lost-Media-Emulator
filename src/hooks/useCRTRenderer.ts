@@ -350,23 +350,10 @@ function buildWorkingProxy(img: HTMLImageElement): {
 } {
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
-  const longEdge = Math.max(w, h);
-  if (longEdge <= WORKING_MAX_DIM || longEdge === 0) {
-    return { source: img, optimized: false, workingW: w, workingH: h };
-  }
-  const scale = WORKING_MAX_DIM / longEdge;
-  const cw = Math.max(1, Math.round(w * scale));
-  const ch = Math.max(1, Math.round(h * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = cw;
-  canvas.height = ch;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, 0, 0, cw, ch);
-  }
-  return { source: canvas, optimized: true, workingW: cw, workingH: ch };
+  // WYSIWYG absolutism (1.1.6 Ben): the preview always works from the ORIGINAL source
+  // pixels — no downscaled working copy. A proxy is a fidelity intermediary; at 100% the
+  // user must see true source pixels. (Kept as a function so the call sites/UI stay stable.)
+  return { source: img, optimized: false, workingW: w, workingH: h };
 }
 
 export function useCRTRenderer() {
@@ -385,7 +372,6 @@ export function useCRTRenderer() {
     compareSplit: false,
     compareSplitRatio: 0.5,
     gpuAcceleration: false,
-    adaptiveQuality: true,
   });
   const lastFrameTimeRef = useRef<number>(0);
   const previewDirtyRef = useRef<boolean>(true);
@@ -402,11 +388,12 @@ export function useCRTRenderer() {
   const panCenterRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const sourceDimsRef = useRef<{ w: number; h: number } | null>(null);
   // Adaptive quality: dynamic render-scale multiplier governed by frame timing.
-  const adaptiveScaleRef = useRef<number>(1);
   const frameTimeAvgRef = useRef<number>(16);
   const lastRenderMsRef = useRef<number>(0); // cost of the most recent frame
-  const adaptiveCooldownRef = useRef<number>(0);
-  const dirtyStreakRef = useRef<number>(0); // consecutive back-to-back renders = interactive burst (slider drag on a still)
+  // WYSIWYG absolutism (1.1.6 Ben): the preview never shows degraded quality. When a heavy
+  // look can't hold the frame budget we DROP FRAMES and say so, never fidelity.
+  const [renderLagging, setRenderLagging] = useState(false);
+  const renderLaggingRef = useRef(false);
   const activeRenderModeRef = useRef<string>("cpu");
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   // Format authenticity pipeline (native resolution + composite colour).
@@ -511,15 +498,11 @@ export function useCRTRenderer() {
 
   // Apply device-pixel-ratio sharpening and the adaptive performance multiplier,
   // then clamp to the user's max-pixel budget.
-  const applyQualityScale = useCallback((w: number, h: number, settings: PreviewSettings) => {
-    let mult = 1;
-    if (settings.adaptiveQuality) {
-      const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
-      mult = dpr * adaptiveScaleRef.current;
-    }
-    const sw = Math.max(1, Math.round(w * mult));
-    const sh = Math.max(1, Math.round(h * mult));
-    return fitToMaxPixels(sw, sh, settings.maxPixels);
+  const applyQualityScale = useCallback((w: number, h: number, _settings: PreviewSettings) => {
+    // WYSIWYG: render exactly the displayed pixels at device density — no adaptive
+    // multiplier, no max-pixel budget. The preview IS the final quality (1.1.6 Ben).
+    const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
+    return { width: Math.max(1, Math.round(w * dpr)), height: Math.max(1, Math.round(h * dpr)) };
   }, []);
 
   const computeRenderSize = useCallback(() => {
@@ -617,7 +600,6 @@ export function useCRTRenderer() {
     const fps = previewSettingsRef.current.fpsLimit || 30;
     // RAM preview is the full-quality path: render at native resolution, not the
     // reduced scale the playback governor may have left behind.
-    adaptiveScaleRef.current = 1;
     const { width, height } = computeRenderSize();
     // Cap total memory to ~1GB worth of decoded frames.
     const bytesPerFrame = width * height * 4;
@@ -690,7 +672,6 @@ export function useCRTRenderer() {
     (window as unknown as { __btDebug?: () => unknown }).__btDebug = () => {
       const ram = ramCacheRef.current;
       return {
-        adaptiveScale: adaptiveScaleRef.current,
         isVideoPlaying: videoPlayingRef.current && isVideoRef.current,
         activeMode: activeRenderModeRef.current,
         avgFrameMs: +frameTimeAvgRef.current.toFixed(2),
@@ -745,9 +726,8 @@ export function useCRTRenderer() {
             } else {
               w = cw; h = ch;
             }
-            const dpr = settings.adaptiveQuality ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-            const mult = settings.adaptiveQuality ? dpr * adaptiveScaleRef.current : 1;
-            const fitted = fitToMaxPixels(Math.max(1, Math.round(w * mult)), Math.max(1, Math.round(h * mult)), settings.maxPixels);
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            const fitted = { width: Math.max(1, Math.round(w * dpr)), height: Math.max(1, Math.round(h * dpr)) }; // WYSIWYG: no pixel budget
             if (canvas.width !== fitted.width || canvas.height !== fitted.height) {
               canvas.width = fitted.width;
               canvas.height = fitted.height;
@@ -861,48 +841,19 @@ export function useCRTRenderer() {
             // scale down one notch. Here we drive the resolution scale directly
             // from the measured frame cost so playback recovers within a frame
             // or two. GPU-accelerated looks (~0.3 ms) naturally pull scale to 1.
-            // Interactive-burst detection (audit #16): a slider drag on a STILL re-renders
-            // back-to-back with no playback/animation flag, so the governor never engaged and
-            // heavy CPU looks froze the UI. Frames arriving as fast as they can render
-            // (gap ≲ renderDuration + 300ms slack) = continuous interaction -> govern it.
-            {
-              const gap = now - (lastFrameTimeRef.current || 0);
-              dirtyStreakRef.current = gap < renderDuration + 300 ? dirtyStreakRef.current + 1 : 0;
-            }
-            const interactiveBurst = dirtyStreakRef.current >= 1;
-            if (settings.adaptiveQuality && (isVideoPlaying || shouldAnimate || interactiveBurst)) {
-              frameTimeAvgRef.current = frameTimeAvgRef.current * 0.7 + renderDuration * 0.3;
+            // Honest lag state (WYSIWYG): during continuous rendering, if frames can't hold
+            // the budget we surface "Rendering…" — quality never drops, frames do.
+            frameTimeAvgRef.current = frameTimeAvgRef.current * 0.7 + renderDuration * 0.3;
+            if (isVideoPlaying || shouldAnimate) {
               const budget = 1000 / settings.fpsLimit;
-              // Aggressive floor during ANY continuous render (playback or
-              // effect animation): both re-run the full pipeline every frame, so
-              // a heavy CPU look must be allowed to drop resolution enough to
-              // stay responsive. Softness while moving is fine; full resolution
-              // is restored the moment rendering goes idle (the else branch).
-              const floor = 0.2;
-              const cur = adaptiveScaleRef.current;
-              // React instantly to a big overrun using the just-measured frame;
-              // otherwise track the smoothed average for stable recovery.
-              const measured = renderDuration > budget * 2 ? renderDuration : frameTimeAvgRef.current;
-              if (adaptiveCooldownRef.current > 0) adaptiveCooldownRef.current -= 1;
-              if (measured > budget * 1.1) {
-                // Over budget: drop proportionally (scale ∝ sqrt of pixel ratio).
-                const target = Math.max(floor, cur * Math.sqrt((budget * 0.9) / measured));
-                if (target < cur - 0.01) {
-                  adaptiveScaleRef.current = target;
-                  pendingResizeRef.current = true;
-                  adaptiveCooldownRef.current = 6;
-                }
-              } else if (adaptiveCooldownRef.current === 0 && measured < budget * 0.6 && cur < 1) {
-                // Comfortably under budget: ease resolution back up gently.
-                adaptiveScaleRef.current = Math.min(1, cur + 0.12);
-                pendingResizeRef.current = true;
-                adaptiveCooldownRef.current = 12;
+              const lagging = frameTimeAvgRef.current > budget * 1.5;
+              if (lagging !== renderLaggingRef.current) {
+                renderLaggingRef.current = lagging;
+                setRenderLagging(lagging);
               }
-            } else if (adaptiveScaleRef.current < 1) {
-              // Paused / still: restore full resolution for a crisp frame.
-              adaptiveScaleRef.current = 1;
-              pendingResizeRef.current = true;
-              previewDirtyRef.current = true;
+            } else if (renderLaggingRef.current) {
+              renderLaggingRef.current = false;
+              setRenderLagging(false);
             }
 
             previewDirtyRef.current = false;
@@ -980,7 +931,6 @@ export function useCRTRenderer() {
     // previewScale (zoom) is a CSS viewport transform now, so it no longer
     // affects the render resolution or invalidates caches.
     if (settings.maxPixels !== prev.maxPixels) {
-      adaptiveScaleRef.current = 1;
       pendingResizeRef.current = true;
       invalidateRamCache();
     }
@@ -991,11 +941,6 @@ export function useCRTRenderer() {
     if (settings.gpuAcceleration !== prev.gpuAcceleration && rendererRef.current?.setPreferGPU) {
       const on = rendererRef.current.setPreferGPU(settings.gpuAcceleration);
       setRendererMode(on ? "gpu" : rendererRef.current.gpuAvailable ? "gpu-ready" : "cpu");
-    }
-
-    if (!settings.adaptiveQuality && prev.adaptiveQuality) {
-      adaptiveScaleRef.current = 1;
-      pendingResizeRef.current = true;
     }
 
     markDirty();
@@ -1107,7 +1052,6 @@ export function useCRTRenderer() {
         sourceDimsRef.current = { w: video.videoWidth, h: video.videoHeight };
 
         rendererRef.current?.reset?.();
-        adaptiveScaleRef.current = 1;
         rendererRef.current?.setImage(video, sourceScale);
         pendingResizeRef.current = true;
         startTimeRef.current = performance.now();
@@ -1172,7 +1116,6 @@ const proxy = buildWorkingProxy(img);
       sourceDimsRef.current = { w: srcW, h: srcH };
 
       rendererRef.current?.reset?.();
-      adaptiveScaleRef.current = 1;
 rendererRef.current?.setImage(proxy.source, sourceScale);
       pendingResizeRef.current = true;
       startTimeRef.current = performance.now();
@@ -1835,6 +1778,7 @@ rendererRef.current?.setImage(proxy.source, sourceScale);
     setFormatProfile,
     setFormatPipelineEnabled,
     rendererMode,
+    renderLagging,
     gpuAvailable: rendererRef.current?.gpuAvailable ?? false,
     // RAM preview (precache)
     ramPreview,

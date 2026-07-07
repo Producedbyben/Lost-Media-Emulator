@@ -255,7 +255,7 @@ const Index = () => {
     videoPlaying, videoSpeed, videoLoop, videoFPS, videoWidth, videoHeight,
     loadImage, sourceInfo, setParams, setOSDOptions, setPreviewSettings,
     isExporting, exportProgress, handleExportMp4, handleExportStill, handleExportGif, handleCancelExport, runExportJob,
-    getSourceElement, setPanCenter: setRendererPanCenter, seekVideoFrame, rendererMode, gpuAvailable,
+    getSourceElement, setPanCenter: setRendererPanCenter, seekVideoFrame, rendererMode, renderLagging, gpuAvailable,
     ramPreview, buildRamPreview, clearRamPreview, validation, validateExport,
     playVideo, pauseVideo, seekVideo, frameStepVideo, setVideoPlaybackSpeed, toggleVideoLoop,
     goToVideoStart, goToVideoEnd,
@@ -601,7 +601,11 @@ const Index = () => {
             return next as CRTParams;
           });
           if (saved.osdOptions) setLocalOSDOptions(prev => ({ ...prev, ...saved.osdOptions }));
-          if (saved.previewSettings) setLocalPreviewSettings(prev => ({ ...prev, ...saved.previewSettings }));
+          if (saved.previewSettings) setLocalPreviewSettings(prev => ({
+            ...prev, ...saved.previewSettings,
+            // 1.1.6 WYSIWYG migration: persisted degraded-preview settings are retired.
+            sourceScale: 1,
+          }));
           if (typeof saved.activePreset === "string") setActivePreset(saved.activePreset);
           if (typeof saved.presetIntensity === "number") setPresetIntensity(saved.presetIntensity);
           if (saved.lastPresetValues) setLastPresetValues(saved.lastPresetValues);
@@ -1811,7 +1815,7 @@ const Index = () => {
                   />
                 )}
                 <div className="shrink-0 px-1">
-                  <PreviewControls fitScale={previewFitScale} settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
+                  <PreviewControls renderLagging={renderLagging} fitScale={previewFitScale} settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
                 </div>
                 {/* Video Transport — professional playback controls */}
                 {isVideo && (
@@ -1902,7 +1906,7 @@ const Index = () => {
                 />
               )}
               <div className="shrink-0 px-1">
-                <PreviewControls fitScale={previewFitScale} settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
+                <PreviewControls renderLagging={renderLagging} fitScale={previewFitScale} settings={previewSettings} onChange={handlePreviewSettingsChange} isVideo={isVideo} gpuAvailable={gpuAvailable} rendererMode={rendererMode} ramPreview={ramPreview} onBuildRamPreview={buildRamPreview} onClearRamPreview={clearRamPreview} />
               </div>
               {isVideo && (
                 <div className="shrink-0">
