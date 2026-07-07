@@ -71,7 +71,7 @@ export async function exportViaFfmpeg(opts: {
   renderOptions?: unknown;
   onProgress?: (ratio: number) => void;
   signal?: AbortSignal;
-}): Promise<{ outPath: string }> {
+}): Promise<{ outPath: string; seekStalls: number }> {
   const b = bridge();
   if (!b) throw new Error("ffmpeg bridge unavailable");
 
@@ -125,6 +125,7 @@ export async function exportViaFfmpeg(opts: {
     }
   });
 
+  let seekStalls = 0;
   try {
     renderer.reset?.();
     for (let frame = 0; frame < totalFrames; frame++) {
@@ -132,7 +133,7 @@ export async function exportViaFfmpeg(opts: {
       const t = inSec + frame / fps;
       if (isVideoSource && opts.videoElement) {
         const seekTime = Math.min(t, (opts.videoElement.duration || duration) - 0.001);
-        await seekVideo(opts.videoElement, seekTime);
+        if (await seekVideo(opts.videoElement, seekTime)) seekStalls++;
         renderer.setImage(opts.videoElement, sourceScale);
       }
       if (content && contentCtx) {
@@ -155,7 +156,7 @@ export async function exportViaFfmpeg(opts: {
       ...(trimmed ? { inSec, outSec } : {}),
     });
     opts.onProgress?.(1);
-    return { outPath: res.outPath };
+    return { outPath: res.outPath, seekStalls };
   } catch (err) {
     await b.cancel({ sessionId }).catch(() => {});
     throw err;
@@ -164,13 +165,16 @@ export async function exportViaFfmpeg(opts: {
   }
 }
 
-function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
+// Resolves true when the seek completed via the 500ms watchdog (a stalled seek) — the frame
+// rendered will DUPLICATE the previous one. Callers count these and surface the total instead
+// of silently shipping dup frames (audit).
+function seekVideo(video: HTMLVideoElement, time: number): Promise<boolean> {
   return new Promise((resolve) => {
-    if (Math.abs(video.currentTime - time) < 0.0005 && video.readyState >= 2) return resolve();
-    const done = () => { video.removeEventListener("seeked", done); resolve(); };
+    if (Math.abs(video.currentTime - time) < 0.0005 && video.readyState >= 2) return resolve(false);
+    let stalled = false;
+    const done = () => { video.removeEventListener("seeked", done); clearTimeout(watchdog); resolve(stalled); };
     video.addEventListener("seeked", done);
-    const watchdog = setTimeout(done, 500);
+    const watchdog = setTimeout(() => { stalled = true; done(); }, 500);
     video.currentTime = time;
-    void watchdog;
   });
 }

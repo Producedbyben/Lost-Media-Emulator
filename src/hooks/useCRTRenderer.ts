@@ -1048,7 +1048,17 @@ export function useCRTRenderer() {
 
         await new Promise<void>((resolve, reject) => {
           video.addEventListener("loadedmetadata", () => resolve(), { once: true });
-          video.addEventListener("error", () => reject(new Error("Video load failed")), { once: true });
+          video.addEventListener("error", () => {
+            // Codec-aware guidance (audit): Chromium can't decode ProRes/DNxHD/10-bit — incl.
+            // LME's OWN ProRes exports re-imported. Name the file + likely cause + the fix.
+            const ext = (file.name.split(".").pop() || "").toLowerCase();
+            const mediaErr = video.error;
+            const proResLikely = ext === "mov" || /prores|dnxh/i.test(file.name);
+            const detail = proResLikely
+              ? "This looks like a ProRes/professional-codec file — the preview player can't decode those (including LME's own ProRes exports). Convert to H.264 MP4 first, e.g. in QuickTime (File → Export As) or ffmpeg."
+              : `The file's video codec isn't supported by the preview player${mediaErr?.message ? ` (${mediaErr.message})` : ""}. Convert to H.264 MP4 and re-import.`;
+            reject(new Error(`Can't play "${file.name}": ${detail}`));
+          }, { once: true });
         });
 
         // Wait for first frame to be decoded
@@ -1358,7 +1368,7 @@ export function useCRTRenderer() {
             resolution: options?.resolution ?? 0,
             aspectRatio: options?.aspectRatio,
           });
-          await exportViaFfmpeg({
+          const ffres = await exportViaFfmpeg({
             canvas, renderer: rendererRef.current,
             params: paramsRef.current, fps: Math.max(1, fps), duration: full,
             ...(isTrimmed ? { inSec: trimIn, outSec: trimOut } : {}),
@@ -1369,6 +1379,9 @@ export function useCRTRenderer() {
             renderOptions: buildExportRenderOptsRef.current(),
             onProgress: (r) => setExportProgress(r),
             signal: controller.signal,
+          });
+          if (ffres?.seekStalls) toast.warning(`${ffres.seekStalls} frame${ffres.seekStalls === 1 ? "" : "s"} may be duplicated`, {
+            description: "Some video seeks timed out during export (slow decode). Re-export or trim if the motion stutters.",
           });
         }
         // Whether encoded or cancelled, the ffmpeg path is done — don't also
@@ -1640,6 +1653,10 @@ export function useCRTRenderer() {
             renderOptions,
             onProgress: (r) => progress(r, Math.round(r * Math.max(1, Math.floor(job.fps * job.duration))), Math.max(1, Math.floor(job.fps * job.duration))),
             signal,
+          }).then((r) => {
+            if (r?.seekStalls) toast.warning(`${r.seekStalls} frame${r.seekStalls === 1 ? "" : "s"} may be duplicated in "${job.name || "queued export"}"`, {
+              description: "Some video seeks timed out during export (slow decode).",
+            });
           });
           return;
         }

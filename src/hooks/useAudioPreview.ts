@@ -6,6 +6,7 @@
 // what you hear is what you get), and play the resulting AudioBuffer through Web
 // Audio, kept in sync with the muted video's play/pause/seek.
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { degradeAudioBuffer, type AudioProfile } from "@/lib/audio-degrade";
 
 export const DEFAULT_AUDIO_PROFILE: AudioProfile = {
@@ -88,7 +89,15 @@ export function useAudioPreview({ videoEl, sourceKey, hasAudio, profile }: UseAu
         decodedRef.current = decoded;
         setDecodedBuffer(decoded);
         setReady(true);
-      } catch { /* no decodable audio; leave silent */ }
+      } catch {
+        // The probe said this source HAS audio (this effect only runs when hasAudio), so a
+        // decode failure is a real problem the user should know about — not a silent skip
+        // (audit): degrade-preview + audio-reactive won't work; exports fall back to muxing
+        // the original track.
+        if (!cancelled) toast.warning("Audio track couldn't be decoded", {
+          description: "Audio-reactive effects and the degraded-audio preview are unavailable for this clip. Exports will mux the original audio track instead.",
+        });
+      }
     })();
     return () => { cancelled = true; stopPlayback(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
