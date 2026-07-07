@@ -53,8 +53,8 @@ const MaskSelector = ({ maskType, maskStrength, maskScale, onMaskTypeChange, onM
             ))}
           </div>
         </div>
-        <EffectSlider label="Mask Strength" value={maskStrength} min={0} max={1} step={0.01} onChange={onMaskStrengthChange} />
-        <EffectSlider label="Mask Scale" value={maskScale} min={0.25} max={3} step={0.01} onChange={onMaskScaleChange} />
+        <EffectSlider label="Mask Strength" description="How strongly the display's subpixel pattern shows through the image." value={maskStrength} min={0} max={1} step={0.01} onChange={onMaskStrengthChange} />
+        <EffectSlider label="Mask Scale" description="Size of the subpixel pattern — larger reads as a bigger screen viewed closer." value={maskScale} min={0.25} max={3} step={0.01} onChange={onMaskScaleChange} />
       </div>
     </CollapsiblePanel>
   );

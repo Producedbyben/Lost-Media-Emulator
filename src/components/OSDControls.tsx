@@ -124,9 +124,9 @@ const OSDControls = ({ options, onChange, onParamChange, timestampValue, enabled
           min={0} max={1} step={0.01}
           onChange={(v) => onParamChange("advancedTimestampOSD", v)}
         />
-        <EffectSlider label="OSD Bloom" value={options.osdBloom} min={0} max={1} step={0.01} onChange={(v) => update({ osdBloom: v })} />
-        <EffectSlider label="OSD Font Scale" value={options.osdFontScale} min={0.6} max={2} step={0.01} onChange={(v) => update({ osdFontScale: v })} />
-        <EffectSlider label="OSD Thickness" value={options.osdThickness} min={0.5} max={2} step={0.01} onChange={(v) => update({ osdThickness: v })} />
+        <EffectSlider label="OSD Bloom" description="Glow around the on-screen text, like bright characters blooming on a CRT." value={options.osdBloom} min={0} max={1} step={0.01} onChange={(v) => update({ osdBloom: v })} />
+        <EffectSlider label="OSD Font Scale" description="Size of the burned-in timestamp/label text." value={options.osdFontScale} min={0.6} max={2} step={0.01} onChange={(v) => update({ osdFontScale: v })} />
+        <EffectSlider label="OSD Thickness" description="Stroke weight of the OSD characters — heavier reads as a cheaper, lower-res overlay chip." value={options.osdThickness} min={0.5} max={2} step={0.01} onChange={(v) => update({ osdThickness: v })} />
 
         {/* OSD Style */}
         <div>

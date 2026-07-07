@@ -69,19 +69,19 @@ const AudioPanel = ({ profile, onChange, decodedBuffer, hasAudio, enabled = true
         <div className="pt-2 space-y-2.5">
           <Waveform buffer={decodedBuffer} />
           <Sub label="Level & Fades" />
-          <EffectSlider label="Level" value={profile.gain ?? 1} min={0} max={2} step={0.01} defaultValue={1} onChange={(v) => onChange({ gain: v })} />
-          <EffectSlider label="Fade In (s)" value={profile.fadeIn ?? 0} min={0} max={5} step={0.1} defaultValue={0} onChange={(v) => onChange({ fadeIn: v })} />
-          <EffectSlider label="Fade Out (s)" value={profile.fadeOut ?? 0} min={0} max={5} step={0.1} defaultValue={0} onChange={(v) => onChange({ fadeOut: v })} />
+          <EffectSlider label="Level" description="Overall audio loudness for this clip. 100% = unchanged." value={profile.gain ?? 1} min={0} max={2} step={0.01} defaultValue={1} onChange={(v) => onChange({ gain: v })} />
+          <EffectSlider label="Fade In (s)" description="Ramp the audio up from silence over this many seconds at the start." value={profile.fadeIn ?? 0} min={0} max={5} step={0.1} defaultValue={0} onChange={(v) => onChange({ fadeIn: v })} />
+          <EffectSlider label="Fade Out (s)" description="Ramp the audio down to silence over this many seconds at the end." value={profile.fadeOut ?? 0} min={0} max={5} step={0.1} defaultValue={0} onChange={(v) => onChange({ fadeOut: v })} />
           <Sub label="Period Degradation" />
-          <EffectSlider label="Tape Hiss" value={profile.hiss} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ hiss: v })} />
-          <EffectSlider label="Mains Hum" value={profile.hum} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ hum: v })} />
-          <EffectSlider label="Wow (slow)" value={profile.wow} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ wow: v })} />
-          <EffectSlider label="Flutter (fast)" value={profile.flutter} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ flutter: v })} />
-          <EffectSlider label="Mono Fold-down" value={profile.mono} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ mono: v })} />
-          <EffectSlider label="Crackle / Pops" value={profile.crackle} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ crackle: v })} />
+          <EffectSlider label="Tape Hiss" description="Broadband analogue tape noise — the constant background 'shhh' of cassette and VHS audio." value={profile.hiss} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ hiss: v })} />
+          <EffectSlider label="Mains Hum" description="Low 50/60Hz electrical hum picked up from power circuits — the classic ground-loop drone." value={profile.hum} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ hum: v })} />
+          <EffectSlider label="Wow (slow)" description="Slow pitch drift from uneven tape speed — long, seasick pitch bends." value={profile.wow} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ wow: v })} />
+          <EffectSlider label="Flutter (fast)" description="Fast pitch wavering from tape-transport vibration — a nervous warble on sustained tones." value={profile.flutter} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ flutter: v })} />
+          <EffectSlider label="Mono Fold-down" description="Collapse stereo toward a single centre channel, like single-mic or mono-broadcast sound." value={profile.mono} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ mono: v })} />
+          <EffectSlider label="Crackle / Pops" description="Random clicks and pops — dirty tape heads, worn vinyl, damaged optical tracks." value={profile.crackle} min={0} max={1} step={0.01} defaultValue={0} onChange={(v) => onChange({ crackle: v })} />
           <Sub label="Bandwidth" />
-          <EffectSlider label="Low Cut (Hz)" value={profile.lowCutHz} min={20} max={2000} step={10} defaultValue={20} onChange={(v) => onChange({ lowCutHz: v })} />
-          <EffectSlider label="High Cut (Hz)" value={profile.highCutHz} min={2000} max={20000} step={100} defaultValue={20000} onChange={(v) => onChange({ highCutHz: v })} />
+          <EffectSlider label="Low Cut (Hz)" description="Remove bass below this frequency — small speakers and telephone lines lose the low end first." value={profile.lowCutHz} min={20} max={2000} step={10} defaultValue={20} onChange={(v) => onChange({ lowCutHz: v })} />
+          <EffectSlider label="High Cut (Hz)" description="Remove treble above this frequency — tape generations and broadcast chains dull the highs." value={profile.highCutHz} min={2000} max={20000} step={100} defaultValue={20000} onChange={(v) => onChange({ highCutHz: v })} />
         </div>
       )}
     </CollapsiblePanel>

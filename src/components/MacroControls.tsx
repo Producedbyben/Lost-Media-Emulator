@@ -124,14 +124,14 @@ const MacroControls = ({ params, onChange }: MacroControlsProps) => {
         <div className="pt-2 space-y-2.5">
           <p className="text-[12px] text-muted-foreground">High-level controls that shape multiple parameters at once.</p>
           <div className="grid grid-cols-1 gap-2">
-            <EffectSlider label="Detail Loss" value={macros.detailLoss} min={0} max={1} step={0.01} onChange={(v) => updateMacro("detailLoss", v)} />
-            <EffectSlider label="Display Texture" value={macros.displayTexture} min={0} max={1} step={0.01} onChange={(v) => updateMacro("displayTexture", v)} />
-            <EffectSlider label="Glow & Flicker" value={macros.glowFlicker} min={0} max={1} step={0.01} onChange={(v) => updateMacro("glowFlicker", v)} />
-            <EffectSlider label="Image Instability" value={macros.instability} min={0} max={1} step={0.01} onChange={(v) => updateMacro("instability", v)} />
-            <EffectSlider label="Damage & Dropouts" value={macros.damageDropouts} min={0} max={1} step={0.01} onChange={(v) => updateMacro("damageDropouts", v)} />
-            <EffectSlider label="Compression Damage" value={macros.compressionDamage} min={0} max={1} step={0.01} onChange={(v) => updateMacro("compressionDamage", v)} />
-            <EffectSlider label="Age & Mood" value={macros.ageMood} min={0} max={1} step={0.01} onChange={(v) => updateMacro("ageMood", v)} />
-            <EffectSlider label="OSD Amount" value={macros.osdAmount} min={0} max={1} step={0.01} onChange={(v) => updateMacro("osdAmount", v)} />
+            <EffectSlider label="Detail Loss" description="One knob for overall sharpness decay — resolution, smearing and generation softness together." value={macros.detailLoss} min={0} max={1} step={0.01} onChange={(v) => updateMacro("detailLoss", v)} />
+            <EffectSlider label="Display Texture" description="The visible structure of the screen itself — scanlines, subpixel mask and pixelation." value={macros.displayTexture} min={0} max={1} step={0.01} onChange={(v) => updateMacro("displayTexture", v)} />
+            <EffectSlider label="Glow & Flicker" description="Phosphor glow, halation bloom and brightness flicker as one combined amount." value={macros.glowFlicker} min={0} max={1} step={0.01} onChange={(v) => updateMacro("glowFlicker", v)} />
+            <EffectSlider label="Image Instability" description="Geometric unsteadiness — jitter, wobble and skew of the whole picture." value={macros.instability} min={0} max={1} step={0.01} onChange={(v) => updateMacro("instability", v)} />
+            <EffectSlider label="Damage & Dropouts" description="Physical media damage — dropouts, head-switching tears, dust and scratches." value={macros.damageDropouts} min={0} max={1} step={0.01} onChange={(v) => updateMacro("damageDropouts", v)} />
+            <EffectSlider label="Compression Damage" description="Digital codec artefacts — macroblocking, quantisation banding and ringing." value={macros.compressionDamage} min={0} max={1} step={0.01} onChange={(v) => updateMacro("compressionDamage", v)} />
+            <EffectSlider label="Age & Mood" description="Colour ageing — fade, shifted balance and tonal drift of old media." value={macros.ageMood} min={0} max={1} step={0.01} onChange={(v) => updateMacro("ageMood", v)} />
+            <EffectSlider label="OSD Amount" description="How prominent the burned-in on-screen display (timestamp/labels) is." value={macros.osdAmount} min={0} max={1} step={0.01} onChange={(v) => updateMacro("osdAmount", v)} />
           </div>
           <div className="flex flex-wrap gap-1.5 pt-1">
             <button onClick={() => randomize("light")} className="flex items-center gap-1 px-2 py-1 text-[12px] bg-secondary text-secondary-foreground rounded border border-border hover:bg-secondary/80">
