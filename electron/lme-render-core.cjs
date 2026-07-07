@@ -158,7 +158,7 @@ function runHeadlessRender({ app, BrowserWindow, distPath, preloadPath, argv }) 
           }
           watchdog.refresh && watchdog.refresh(); // a long batch must not trip the watchdog
         }
-        return done(okCount === jobs.length ? 0 : 1, { ok: okCount === jobs.length, type: "batch", total: jobs.length, ok_count: okCount, results });
+        return done(okCount === jobs.length ? 0 : 1, { ok: okCount === jobs.length, type: "batch", engineVersion: app.getVersion(), total: jobs.length, ok_count: okCount, results });
       }
 
       if (!args.in) return fail("--in <image> required");
@@ -182,13 +182,14 @@ function runHeadlessRender({ app, BrowserWindow, distPath, preloadPath, argv }) 
         log("renderVideo…");
         const payload = { input: inputURL, look, width, height, fps, durationSec: Number(args.duration) || 4, codec: args.codec ? String(args.codec) : "h264", outPath, formatPipeline, ...framing };
         const res = await win.webContents.executeJavaScript(`window.lmeHeadless.renderVideo(${JSON.stringify(payload)})`);
-        return done(0, { ok: true, type: "video", bytes: fs.existsSync(outPath) ? fs.statSync(outPath).size : 0, ...res });
+        return done(0, { ok: true, type: "video", engineVersion: app.getVersion(), bytes: fs.existsSync(outPath) ? fs.statSync(outPath).size : 0, ...res });
       }
-      log("renderStill… framing=" + JSON.stringify(framing) + " rawAnchor=" + JSON.stringify(args.anchor));
+      const engineVersion = app.getVersion();
+      log("renderStill… framing=" + JSON.stringify(framing));
       const payload = { input: inputURL, look, width, height, frameIndex: Number(args.frame) || 0, fps, formatPipeline, ...framing };
       const dataURL = await win.webContents.executeJavaScript(`window.lmeHeadless.renderStill(${JSON.stringify(payload)})`);
       fs.writeFileSync(outPath, Buffer.from(String(dataURL).replace(/^data:image\/png;base64,/, ""), "base64"));
-      return done(0, { ok: true, type: "still", outPath, width, height, bytes: fs.statSync(outPath).size });
+      return done(0, { ok: true, type: "still", engineVersion, outPath, width, height, bytes: fs.statSync(outPath).size });
     } catch (e) {
       fail(String((e && e.stack) || e));
     }

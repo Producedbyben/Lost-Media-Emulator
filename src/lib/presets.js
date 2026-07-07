@@ -1727,7 +1727,7 @@ export const PRESETS = {
   },
   "Pioneer Plasma TV (2007)": {
     burnInGhost: 0.7,
-    burnInStyle: "logo",
+    burnInStyle: "plasma-logo", // plasma- prefix = BRIGHT retention (reads on dark fields)
     scanlineStrength: 0.06,
     phosphorMask: 0.34,
     barrelDistortion: 0,
@@ -2477,7 +2477,7 @@ export const PRESETS = {
     maskType: "oledPentile",
   },
   "CRT Plasma Burn-In": {
-    burnInStyle: "channel-box",
+    burnInStyle: "plasma-channel-box", // plasma- prefix = BRIGHT retention (reads on dark fields)
     schemaVersion: 2,
     scanlineStrength: 0.06, phosphorMask: 0.36, barrelDistortion: 0, bloom: 0.34,
     flicker: 0.02, chromaticAberration: 0.03, noise: 0.08, pixelSize: 1,

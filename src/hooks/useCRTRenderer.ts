@@ -73,7 +73,7 @@ export interface CRTParams {
   advancedNeonPhosphorBleed: number;
   advancedWatercolorSmear: number;  // RealVideo blob-smear signature (1.1.5)
   advancedLedWall: number;          // LED-wall lattice + moiré + rolling band (1.1.5)
-  burnInStyle: string;              // synthetic retained-graphic burn-in shape (1.1.5): none|logo|ticker|channel-box|hud|bezel
+  burnInStyle: string;              // retained-graphic burn-in (1.1.5): none|logo|ticker|channel-box|hud|bezel; "plasma-" prefix = bright retention (screen blend, reads on dark fields), else dark phosphor wear (multiply)
   // V2: Color & Signal
   lumaNoise: number;
   chromaNoise: number;
