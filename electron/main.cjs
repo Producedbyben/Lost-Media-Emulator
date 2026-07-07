@@ -137,6 +137,34 @@ function openRecentFile(filePath) {
   addRecentFile(filePath); // bump to the front, like every mac app
 }
 
+// --- Custom presets: durable app-data store (audit #26) -------------------------
+// Customer-created presets previously lived only in renderer localStorage — a webview
+// data clear silently destroyed paid-user data. The renderer mirrors every save here;
+// on boot it hydrates from this file (authoritative) back into localStorage.
+const CUSTOM_PRESETS_FILE = () => path.join(app.getPath("userData"), "custom-presets.json");
+ipcMain.handle("custom-presets:load", () => {
+  const fs = require("fs");
+  const file = CUSTOM_PRESETS_FILE();
+  try {
+    if (!fs.existsSync(file)) return [];
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // Corrupt store: keep the evidence, never throw at the renderer.
+    try { fs.renameSync(file, `${file}.corrupt-${Date.now()}`); } catch { /* ignore */ }
+    return [];
+  }
+});
+ipcMain.handle("custom-presets:save", (_e, { presets }) => {
+  const fs = require("fs");
+  if (!Array.isArray(presets)) return { ok: false };
+  const file = CUSTOM_PRESETS_FILE();
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(presets, null, 2));
+  fs.renameSync(tmp, file); // atomic swap
+  return { ok: true };
+});
+
 ipcMain.handle("recent-files:add", (_e, args) => {
   const p = args && args.path;
   if (typeof p === "string" && p) addRecentFile(p);

@@ -12,7 +12,7 @@ type Renderer = {
 
 interface FfmpegBridge {
   available: () => Promise<boolean>;
-  begin: (o: { width: number; height: number; fps: number }) => Promise<{ sessionId: string }>;
+  begin: (o: { width: number; height: number; fps: number; estimateBytes?: number }) => Promise<{ sessionId: string }>;
   frame: (o: { sessionId: string; index: number; bytes: ArrayBuffer }) => Promise<{ ok: boolean }>;
   encode: (o: { sessionId: string; codec: string; outPath: string; audioSourcePath?: string; inSec?: number; outSec?: number }) => Promise<{ ok: boolean; outPath: string }>;
   cancel: (o: { sessionId: string }) => Promise<void>;
@@ -116,7 +116,9 @@ export async function exportViaFfmpeg(opts: {
   if (contentCanvas && content) { contentCanvas.width = content.width; contentCanvas.height = content.height; }
   const contentCtx = contentCanvas ? contentCanvas.getContext("2d", { alpha: false })! : null;
 
-  const { sessionId } = await b.begin({ width, height, fps });
+  // ~1.2 B/px per PNG frame is conservative for effect-heavy noisy frames (audit preflight).
+  const estimateBytes = totalFrames * width * height * 1.2;
+  const { sessionId } = await b.begin({ width, height, fps, estimateBytes });
   const unsub = b.onProgress((d) => {
     // Encode phase reports its OWN frame counter from 0; map it into the reserved last
     // 10% so the bar advances 90% -> 100% instead of snapping back to 0% (audit).

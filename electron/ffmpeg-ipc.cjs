@@ -15,7 +15,25 @@ function registerFfmpegIpc(ipcMain, { revealOnEncode = true } = {}) {
 
   ipcMain.handle("ffmpeg:available", () => !!locate().ffmpeg);
 
-  ipcMain.handle("ffmpeg:begin", (_e, { width, height, fps }) => {
+  ipcMain.handle("ffmpeg:begin", (_e, { width, height, fps, estimateBytes }) => {
+    // Disk preflight (audit): exports write a multi-GB temp PNG sequence; fail EARLY with a
+    // clear message instead of dying at 97% on a cryptic write error. 15% headroom; skipped
+    // when statfs is unavailable or no estimate was provided.
+    if (Number(estimateBytes) > 0) {
+      try {
+        const fs = require("fs");
+        const st = fs.statfsSync(app.getPath("temp"));
+        const free = Number(st.bavail) * Number(st.bsize);
+        const need = Number(estimateBytes) * 1.15;
+        if (free > 0 && free < need) {
+          const gb = (n) => (n / 1e9).toFixed(1);
+          throw new Error(`Not enough disk space for this export: needs ~${gb(need)} GB free for temporary frames, ${gb(free)} GB available. Free up space or shorten/trim the export.`);
+        }
+      } catch (err) {
+        if (err && /Not enough disk space/.test(String(err.message))) throw err;
+        /* statfs unavailable — skip the preflight */
+      }
+    }
     const session = createSession({ width, height, fps, tmpRoot: app.getPath("temp") });
     ffmpegSessions.set(session.id, session);
     return { sessionId: session.id };

@@ -16,18 +16,60 @@ export function loadCustomPresets(): CustomPreset[] {
   } catch { return []; }
 }
 
+// ---------------------------------------------------------------------------
+// Durable app-data mirror (audit #26). localStorage stays the synchronous working
+// copy, but on desktop every mutation is mirrored to userData/custom-presets.json
+// via IPC, and boot hydrates FROM the file (authoritative — survives a webview
+// data clear that would otherwise destroy paid-user presets).
+// ---------------------------------------------------------------------------
+type PresetBridge = { load: () => Promise<CustomPreset[]>; save: (p: CustomPreset[]) => Promise<unknown> };
+function presetBridge(): PresetBridge | null {
+  const d = (window as unknown as { desktop?: { customPresets?: PresetBridge } }).desktop;
+  return d?.customPresets ?? null;
+}
+function mirrorToDisk(presets: CustomPreset[]): void {
+  presetBridge()?.save(presets).catch(() => { /* mirror is best-effort; localStorage still has it */ });
+}
+
+/**
+ * Boot hydration: returns the authoritative list (file store) on desktop, migrating
+ * in whichever direction has data. Returns null on web (no bridge) — caller keeps
+ * the localStorage-initialised state.
+ */
+export async function hydrateCustomPresetsFromDisk(): Promise<CustomPreset[] | null> {
+  const bridge = presetBridge();
+  if (!bridge) return null;
+  try {
+    const onDisk = await bridge.load();
+    const local = loadCustomPresets();
+    if (onDisk.length > 0) {
+      // File is authoritative — restore into localStorage (recovers from a data clear).
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(onDisk));
+      return onDisk;
+    }
+    if (local.length > 0) {
+      // One-time migration: existing localStorage presets move to the durable store.
+      await bridge.save(local);
+      return local;
+    }
+    return [];
+  } catch { return null; }
+}
+
 export function saveCustomPreset(preset: CustomPreset): CustomPreset[] {
   const presets = loadCustomPresets();
   const existing = presets.findIndex(p => p.name === preset.name);
   if (existing >= 0) presets[existing] = preset;
   else presets.push(preset);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+  mirrorToDisk(presets);
   return presets;
 }
 
 export function deleteCustomPreset(name: string): CustomPreset[] {
   const presets = loadCustomPresets().filter(p => p.name !== name);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+  mirrorToDisk(presets);
   return presets;
 }
 

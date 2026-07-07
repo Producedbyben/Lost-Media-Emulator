@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Search, Save, Trash2, Upload, Download, Link, Share2, Dice3, Grid3X3, List, Star, Clock, Tv, Film, Video, Eye, Radio, Monitor, Layers, Sparkles, Zap, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import { PRESETS } from "@/lib/presets.js";
 import EffectSlider from "@/components/EffectSlider";
 import PresetThumbnail from "@/components/PresetThumbnail";
 import {
-  loadCustomPresets, saveCustomPreset, deleteCustomPreset,
+  loadCustomPresets, saveCustomPreset, deleteCustomPreset, hydrateCustomPresetsFromDisk,
   exportPresetsJSON, importPresetsJSON, generateShareURL,
   exportLookJSON, parseLookJSON,
   CustomPreset,
@@ -105,6 +105,14 @@ const PresetSelector = ({
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>(loadCustomPresets);
+  // Desktop: hydrate from the durable app-data store (authoritative; migrates either way).
+  useEffect(() => {
+    let live = true;
+    hydrateCustomPresetsFromDisk().then((fromDisk) => {
+      if (live && fromDisk) setCustomPresets(fromDisk);
+    });
+    return () => { live = false; };
+  }, []);
   const [saveName, setSaveName] = useState("");
   const [showSave, setShowSave] = useState(false);
   const [shareUrl, setShareUrl] = useState("");

@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld("desktop", {
   writeTempAudio: (bytes) => ipcRenderer.invoke("ffmpeg:write-temp-audio", { bytes }),
   // File ▸ Open Recent: the renderer reports each successfully-opened on-disk
   // path; main persists the list and rebuilds the menu.
+  customPresets: {
+    load: () => ipcRenderer.invoke("custom-presets:load"),
+    save: (presets) => ipcRenderer.invoke("custom-presets:save", { presets }),
+  },
   recentFiles: {
     add: (filePath) => ipcRenderer.invoke("recent-files:add", { path: filePath }),
   },
