@@ -596,18 +596,25 @@ export function useCRTRenderer() {
     if (cw < 10 || ch < 10) return { width: 960, height: 540 };
 
     const src = sourceDimsRef.current;
+    const s = previewSettingsRef.current;
     let w: number, h: number;
     if (src && src.w > 0 && src.h > 0) {
-      const srcAR = src.w / src.h;
-      const containerAR = cw / ch;
-      if (srcAR > containerAR) {
-        w = cw;
-        h = Math.round(cw / srcAR);
+      if (!s.previewFit) {
+        // Same Adobe-style zoomed-viewport geometry as the live loop.
+        const z = Math.max(0.05, s.previewScale || 1);
+        w = Math.min(cw, Math.max(1, Math.round(src.w * z)));
+        h = Math.min(ch, Math.max(1, Math.round(src.h * z)));
       } else {
-        h = ch;
-        w = Math.round(ch * srcAR);
+        const srcAR = src.w / src.h;
+        const containerAR = cw / ch;
+        if (srcAR > containerAR) {
+          w = cw;
+          h = Math.round(cw / srcAR);
+        } else {
+          h = ch;
+          w = Math.round(ch * srcAR);
+        }
       }
-      // (zoom renders a source WINDOW via renderOptions.sourceView — the canvas box stays at fit size)
     } else {
       w = cw;
       h = ch;
@@ -797,16 +804,30 @@ export function useCRTRenderer() {
             const src = sourceDimsRef.current;
             let w: number, h: number;
             if (src && src.w > 0 && src.h > 0) {
-              const srcAR = src.w / src.h;
-              const containerAR = cw / ch;
-              if (srcAR > containerAR) { w = cw; h = Math.round(cw / srcAR); }
-              else { h = ch; w = Math.round(ch * srcAR); }
-              // (zoom renders a source WINDOW via renderOptions.sourceView — the canvas box stays at fit size)
+              if (!settings.previewFit) {
+                // Adobe-style zoomed viewport (Ben, 1.1.6): the canvas box GROWS with zoom —
+                // min(container, source x zoom) per axis — so zooming consumes the whole
+                // preview area; letterboxing only remains while the zoomed content is
+                // smaller than the viewport. Never locked to the fit-sized box.
+                const z = Math.max(0.05, settings.previewScale || 1);
+                w = Math.min(cw, Math.max(1, Math.round(src.w * z)));
+                h = Math.min(ch, Math.max(1, Math.round(src.h * z)));
+              } else {
+                const srcAR = src.w / src.h;
+                const containerAR = cw / ch;
+                if (srcAR > containerAR) { w = cw; h = Math.round(cw / srcAR); }
+                else { h = ch; w = Math.round(ch * srcAR); }
+              }
             } else {
               w = cw; h = ch;
             }
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
             const fitted = { width: Math.max(1, Math.round(w * dpr)), height: Math.max(1, Math.round(h * dpr)) }; // WYSIWYG: no pixel budget
+            // Explicit CSS box: the buffer is DPR-scaled, so relying on max-w/h clamping
+            // would stretch it back to the container. The box IS the layout size.
+            const cssW = `${w}px`, cssH = `${h}px`;
+            if (canvas.style.width !== cssW) canvas.style.width = cssW;
+            if (canvas.style.height !== cssH) canvas.style.height = cssH;
             if (canvas.width !== fitted.width || canvas.height !== fitted.height) {
               canvas.width = fitted.width;
               canvas.height = fitted.height;
@@ -1013,6 +1034,7 @@ export function useCRTRenderer() {
     // so a zoom/fit change must re-render and invalidates RAM-cached frames.
     if (settings.previewScale !== prev.previewScale || settings.previewFit !== prev.previewFit) {
       previewDirtyRef.current = true;
+      pendingResizeRef.current = true; // the canvas BOX depends on zoom (Adobe-style viewport)
       invalidateRamCache();
     }
     if (settings.maxPixels !== prev.maxPixels) {

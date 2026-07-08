@@ -16,6 +16,7 @@ interface PreviewCanvasProps {
   compareSplit?: boolean;
   onCompareSplitRatioChange?: (ratio: number) => void;
   sourceWidth?: number;     // natural width of the loaded media — enables Photoshop-style 1:1 zoom (Ben-11 #5)
+  sourceHeight?: number;    // natural height — needed for per-axis viewport math (Adobe-style zoom)
   onFitScaleChange?: (fitScale: number) => void; // reports source-px->CSS-px fit factor so sibling readouts can show user-true percentages
 }
 
@@ -49,6 +50,7 @@ const PreviewCanvas = ({
   compareSplit = false,
   onCompareSplitRatioChange,
   sourceWidth = 0,
+  sourceHeight = 0,
   onFitScaleChange,
 }: PreviewCanvasProps) => {
   const isDraggingPan = useRef(false);
@@ -101,21 +103,33 @@ const PreviewCanvas = ({
 
   // Pixel-true zoom (1.1.6 #1): `zoom` IS the user scale (1 = one source px per CSS px) and
   // the canvas RENDERS the visible source window at full density (renderOptions.sourceView in
-  // the hook) — never a CSS stretch. viewFrac = the fraction of the source that is visible.
-  const [canvasBaseW, setCanvasBaseW] = useState(0);
+  // the hook) — never a CSS stretch. Adobe-style viewport (Ben): the canvas box grows with
+  // zoom to consume the whole preview area; per-axis view fractions drive pan/cursor.
+  const [contBox, setContBox] = useState({ w: 0, h: 0 });
   useEffect(() => {
-    const el = canvasRef.current;
+    const el = containerRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setCanvasBaseW(el.offsetWidth || 0));
+    const ro = new ResizeObserver(() =>
+      setContBox({ w: el.clientWidth || 0, h: el.clientHeight || 0 }));
     ro.observe(el);
-    setCanvasBaseW(el.offsetWidth || 0);
+    setContBox({ w: el.clientWidth || 0, h: el.clientHeight || 0 });
     return () => ro.disconnect();
-  }, [canvasRef, hasImage]);
-  const fitScale = sourceWidth > 0 && canvasBaseW > 0 ? canvasBaseW / sourceWidth : 0;
+  }, [containerRef, hasImage]);
+  // Fit factor comes from the CONTAINER (the canvas box itself changes with zoom).
+  const fitScale = sourceWidth > 0 && sourceHeight > 0 && contBox.w > 0 && contBox.h > 0
+    ? Math.min(contBox.w / sourceWidth, contBox.h / sourceHeight)
+    : 0;
   useEffect(() => { onFitScaleChange?.(fitScale); }, [fitScale, onFitScaleChange]);
-  const viewFrac = !fit && sourceWidth > 0 && canvasBaseW > 0
-    ? Math.min(1, (canvasBaseW / Math.max(0.05, zoom)) / sourceWidth)
+  // Visible fraction of the source per axis: box/(zoom*src). The hook sizes the box to
+  // min(container, src*zoom), so a fraction < 1 means that axis overflows the viewport.
+  const z = Math.max(0.05, zoom);
+  const viewFracX = !fit && sourceWidth > 0 && contBox.w > 0
+    ? Math.min(1, contBox.w / (z * sourceWidth))
     : 1;
+  const viewFracY = !fit && sourceHeight > 0 && contBox.h > 0
+    ? Math.min(1, contBox.h / (z * sourceHeight))
+    : 1;
+  const zoomedIn = viewFracX < 0.999 || viewFracY < 0.999;
 
   const stepZoom = useCallback((direction: number) => {
     if (!onZoomChange) return;
@@ -133,11 +147,15 @@ const PreviewCanvas = ({
 
 
   // Clamp the pan centre so the view window stays inside the source: with a visible
-  // fraction f the centre can move ±(1-f)/2 from 0.5.
-  const clampPan = useCallback((v: number) => {
-    const m = Math.max(0, (1 - viewFrac) / 2);
+  // fraction f on an axis the centre can move ±(1-f)/2 from 0.5.
+  const clampPanX = useCallback((v: number) => {
+    const m = Math.max(0, (1 - viewFracX) / 2);
     return Math.max(0.5 - m, Math.min(0.5 + m, v));
-  }, [viewFrac]);
+  }, [viewFracX]);
+  const clampPanY = useCallback((v: number) => {
+    const m = Math.max(0, (1 - viewFracY) / 2);
+    return Math.max(0.5 - m, Math.min(0.5 + m, v));
+  }, [viewFracY]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!hasImage) return;
@@ -150,17 +168,17 @@ const PreviewCanvas = ({
       return;
     }
     // Zoomed in: plain scroll pans the view window (Photoshop-style). At fit: inert.
-    if (viewFrac < 0.999 && onPanChange) {
+    if (zoomedIn && onPanChange) {
       e.preventDefault();
       const canvas = canvasRef.current;
       const r = canvas ? canvas.getBoundingClientRect() : null;
       if (!r || !r.width) return;
       onPanChange(
-        clampPan(panX + (e.deltaX / r.width) * viewFrac),
-        clampPan(panY + (e.deltaY / r.height) * viewFrac)
+        clampPanX(panX + (e.deltaX / r.width) * viewFracX),
+        clampPanY(panY + (e.deltaY / r.height) * viewFracY)
       );
     }
-  }, [hasImage, stepZoom, viewFrac, onPanChange, clampPan, panX, panY, canvasRef]);
+  }, [hasImage, stepZoom, zoomedIn, viewFracX, viewFracY, onPanChange, clampPanX, clampPanY, panX, panY, canvasRef]);
 
   // Relative grab-drag: capture the pan centre and the on-screen canvas size at
   // pointer-down, then translate 1:1 with pointer movement (image follows the
@@ -181,10 +199,10 @@ const PreviewCanvas = ({
     onPanChange(
       // Pointer delta (CSS px) -> source-fraction delta: divide by the canvas box and scale
       // by the visible fraction, so the image follows the cursor 1:1 on screen.
-      clampPan(s.px - ((clientX - s.cx) / s.rw) * viewFrac),
-      clampPan(s.py - ((clientY - s.cy) / s.rh) * viewFrac)
+      clampPanX(s.px - ((clientX - s.cx) / s.rw) * viewFracX),
+      clampPanY(s.py - ((clientY - s.cy) / s.rh) * viewFracY)
     );
-  }, [onPanChange, clampPan, viewFrac]);
+  }, [onPanChange, clampPanX, clampPanY, viewFracX, viewFracY]);
 
   const updateSplitFromPointer = useCallback((clientX: number) => {
     const canvas = canvasRef.current;
@@ -203,13 +221,13 @@ const PreviewCanvas = ({
       updateSplitFromPointer(e.clientX);
       return;
     }
-    if (viewFrac < 0.999 && onPanChange) {
+    if (zoomedIn && onPanChange) {
       isDraggingPan.current = true;
       panPointerId.current = e.pointerId;
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       beginPanDrag(e.clientX, e.clientY);
     }
-  }, [hasImage, compareSplit, viewFrac, onPanChange, onCompareSplitRatioChange, beginPanDrag, updateSplitFromPointer]);
+  }, [hasImage, compareSplit, zoomedIn, onPanChange, onCompareSplitRatioChange, beginPanDrag, updateSplitFromPointer]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (isDraggingSplit.current) {
@@ -244,7 +262,7 @@ const PreviewCanvas = ({
   const recenter = useCallback(() => {
     onPanChange?.(0.5, 0.5);
   }, [onPanChange]);
-  const isPanned = viewFrac < 0.999 && (Math.abs(panX - 0.5) > 0.001 || Math.abs(panY - 0.5) > 0.001);
+  const isPanned = zoomedIn && (Math.abs(panX - 0.5) > 0.001 || Math.abs(panY - 0.5) > 0.001);
 
   const loadSampleImage = useCallback(async (sample: { url: string; name: string }, idx: number) => {
     setLoadingSample(idx);
@@ -262,7 +280,7 @@ const PreviewCanvas = ({
 
   const cursorStyle = compareSplit
     ? "ew-resize"
-    : viewFrac < 0.999
+    : zoomedIn
       ? "grab"
       : "default";
 

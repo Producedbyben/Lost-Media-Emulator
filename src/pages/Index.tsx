@@ -1827,6 +1827,7 @@ const Index = () => {
                     zoom={previewSettings.previewScale}
                     fit={previewSettings.previewFit}
                     sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
+                    sourceHeight={sourceElement ? ((sourceElement as HTMLVideoElement).videoHeight || (sourceElement as HTMLImageElement).naturalHeight || 0) : 0}
                     onFitScaleChange={setPreviewFitScale}
                     onZoomChange={(z) => handlePreviewSettingsChange({ ...previewSettings, previewScale: z, previewFit: false })}
                     onFitChange={(f) => { handlePreviewSettingsChange({ ...previewSettings, previewFit: f }); if (f) handlePanChange(0.5, 0.5); }}
@@ -1920,6 +1921,7 @@ const Index = () => {
                   zoom={previewSettings.previewScale}
                   fit={previewSettings.previewFit}
                   sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
+                  sourceHeight={sourceElement ? ((sourceElement as HTMLVideoElement).videoHeight || (sourceElement as HTMLImageElement).naturalHeight || 0) : 0}
                   onFitScaleChange={setPreviewFitScale}
                   onZoomChange={(z) => handlePreviewSettingsChange({ ...previewSettings, previewScale: z, previewFit: false })}
                   onFitChange={(f) => { handlePreviewSettingsChange({ ...previewSettings, previewFit: f }); if (f) handlePanChange(0.5, 0.5); }}
