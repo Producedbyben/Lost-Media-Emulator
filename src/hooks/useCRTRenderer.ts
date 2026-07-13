@@ -103,6 +103,17 @@ export interface CRTParams {
   dmgReflectiveShadow: number;      // reflective (unbacklit) ambient diagonal shadow
   dmgShadowAngle: number;           // shadow direction, degrees (0 = auto 135)
   dmgGhost: number;                 // slow-LCD directional edge blur
+  // 1.1.7 display-type looks (PE alternates #6/#7, agency/pe-1.1.6-display-looks.md).
+  vfdGlow: number;                  // luminance -> single cyan-green emissive phosphor
+  vfdLevels: number;                // segment/dot-matrix quantization levels (0 = auto 8)
+  vfdGrid: number;                  // coarse segment/dot-matrix dark inter-cell lattice
+  vfdBloom: number;                 // halation/bloom on lit phosphor cells
+  vfdBlackCrush: number;            // crushed near-black background between segments
+  tnGammaShift: number;             // vertical gamma/colour shift: top pale <-> bottom crushed
+  tnAxis: number;                   // gradient axis, degrees (0 = auto top-to-bottom)
+  tnFrcDither: number;              // 6-bit FRC temporal-dither banding
+  tnCoolCast: number;               // slight cool colour cast
+  tnGhost: number;                  // light response ghost (subtler than STN)
   // V2: Color & Signal
   lumaNoise: number;
   chromaNoise: number;
@@ -270,6 +281,16 @@ export const DEFAULT_PARAMS: CRTParams = {
   dmgReflectiveShadow: 0,
   dmgShadowAngle: 0,
   dmgGhost: 0,
+  vfdGlow: 0,
+  vfdLevels: 0,
+  vfdGrid: 0,
+  vfdBloom: 0,
+  vfdBlackCrush: 0,
+  tnGammaShift: 0,
+  tnAxis: 0,
+  tnFrcDither: 0,
+  tnCoolCast: 0,
+  tnGhost: 0,
   // V2: Color & Signal — all neutral
   lumaNoise: 0,
   chromaNoise: 0,

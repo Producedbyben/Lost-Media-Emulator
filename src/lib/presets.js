@@ -2629,6 +2629,9 @@ export const DISPLAY_PARAM_KEYS = [
   "dlpRainbow", "dlpRainbowThreshold", "dlpScreenDoor", "dlpDither",
   "einkGrey", "einkLevels", "einkGhost", "einkDither", "einkFlash",
   "dmgGreen", "dmgPixelate", "dmgReflectiveShadow", "dmgShadowAngle", "dmgGhost",
+  // 1.1.7 display-type looks (PE alternates #6/#7)
+  "vfdGlow", "vfdLevels", "vfdGrid", "vfdBloom", "vfdBlackCrush",
+  "tnGammaShift", "tnAxis", "tnFrcDither", "tnCoolCast", "tnGhost",
 ];
 
 const DISPLAY_KEY_SET = new Set(DISPLAY_PARAM_KEYS);
@@ -2806,6 +2809,26 @@ export const DISPLAY_PRESETS = {
     dmgGreen: 1.0, dmgPixelate: 0.6, dmgReflectiveShadow: 0.4, dmgShadowAngle: 135, dmgGhost: 0.25,
     maskType: "none", bloom: 0,
   },
+
+  /* ---- 1.1.7 display-type looks (PE alternates #6/#7, agency/pe-1.1.6-display-looks.md) ---- */
+
+  // VFD car-stereo/VCR readout: luminance mapped onto a single cyan-green emissive
+  // phosphor, crushed near-black background, coarse segment/dot-matrix grid, strong
+  // bloom. Nearest cousin = amber terminal — different phosphor colour, no grid.
+  "VFD Readout (Car Stereo)": {
+    ...NEUTRAL_DISPLAY,
+    vfdGlow: 1.0, vfdLevels: 8, vfdGrid: 0.5, vfdBloom: 0.55, vfdBlackCrush: 0.7,
+    maskType: "none", bloom: 0,
+  },
+
+  // TN panel viewing-angle shift: vertical gamma/colour gradient (top pale, bottom
+  // crushed), 6-bit FRC dither banding, slight cool cast, light response ghost.
+  // Nearest cousin = IPS Office LCD (angle-stable) — TN is defined by the instability.
+  "TN Panel (Viewing-Angle Shift)": {
+    ...NEUTRAL_DISPLAY,
+    tnGammaShift: 0.6, tnAxis: 0, tnFrcDither: 0.5, tnCoolCast: 0.3, tnGhost: 0.15,
+    maskType: "none", bloom: 0,
+  },
 };
 
 export const DISPLAY_PRESET_CATEGORIES = {
@@ -2818,6 +2841,7 @@ export const DISPLAY_PRESET_CATEGORIES = {
     "IPS Office LCD", "OLED PenTile Smartphone", "Pioneer Plasma", "Cyberpunk OLED",
     "E-Paper Display", "Handheld Pixel LCD (Game Boy)",
     "STN Laptop LCD (Passive-Matrix)", "E-Ink Reader (Refresh Ghost)",
+    "TN Panel (Viewing-Angle Shift)",
   ],
   "Large / Public": [
     "LED Billboard", "Stadium Jumbotron", "Cinema Projector", "IMAX Large-Format Screen",
@@ -2825,7 +2849,7 @@ export const DISPLAY_PRESET_CATEGORIES = {
   ],
   "Portable / Retro": [
     "Portable Pocket TV", "CRT Viewfinder", "Handheld LCD Screen",
-    "Reflective Handheld (DMG Green)",
+    "Reflective Handheld (DMG Green)", "VFD Readout (Car Stereo)",
   ],
 };
 

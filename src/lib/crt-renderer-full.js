@@ -595,6 +595,17 @@ export class CRTRendererFull {
     const dmgReflectiveShadow = n01(params.dmgReflectiveShadow);
     const dmgShadowAngle = Number(params.dmgShadowAngle) || 135; // degrees; 0 = auto 135
     const dmgGhost = n01(params.dmgGhost);
+    // 1.1.7 display-type looks (PE alternates #6/#7, agency/pe-1.1.6-display-looks.md).
+    const vfdGlow = n01(params.vfdGlow);
+    const vfdLevels = Math.max(0, Math.round(Number(params.vfdLevels) || 0)); // 0 = auto 8
+    const vfdGrid = n01(params.vfdGrid);
+    const vfdBloom = n01(params.vfdBloom);
+    const vfdBlackCrush = n01(params.vfdBlackCrush);
+    const tnGammaShift = n01(params.tnGammaShift);
+    const tnAxis = Number(params.tnAxis) || 0; // degrees; 0 = auto top-to-bottom
+    const tnFrcDither = n01(params.tnFrcDither);
+    const tnCoolCast = n01(params.tnCoolCast);
+    const tnGhost = n01(params.tnGhost);
     // ---- v2 film / sensor / signal params (now consumed) ----
     const c01 = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; };
     const grainSize = c01(params.grainSize);
@@ -2146,6 +2157,115 @@ export class CRTRendererFull {
           }
         }
         outCtx.putImageData(img, 0, 0);
+      }
+    }
+
+    // ---- VFD, vacuum fluorescent display (PE 1.1.6 alt #6): luminance mapped onto a
+    // single cyan-green emissive phosphor over a crushed near-black background, quantized
+    // to a coarse segment/dot-matrix grid, with strong bloom/halation on the lit cells —
+    // the car-stereo/VCR readout tell. Nearest cousin = amber terminal (different phosphor
+    // colour, no segment grid, lighter bloom); this one must read grid + bloom + cyan-green. ----
+    if (vfdGlow > 0.001 || vfdGrid > 0.001 || vfdBloom > 0.001) {
+      if (vfdGlow > 0.001) {
+        const img = outCtx.getImageData(0, 0, width, height);
+        const d = img.data;
+        const levels = vfdLevels >= 2 ? vfdLevels : 8;
+        const step = 255 / (levels - 1);
+        const phR = 0x33, phG = 0xff, phB = 0xcc; // cyan-green phosphor family
+        const crush = vfdBlackCrush * 40;
+        const scale = 255 / Math.max(1, 255 - crush);
+        for (let i = 0; i < d.length; i += 4) {
+          let l = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+          l = Math.max(0, l - crush) * scale;
+          l = Math.round(Math.max(0, Math.min(255, l)) / step) * step;
+          const ln = l / 255;
+          d[i] = d[i] * (1 - vfdGlow) + phR * ln * vfdGlow;
+          d[i + 1] = d[i + 1] * (1 - vfdGlow) + phG * ln * vfdGlow;
+          d[i + 2] = d[i + 2] * (1 - vfdGlow) + phB * ln * vfdGlow;
+        }
+        outCtx.putImageData(img, 0, 0);
+      }
+      // Coarse segment/dot-matrix grid: dark inter-cell lattice, coarser than the DLP screen-door.
+      if (vfdGrid > 0.001) {
+        const cell = 5;
+        if (this._vfdGridKey !== cell) {
+          const tile = document.createElement("canvas");
+          tile.width = cell; tile.height = cell;
+          const gctx = tile.getContext("2d");
+          gctx.fillStyle = "#000"; gctx.fillRect(0, 0, cell, cell);
+          gctx.fillStyle = "#fff"; gctx.fillRect(0, 0, cell - 1, cell - 1);
+          this._vfdGrid = tile; this._vfdGridKey = cell;
+        }
+        outCtx.save();
+        outCtx.globalCompositeOperation = "multiply";
+        outCtx.globalAlpha = Math.min(0.85, vfdGrid);
+        outCtx.fillStyle = outCtx.createPattern(this._vfdGrid, "repeat");
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.restore();
+      }
+      // Bloom/halation: lit phosphor cells glow into their surroundings.
+      if (vfdBloom > 0.001) {
+        outCtx.save();
+        outCtx.globalCompositeOperation = "screen";
+        outCtx.globalAlpha = Math.min(0.8, vfdBloom * 0.6);
+        outCtx.filter = `blur(${(2 + vfdBloom * 6).toFixed(2)}px) brightness(1.3)`;
+        outCtx.drawImage(outCtx.canvas, 0, 0);
+        outCtx.restore();
+      }
+    }
+
+    // ---- TN panel viewing-angle shift (PE 1.1.6 alt #7): the cheap-TFT tell — a vertical
+    // gamma/colour gradient (top washes pale, bottom crushes dark), 6-bit FRC dither
+    // banding, a slight cool cast, and a light response ghost. Nearest cousin = IPS Office
+    // LCD (angle-stable, accurate); TN is defined by the angle INSTABILITY this gradient
+    // encodes — that gradient is the whole discriminator. ----
+    if (tnGammaShift > 0.001 || tnFrcDither > 0.001 || tnCoolCast > 0.001) {
+      const img = outCtx.getImageData(0, 0, width, height);
+      const d = img.data;
+      const axisRad = (tnAxis * Math.PI) / 180; // 0 = auto vertical (top -> bottom)
+      const ax = Math.sin(axisRad), ay = -Math.cos(axisRad); // unit vector along the gradient
+      for (let y = 0; y < height; y++) {
+        const by = y & 3;
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          let r = d[i], g = d[i + 1], b = d[i + 2];
+          if (tnGammaShift > 0.001) {
+            // Position along the viewing-angle axis, -1 (top) .. +1 (bottom).
+            const t = ((x / width - 0.5) * ax + (y / height - 0.5) * ay) * 2;
+            const shift = t * tnGammaShift * 70; // + washes pale, - crushes dark
+            r += shift; g += shift; b += shift * 0.9;
+            if (shift > 0) { // pale wash also lifts the floor and flattens contrast
+              const flat = (shift / 70) * 0.4;
+              r = r * (1 - flat) + 200 * flat;
+              g = g * (1 - flat) + 205 * flat;
+              b = b * (1 - flat) + 200 * flat;
+            }
+          }
+          if (tnCoolCast > 0.001) { b += tnCoolCast * 14; r -= tnCoolCast * 6; }
+          if (tnFrcDither > 0.001) {
+            const th = ((BAYER4[by][x & 3] + 0.5) / 16 - 0.5) * 24 * tnFrcDither;
+            const bandStep = 255 / 62; // 6-bit FRC ~ 64 levels
+            r = Math.round(Math.max(0, Math.min(255, r + th)) / bandStep) * bandStep;
+            g = Math.round(Math.max(0, Math.min(255, g + th)) / bandStep) * bandStep;
+            b = Math.round(Math.max(0, Math.min(255, b + th)) / bandStep) * bandStep;
+          }
+          d[i] = Math.max(0, Math.min(255, r));
+          d[i + 1] = Math.max(0, Math.min(255, g));
+          d[i + 2] = Math.max(0, Math.min(255, b));
+        }
+      }
+      outCtx.putImageData(img, 0, 0);
+      // Light response ghost: faint offset echo (TN response time is quicker than STN,
+      // so this stays subtle — the gradient + banding are the real discriminator).
+      if (tnGhost > 0.001) {
+        this.ensureCanvasSize(this.tempCanvas, width, height);
+        this.tempCtx.clearRect(0, 0, width, height);
+        this.tempCtx.drawImage(outCtx.canvas, 0, 0);
+        outCtx.save();
+        outCtx.globalCompositeOperation = "darken";
+        outCtx.globalAlpha = Math.min(0.3, tnGhost * 0.25);
+        outCtx.drawImage(this.tempCanvas, 1, 1);
+        outCtx.restore();
       }
     }
 
