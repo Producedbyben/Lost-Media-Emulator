@@ -14,6 +14,12 @@ export interface PreviewSettings {
   gpuAcceleration: boolean;
   /** Fit-to-window mode; when false, previewScale is the USER scale (1 = 100%, one source px per CSS px). */
   previewFit: boolean;
+  /**
+   * Opt-in ingest downsample: SHORT-edge px to downsize an imported source to (0 =
+   * off / native). Applied ONCE at import; the downsized working source drives BOTH
+   * preview and export, so what you edit is what exports. Never upscales.
+   */
+  downsampleTarget: number;
 }
 
 export const DEFAULT_PREVIEW_SETTINGS: PreviewSettings = {
@@ -26,6 +32,7 @@ export const DEFAULT_PREVIEW_SETTINGS: PreviewSettings = {
   compareMode: "off",
   compareSplit: false,
   compareSplitRatio: 0.5,
+  downsampleTarget: 0,
   // Default GPU (Metal) acceleration ON in the native desktop build, where it's
   // verified against the Apple Silicon Metal backend. Web stays opt-in.
   gpuAcceleration:
@@ -63,6 +70,15 @@ interface PreviewControlsProps {
 
 
 const FPS_OPTIONS = [15, 30, 60];
+
+// Ingest downsample presets: SHORT-edge px, 0 = Native (off). Downsizing a large
+// source on import runs the whole pipeline (preview + export) at the smaller size.
+const IMPORT_SIZE_OPTIONS = [
+  { label: "Native", value: 0 },
+  { label: "1080p", value: 1080 },
+  { label: "720p", value: 720 },
+  { label: "480p", value: 480 },
+];
 
 // USER scales: 1 = 100% = one source pixel per CSS pixel. Fit is a mode, not a scale.
 const ZOOM_OPTIONS = [
@@ -224,6 +240,28 @@ const PreviewControls = ({
               </div>
             </div>
 
+
+            <div className="space-y-1">
+              <p className="text-muted-foreground font-medium">Import size</p>
+              <div className="flex flex-wrap gap-1">
+                {IMPORT_SIZE_OPTIONS.map(({ label, value }) => (
+                  <button
+                    key={label}
+                    onClick={() => update({ downsampleTarget: value })}
+                    className={`px-1.5 py-0.5 rounded font-mono transition-colors ${
+                      settings.downsampleTarget === value
+                        ? "bg-primary/15 text-primary"
+                        : "bg-secondary text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 leading-tight">
+                Downsamples large sources on import (applies to the next import). What you edit is what exports; smaller sources are never upscaled.
+              </p>
+            </div>
 
             {(settings.animationEnabled || isVideo) && (
               <div className="space-y-1">

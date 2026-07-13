@@ -16,6 +16,11 @@ import { DEFAULT_PARAMS } from "@/hooks/useCRTRenderer";
 type Params = Record<string, number | string>;
 type LookInput = string | { name?: string; params?: Params } | Params;
 
+// Output size here is chosen EXPLICITLY by the caller (width/height below), not via the
+// GUI's opt-in ingest downsample (source-downsample.ts / PreviewSettings.downsampleTarget).
+// That interactive downsample rewrites the working source + sourceDimsRef so the app's
+// export shrinks with it; the headless/CLI path instead renders straight to the requested
+// width/height, so a caller that wants a smaller render simply asks for smaller dims.
 interface StillOpts {
   input: string;            // image data URL
   look?: LookInput;         // preset name | look JSON | raw params (default = clean defaults)

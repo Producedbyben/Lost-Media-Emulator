@@ -10,6 +10,7 @@ import { saveBlob, ensureFilename } from "@/lib/save-file.js";
 import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
 import { computeExportSize } from "@/lib/export-size";
 import { renderCompareSplit, type SplitOffscreen } from "@/lib/compare-split";
+import { computeDownsampleDims } from "@/lib/source-downsample";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import { buildOSDRenderOptions } from "@/lib/osd-render-options";
@@ -418,10 +419,21 @@ export interface SourceInfo {
 }
 
 /**
- * Build the optimised working source for a still. Returns the original element
- * untouched when it's already within budget, otherwise a downscaled canvas.
+ * Build the working source for a still.
+ *
+ * By default (downsampleTarget = 0) the preview works from the ORIGINAL source
+ * pixels — WYSIWYG absolutism (1.1.6 Ben): at 100% the user sees true source pixels
+ * and there is no fidelity-degrading proxy.
+ *
+ * When the user opts into an ingest downsample (downsampleTarget = short-edge px, Task 2)
+ * and the source exceeds it, we downscale ONCE here into a working canvas so the ENTIRE
+ * pipeline runs at the chosen size. This is NOT the old adaptive-quality degrade: it is a
+ * DELIBERATE working resolution the user picked, so WYSIWYG still holds — the downsized
+ * working source drives both preview AND export (via sourceDimsRef), i.e. what you edit at
+ * the chosen size is exactly what exports. Aspect ratio is preserved; sources at or below
+ * the target are left untouched (never upscaled).
  */
-function buildWorkingProxy(img: HTMLImageElement): {
+function buildWorkingProxy(img: HTMLImageElement, downsampleTarget = 0): {
   source: HTMLImageElement | HTMLCanvasElement;
   optimized: boolean;
   workingW: number;
@@ -429,10 +441,17 @@ function buildWorkingProxy(img: HTMLImageElement): {
 } {
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
-  // WYSIWYG absolutism (1.1.6 Ben): the preview always works from the ORIGINAL source
-  // pixels — no downscaled working copy. A proxy is a fidelity intermediary; at 100% the
-  // user must see true source pixels. (Kept as a function so the call sites/UI stay stable.)
-  return { source: img, optimized: false, workingW: w, workingH: h };
+  const dims = computeDownsampleDims(w, h, downsampleTarget);
+  if (!dims.scaled) return { source: img, optimized: false, workingW: w, workingH: h };
+  const canvas = document.createElement("canvas");
+  canvas.width = dims.width;
+  canvas.height = dims.height;
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) return { source: img, optimized: false, workingW: w, workingH: h };
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, w, h, 0, 0, dims.width, dims.height);
+  return { source: canvas, optimized: true, workingW: dims.width, workingH: dims.height };
 }
 
 export function useCRTRenderer() {
@@ -452,6 +471,7 @@ export function useCRTRenderer() {
     compareSplitRatio: 0.5,
     gpuAcceleration: false,
     previewFit: true,
+    downsampleTarget: 0,
   });
   const lastFrameTimeRef = useRef<number>(0);
   const previewDirtyRef = useRef<boolean>(true);
@@ -1261,7 +1281,9 @@ export function useCRTRenderer() {
 
       const srcW = img.naturalWidth || img.width;
       const srcH = img.naturalHeight || img.height;
-const proxy = buildWorkingProxy(img);
+      // Opt-in ingest downsample (Task 2): downsize the source ONCE to the chosen
+      // working resolution so preview AND export run at that size. Default (0) = native.
+      const proxy = buildWorkingProxy(img, previewSettingsRef.current.downsampleTarget);
 
       isVideoRef.current = false;
       videoPlayingRef.current = false;
@@ -1280,10 +1302,13 @@ const proxy = buildWorkingProxy(img);
       } else {
         objectUrlRef.current = url;
       }
-      sourceDimsRef.current = { w: srcW, h: srcH };
+      // Preview zoom AND export sizing both derive from sourceDimsRef, so it holds the
+      // WORKING dims: native when downsample is off, the downsized size when it's on —
+      // that is what makes an ingest downsample flow through to a correctly-sized export.
+      sourceDimsRef.current = { w: proxy.workingW, h: proxy.workingH };
 
       rendererRef.current?.reset?.();
-rendererRef.current?.setImage(proxy.source, sourceScale);
+      rendererRef.current?.setImage(proxy.source, sourceScale);
       pendingResizeRef.current = true;
       startTimeRef.current = performance.now();
       markDirty();

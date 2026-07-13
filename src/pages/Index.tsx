@@ -1863,8 +1863,8 @@ const Index = () => {
                     canvasRef={canvasRef} containerRef={containerRef} hasImage={hasImage} onLoadImage={handleLoadFile}
                     zoom={previewSettings.previewScale}
                     fit={previewSettings.previewFit}
-                    sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
-                    sourceHeight={sourceElement ? ((sourceElement as HTMLVideoElement).videoHeight || (sourceElement as HTMLImageElement).naturalHeight || 0) : 0}
+                    sourceWidth={sourceInfo ? sourceInfo.workingW : 0}
+                    sourceHeight={sourceInfo ? sourceInfo.workingH : 0}
                     onFitScaleChange={setPreviewFitScale}
                     onZoomChange={(z) => handlePreviewSettingsChange({ ...previewSettings, previewScale: z, previewFit: false })}
                     onFitChange={(f) => { handlePreviewSettingsChange({ ...previewSettings, previewFit: f }); if (f) handlePanChange(0.5, 0.5); }}
@@ -1957,8 +1957,8 @@ const Index = () => {
                   canvasRef={canvasRef} containerRef={containerRef} hasImage={hasImage} onLoadImage={handleLoadFile}
                   zoom={previewSettings.previewScale}
                   fit={previewSettings.previewFit}
-                  sourceWidth={sourceElement ? ((sourceElement as HTMLVideoElement).videoWidth || (sourceElement as HTMLImageElement).naturalWidth || 0) : 0}
-                  sourceHeight={sourceElement ? ((sourceElement as HTMLVideoElement).videoHeight || (sourceElement as HTMLImageElement).naturalHeight || 0) : 0}
+                  sourceWidth={sourceInfo ? sourceInfo.workingW : 0}
+                  sourceHeight={sourceInfo ? sourceInfo.workingH : 0}
                   onFitScaleChange={setPreviewFitScale}
                   onZoomChange={(z) => handlePreviewSettingsChange({ ...previewSettings, previewScale: z, previewFit: false })}
                   onFitChange={(f) => { handlePreviewSettingsChange({ ...previewSettings, previewFit: f }); if (f) handlePanChange(0.5, 0.5); }}

@@ -22,6 +22,11 @@
 // decides how the source is mapped INTO that box (cover vs. contain), which is
 // applied at draw time, not here.
 
+// Interaction with the ingest downsample (source-downsample.ts): sourceW/sourceH is
+// the WORKING source, which may be a deliberately DOWNSAMPLED import — the hook keeps
+// sourceDimsRef at the working dims. So "Source" (resolution 0) faithfully honors the
+// user's chosen ingest resolution: downsample a 4K still to 480p and the export is 480p,
+// not 4K. A fixed resolution still overrides as usual (it targets that short edge).
 export interface ExportSizeInput {
   sourceW: number;
   sourceH: number;
