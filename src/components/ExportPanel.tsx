@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, memo, type ReactNode } from "react";
 import { Film, Image as ImageIcon, X, Video, Crop, Share, FileBox, Square, Smartphone, RectangleHorizontal, Tv, Camera, Info, ShieldCheck, ListPlus, FolderOpen, Type, Volume2, VolumeX, Scissors, ChevronDown, Settings2, Monitor, Check, TriangleAlert, type LucideIcon } from "lucide-react";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
 import { computeExportSize } from "@/lib/export-size";
@@ -820,4 +820,4 @@ const ExportPanel = ({
   );
 };
 
-export default ExportPanel;
+export default memo(ExportPanel);

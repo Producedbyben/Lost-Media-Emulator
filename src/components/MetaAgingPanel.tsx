@@ -1,3 +1,4 @@
+import { memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import EffectHelp from "./EffectHelp";
@@ -36,4 +37,4 @@ const MetaAgingPanel = ({ params, onChange, onStringChange, enabled = true, onTo
   );
 };
 
-export default MetaAgingPanel;
+export default memo(MetaAgingPanel);

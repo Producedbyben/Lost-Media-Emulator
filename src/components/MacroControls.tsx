@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import { Dice3 } from "lucide-react";
@@ -153,4 +153,4 @@ const MacroControls = ({ params, onChange }: MacroControlsProps) => {
   );
 };
 
-export default MacroControls;
+export default memo(MacroControls);

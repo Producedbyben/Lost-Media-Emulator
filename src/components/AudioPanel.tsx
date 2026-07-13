@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, memo } from "react";
 import { VolumeX } from "lucide-react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
@@ -88,4 +88,4 @@ const AudioPanel = ({ profile, onChange, decodedBuffer, hasAudio, enabled = true
   );
 };
 
-export default AudioPanel;
+export default memo(AudioPanel);

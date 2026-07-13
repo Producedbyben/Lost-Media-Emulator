@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import { PANEL_INFO } from "@/lib/effect-info";
@@ -281,4 +281,4 @@ const OSDControls = ({ options, onChange, onParamChange, timestampValue, enabled
   );
 };
 
-export default OSDControls;
+export default memo(OSDControls);

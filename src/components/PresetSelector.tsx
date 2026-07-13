@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
 import { Search, Save, Trash2, Upload, Download, Link, Share2, Dice3, Grid3X3, List, Star, Clock, Tv, Film, Video, Eye, Radio, Monitor, Layers, Sparkles, Zap, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -501,4 +501,4 @@ const PresetSelector = ({
   );
 };
 
-export default PresetSelector;
+export default memo(PresetSelector);

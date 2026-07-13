@@ -1,3 +1,4 @@
+import { memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import { EFFECT_INFO, PANEL_INFO } from "@/lib/effect-info";
@@ -26,4 +27,4 @@ const SensorLensPanel = ({ params, onChange, enabled = true, onToggleEnabled }: 
   );
 };
 
-export default SensorLensPanel;
+export default memo(SensorLensPanel);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 
@@ -60,4 +61,4 @@ const MaskSelector = ({ maskType, maskStrength, maskScale, onMaskTypeChange, onM
   );
 };
 
-export default MaskSelector;
+export default memo(MaskSelector);

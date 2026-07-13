@@ -1,3 +1,4 @@
+import { memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import EffectHelp from "./EffectHelp";
@@ -66,4 +67,4 @@ const DigitalPanel = ({ params, onChange, onStringChange, enabled = true, onTogg
   );
 };
 
-export default DigitalPanel;
+export default memo(DigitalPanel);

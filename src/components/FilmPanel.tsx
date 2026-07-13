@@ -1,3 +1,4 @@
+import { memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import { EFFECT_INFO, PANEL_INFO } from "@/lib/effect-info";
@@ -51,4 +52,4 @@ const FilmPanel = ({ params, onChange, enabled = true, onToggleEnabled }: FilmPa
   );
 };
 
-export default FilmPanel;
+export default memo(FilmPanel);

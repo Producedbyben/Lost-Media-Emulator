@@ -1,3 +1,4 @@
+import { memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import ColorPad2D from "./ColorPad2D";
@@ -54,4 +55,4 @@ const ColorGradePanel = ({ params, onChange, enabled = true, onToggleEnabled }: 
   );
 };
 
-export default ColorGradePanel;
+export default memo(ColorGradePanel);

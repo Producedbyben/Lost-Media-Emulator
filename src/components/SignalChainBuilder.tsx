@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, memo } from "react";
 import { Lock, Unlock, X, ArrowDown, Camera, MonitorPlay, Search } from "lucide-react";
 import EffectSlider from "./EffectSlider";
 import PresetThumbnail from "./PresetThumbnail";
@@ -227,4 +227,4 @@ const SignalChainBuilder = (props: SignalChainBuilderProps) => {
   );
 };
 
-export default SignalChainBuilder;
+export default memo(SignalChainBuilder);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import EffectSlider from "./EffectSlider";
 import CollapsiblePanel from "./CollapsiblePanel";
 import { EFFECT_INFO, PANEL_INFO } from "@/lib/effect-info";
@@ -58,4 +59,4 @@ const TapePanel = ({ params, onChange, enabled = true, onToggleEnabled }: TapePa
   );
 };
 
-export default TapePanel;
+export default memo(TapePanel);

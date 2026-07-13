@@ -39,6 +39,7 @@ import VideoTransport from "@/components/VideoTransport";
 import { useCRTRenderer, CRTParams, DEFAULT_PARAMS } from "@/hooks/useCRTRenderer";
 import { useLookHistory } from "@/hooks/useLookHistory";
 import { useExportQueue } from "@/hooks/useExportQueue";
+import { useParamSlice } from "@/hooks/useParamSlice";
 import { usePresetFavorites } from "@/hooks/usePresetFavorites";
 import { useTheme } from "@/hooks/useTheme";
 import { generateOSDProfile } from "@/lib/osd-profile";
@@ -48,6 +49,7 @@ import { clampParam, validateEnum } from "@/lib/preset-migration";
 import { KeyframeState, evaluateAllTracks } from "@/lib/keyframe-engine";
 import { AudioAnalyzerState, DEFAULT_AUDIO_ANALYZER_STATE } from "@/lib/audio-analyzer";
 import { DEFAULT_AUDIO_PROFILE } from "@/hooks/useAudioPreview";
+import type { AudioProfile } from "@/lib/audio-degrade";
 import { downloadCubeLUT } from "@/lib/lut-exporter";
 // @ts-ignore
 import { getFormatProfile, getFormatBadge } from "@/lib/format-profiles.js";
@@ -289,6 +291,12 @@ const Index = () => {
   }, [startTutorial]);
   const { showTour, setShowTour, startEffectTour } = useEffectTour();
   const [params, setLocalParams] = useState<CRTParams>(DEFAULT_PARAMS);
+  // Latest-value ref for params: lets callbacks read the current params without
+  // taking a `params` dependency (which would make them re-create on every slider tick).
+  const paramsRef = useRef<CRTParams>(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  }, [params]);
   const [osdOptions, setLocalOSDOptions] = useState<OSDOptions>(DEFAULT_OSD_OPTIONS);
   const [previewSettings, setLocalPreviewSettings] = useState<PreviewSettings>(DEFAULT_PREVIEW_SETTINGS);
   const [activePreset, setActivePreset] = useState("True Zero (Neutral)"); // Ben-11 #4: new sessions start as true passthrough (digitalClean format profile, no look)
@@ -427,8 +435,9 @@ const Index = () => {
         const config = PANEL_EFFECT_CONFIGS[panelKey];
         if (config) {
           const saved: Record<string, number> = {};
+          const currentParams = paramsRef.current;
           for (const key of config.controlIds) {
-            saved[key] = typeof (params as any)[key] === "number" ? (params as any)[key] : 0;
+            saved[key] = typeof (currentParams as any)[key] === "number" ? (currentParams as any)[key] : 0;
           }
           savedParamsRef.current[panelKey] = saved;
         }
@@ -456,7 +465,8 @@ const Index = () => {
         }, 500);
       }, 0);
     };
-  }, [params]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleGrading = useMemo(() => makePanelToggle("grading", setGradingEnabled), [makePanelToggle]);
   const toggleMasks = useMemo(() => makePanelToggle("masks", setMasksEnabled), [makePanelToggle]);
@@ -706,6 +716,25 @@ const Index = () => {
     });
   }, []);
 
+  // Stable wrapper callbacks for MaskSelector — keeps its props reference-stable
+  // so wrapping it in React.memo actually prevents re-renders on unrelated param ticks.
+  const handleMaskTypeChange = useCallback((type: string) => {
+    handleStringParamChange("maskType", type);
+  }, [handleStringParamChange]);
+
+  const handleMaskStrengthChange = useCallback((v: number) => {
+    handleParamChange("phosphorMask", v);
+  }, [handleParamChange]);
+
+  const handleMaskScaleChange = useCallback((v: number) => {
+    handleParamChange("maskScale", v);
+  }, [handleParamChange]);
+
+  // Stable wrapper for AudioPanel's onChange — avoids a fresh arrow function every render.
+  const handleAudioProfileChange = useCallback((patch: Partial<AudioProfile>) => {
+    setAudioProfile((p) => ({ ...p, ...patch }));
+  }, []);
+
   // Reference match: tune grade toward a dropped reference image.
   const handleMatchReferenceFile = useCallback(async (file: File) => {
     try {
@@ -887,6 +916,25 @@ const Index = () => {
     setDisplaySlot(null);
     applyChain(captureSlot, null, captureIntensity, displayIntensity);
   }, [applyChain, captureSlot, captureIntensity, displayIntensity]);
+
+  // Stable `chain` prop for PresetSelector/SignalChainBuilder — only recomputed
+  // when signal-chain state itself changes, not on every param slider tick.
+  const chainConfig = useMemo(() => ({
+    captureSlot, displaySlot, captureIntensity, displayIntensity,
+    captureLocked, displayLocked,
+    onSelectCapture: (name: string) => handleSelectCapture(name),
+    onSelectDisplay: (name: string) => handleSelectDisplay(name),
+    onCaptureIntensity: handleCaptureIntensity,
+    onDisplayIntensity: handleDisplayIntensity,
+    onToggleCaptureLock: () => setCaptureLocked((v) => !v),
+    onToggleDisplayLock: () => setDisplayLocked((v) => !v),
+    onClearCapture: handleClearCapture,
+    onClearDisplay: handleClearDisplay,
+  }), [
+    captureSlot, displaySlot, captureIntensity, displayIntensity, captureLocked, displayLocked,
+    handleSelectCapture, handleSelectDisplay, handleCaptureIntensity, handleDisplayIntensity,
+    handleClearCapture, handleClearDisplay,
+  ]);
 
 
 
@@ -1331,21 +1379,21 @@ const Index = () => {
   const panelGroups: { title: string; section: PanelSection; items: PanelEntry[] }[] = [
     { title: "Color & Grade", section: "capture", items: [
       { key: "grading", enabled: gradingEnabled, node: (
-        <div id="panel-grading"><ColorGradePanel params={params as any} onChange={handleParamChange} enabled={gradingEnabled} onToggleEnabled={toggleGrading} /></div>
+        <div id="panel-grading"><ColorGradePanel params={useParamSlice(params, ["imageBrightness", "imageContrast", "advancedSaturation", "imageGamma", "imageTemperature", "imageTint", "lumaNoise", "chromaNoise", "chromaBleedHorizontal", "chromaBleedVertical", "chromaPhaseError", "blackLevelCrush", "highlightRollOff", "gammaCurve"]) as any} onChange={handleParamChange} enabled={gradingEnabled} onToggleEnabled={toggleGrading} /></div>
       ) },
     ] },
     { title: "Display & CRT", section: "display", items: [
       { key: "display", enabled: displayEnabled, node: (
-        <div id="panel-display"><DisplayPanel params={params as any} onChange={handleParamChange} onStringChange={handleStringParamChange} enabled={displayEnabled} onToggleEnabled={toggleDisplay} /></div>
+        <div id="panel-display"><DisplayPanel params={useParamSlice(params, ["scanlineStrength", "barrelDistortion", "chromaticAberration", "bloom", "advancedNeonPhosphorBleed", "flicker", "scanlineProfile", "phosphorPersistence", "beamSpotSizeX", "beamSpotSizeY", "subpixelLayoutOverride", "pixelResponseTime"]) as any} onChange={handleParamChange} onStringChange={handleStringParamChange} enabled={displayEnabled} onToggleEnabled={toggleDisplay} /></div>
       ) },
     ] },
     { title: "Masks & Geometry", section: "display", items: [
       { key: "masks", enabled: masksEnabled, node: (
         <div id="panel-masks">
           <MaskSelector maskType={String(params.maskType)} maskStrength={params.phosphorMask} maskScale={params.maskScale}
-            onMaskTypeChange={(type) => handleStringParamChange("maskType", type)}
-            onMaskStrengthChange={(v) => handleParamChange("phosphorMask", v)}
-            onMaskScaleChange={(v) => handleParamChange("maskScale", v)}
+            onMaskTypeChange={handleMaskTypeChange}
+            onMaskStrengthChange={handleMaskStrengthChange}
+            onMaskScaleChange={handleMaskScaleChange}
             enabled={masksEnabled} onToggleEnabled={toggleMasks} />
         </div>
       ) },
@@ -1359,32 +1407,32 @@ const Index = () => {
     ] },
     { title: "Tape & Dropouts", section: "capture", items: [
       { key: "tape", enabled: tapeEnabled, node: (
-        <div id="panel-tape"><TapePanel params={params as any} onChange={handleParamChange} enabled={tapeEnabled} onToggleEnabled={toggleTape} /></div>
+        <div id="panel-tape"><TapePanel params={useParamSlice(params, ["pixelSize", "advancedLineJitter", "advancedTimebaseWobble", "advancedHeadSwitching", "advancedChromaDelay", "advancedCrossColor", "advancedDropouts", "advancedGhosting", "advancedInterlacing", "advancedTapeCrease", "dropoutFrequency", "dropoutLength", "jitterSpeed", "jitterRandomness", "wowFlutterSlow", "wowFlutterFast", "flickerFrequencyHz", "flickerDepth", "autoExposureHunt", "headClogEvents", "trackingError", "tapeSkew", "chromaNoiseStreaking"]) as any} onChange={handleParamChange} enabled={tapeEnabled} onToggleEnabled={toggleTape} /></div>
       ) },
     ] },
     { title: "Audio", section: "capture", items: [
       { key: "audio", enabled: true, node: (
-        <div id="panel-audio"><AudioPanel profile={audioProfile} onChange={(patch) => setAudioProfile((p) => ({ ...p, ...patch }))} decodedBuffer={audioDecodedBuffer} hasAudio={sourceHasAudio} /></div>
+        <div id="panel-audio"><AudioPanel profile={audioProfile} onChange={handleAudioProfileChange} decodedBuffer={audioDecodedBuffer} hasAudio={sourceHasAudio} /></div>
       ) },
     ] },
     { title: "Film", section: "capture", items: [
       { key: "film", enabled: filmEnabled, node: (
-        <div id="panel-film"><FilmPanel params={params as any} onChange={handleParamChange} enabled={filmEnabled} onToggleEnabled={toggleFilm} /></div>
+        <div id="panel-film"><FilmPanel params={useParamSlice(params, ["advancedFilmGrain", "advancedFilmDust", "advancedFilmScratches", "advancedFilmGateWeave", "advancedFilmHalation", "advancedExposurePump", "advancedWhiteBalanceDrift", "advancedFocusBreathing", "grainSize", "grainChromaticity", "gateJitterX", "gateJitterY", "gateRotation", "shutterJudder", "printFadeCyan", "printFadeMagenta", "printFadeYellow", "spliceFlash", "cueMarks"]) as any} onChange={handleParamChange} enabled={filmEnabled} onToggleEnabled={toggleFilm} /></div>
       ) },
     ] },
     { title: "Digital & Compression", section: "capture", items: [
       { key: "digital", enabled: digitalEnabled, node: (
-        <div id="panel-digital"><DigitalPanel params={params as any} onChange={handleParamChange} onStringChange={handleStringParamChange} enabled={digitalEnabled} onToggleEnabled={toggleDigital} /></div>
+        <div id="panel-digital"><DigitalPanel params={useParamSlice(params, ["noise", "advancedFrameStutter", "advancedRfInterference", "advancedCctvMonochrome", "advancedQuantization", "advancedGenerationLoss", "advancedMacroBlocking", "gopLength", "deblockingStrength", "ringingStrength", "chromaSubsamplingMode", "packetLossBurst", "upscaleSharpenHalos", "datamoshBloom", "datamoshDisplacement", "pixelSort", "bitrotCorruption"]) as any} onChange={handleParamChange} onStringChange={handleStringParamChange} enabled={digitalEnabled} onToggleEnabled={toggleDigital} /></div>
       ) },
     ] },
     { title: "Lens & Sensor", section: "capture", items: [
       { key: "sensorLens", enabled: sensorLensEnabled, node: (
-        <div id="panel-sensorLens"><SensorLensPanel params={params as any} onChange={handleParamChange} enabled={sensorLensEnabled} onToggleEnabled={toggleSensorLens} /></div>
+        <div id="panel-sensorLens"><SensorLensPanel params={useParamSlice(params, ["rollingShutterSkew", "fixedPatternNoise", "hotPixels", "lensSmear", "haze", "flareGhosts", "vignette", "cornerSharpnessFalloff"]) as any} onChange={handleParamChange} enabled={sensorLensEnabled} onToggleEnabled={toggleSensorLens} /></div>
       ) },
     ] },
     { title: "Media Aging", section: "capture", items: [
       { key: "metaAging", enabled: metaAgingEnabled, node: (
-        <div id="panel-metaAging"><MetaAgingPanel params={params as any} onChange={handleParamChange} onStringChange={handleStringParamChange} enabled={metaAgingEnabled} onToggleEnabled={toggleMetaAging} /></div>
+        <div id="panel-metaAging"><MetaAgingPanel params={useParamSlice(params, ["mediaAgeYears", "storageCondition", "copyGenerationCount", "restorationPassLevel"]) as any} onChange={handleParamChange} onStringChange={handleStringParamChange} enabled={metaAgingEnabled} onToggleEnabled={toggleMetaAging} /></div>
       ) },
     ] },
     { title: "Overlays & Tools", section: "capture", items: [
@@ -1554,18 +1602,7 @@ const Index = () => {
               recentlyUsed={recentlyUsed}
               onToggleFavorite={toggleFavorite}
               isFavorite={isFavorite}
-              chain={{
-                captureSlot, displaySlot, captureIntensity, displayIntensity,
-                captureLocked, displayLocked,
-                onSelectCapture: (name) => handleSelectCapture(name),
-                onSelectDisplay: (name) => handleSelectDisplay(name),
-                onCaptureIntensity: handleCaptureIntensity,
-                onDisplayIntensity: handleDisplayIntensity,
-                onToggleCaptureLock: () => setCaptureLocked((v) => !v),
-                onToggleDisplayLock: () => setDisplayLocked((v) => !v),
-                onClearCapture: handleClearCapture,
-                onClearDisplay: handleClearDisplay,
-              }}
+              chain={chainConfig}
             />
           </div>
         </CollapsiblePanel>
@@ -1619,7 +1656,7 @@ const Index = () => {
           />
         </div>
       </CollapsiblePanel>
-      <MacroControls params={params as unknown as Record<string, number>} onChange={handleParamChange} />
+      <MacroControls params={useParamSlice(params, []) as unknown as Record<string, number>} onChange={handleParamChange} />
       <CollapsiblePanel title="Scope" defaultOpen={false}>
         <div className="pt-2">
           <HistogramScope canvasRef={canvasRef} hasImage={hasImage} mode="histogram" />
