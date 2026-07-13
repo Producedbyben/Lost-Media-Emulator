@@ -33,6 +33,13 @@ export class CRTRendererFull {
     this._moshLastFrame = -999;
     this._moshLastW = 0;
     this._moshLastH = 0;
+    // E-Ink refresh-ghost inter-frame buffer (1.1.7): the actual previous rendered
+    // frame, so a continuous video sequence gets a REAL prior-content residue
+    // instead of a same-frame synthetic offset echo.
+    this.einkGhostCanvas = document.createElement("canvas");
+    this._einkLastFrame = -999;
+    this._einkLastW = 0;
+    this._einkLastH = 0;
     this.sourceCtx = this.sourceCanvas.getContext("2d");
     this.fitCtx = this.fitCanvas.getContext("2d", { willReadFrequently: true });
     this.workCtx = this.workCanvas.getContext("2d", { willReadFrequently: true });
@@ -40,6 +47,7 @@ export class CRTRendererFull {
     this.quantCtx = this.quantCanvas.getContext("2d", { willReadFrequently: true });
     this.moshCtx = this.moshCanvas.getContext("2d");
     this.moshSnapCtx = this.moshSnapCanvas.getContext("2d", { willReadFrequently: true });
+    this.einkGhostCtx = this.einkGhostCanvas.getContext("2d");
     this.cachedOutImageData = null;
     this.cachedOutImageWidth = 0;
     this.cachedOutImageHeight = 0;
@@ -242,6 +250,13 @@ export class CRTRendererFull {
     this._moshLastH = 0;
     if (this.moshCtx && this.moshCanvas) {
       this.moshCtx.clearRect(0, 0, this.moshCanvas.width, this.moshCanvas.height);
+    }
+    // Same determinism guarantee for the e-ink refresh-ghost buffer (1.1.7).
+    this._einkLastFrame = -999;
+    this._einkLastW = 0;
+    this._einkLastH = 0;
+    if (this.einkGhostCtx && this.einkGhostCanvas) {
+      this.einkGhostCtx.clearRect(0, 0, this.einkGhostCanvas.width, this.einkGhostCanvas.height);
     }
   }
 
@@ -1825,20 +1840,39 @@ export class CRTRendererFull {
         }
       }
       outCtx.putImageData(img, 0, 0);
-      // Refresh ghost: faint dark-neutral residue of OFFSET content, full-frame, multiply —
-      // recreates the previous-page echo (copy honesty rule: "recreates the residue",
-      // never "shows your last page").
+      // Refresh ghost (1.1.7): on a continuous video sequence (this renderer instance
+      // persists and frameIndex advances by exactly 1) this is a REAL previous-frame
+      // buffer — genuine prior-CONTENT residue from the actual prior frame, registered
+      // in place (no synthetic spatial offset needed; the dither/grain evolve over time
+      // so the buffer reads as a distinct moment on its own). Falls back to the old
+      // same-frame offset echo when there's no valid prior frame (stills, seeks, look
+      // switches) — still honest, still readable. Copy honesty rule unchanged either way:
+      // "recreates the residue", never "shows your last page".
       if (einkGhost > 0.001) {
-        this.ensureCanvasSize(this.tempCanvas, width, height);
-        this.tempCtx.clearRect(0, 0, width, height);
-        this.tempCtx.filter = "grayscale(1) contrast(1.5) brightness(1.45)";
-        this.tempCtx.drawImage(outCtx.canvas, 0, 0);
-        this.tempCtx.filter = "none";
+        this.ensureCanvasSize(this.einkGhostCanvas, width, height);
+        const continuous =
+          this._einkLastW === width && this._einkLastH === height &&
+          frameIndex === this._einkLastFrame + 1;
         outCtx.save();
         outCtx.globalCompositeOperation = "multiply";
         outCtx.globalAlpha = Math.min(0.4, einkGhost * 0.3);
-        outCtx.drawImage(this.tempCanvas, Math.round(width * 0.012), Math.round(height * 0.02));
+        if (continuous) {
+          outCtx.drawImage(this.einkGhostCanvas, 0, 0);
+        } else {
+          this.ensureCanvasSize(this.tempCanvas, width, height);
+          this.tempCtx.clearRect(0, 0, width, height);
+          this.tempCtx.filter = "grayscale(1) contrast(1.5) brightness(1.45)";
+          this.tempCtx.drawImage(outCtx.canvas, 0, 0);
+          this.tempCtx.filter = "none";
+          outCtx.drawImage(this.tempCanvas, Math.round(width * 0.012), Math.round(height * 0.02));
+        }
         outCtx.restore();
+        // Persist this frame (post-ghost, pre-flash) as the next call's real prior frame.
+        this.einkGhostCtx.clearRect(0, 0, width, height);
+        this.einkGhostCtx.drawImage(outCtx.canvas, 0, 0);
+        this._einkLastFrame = frameIndex;
+        this._einkLastW = width;
+        this._einkLastH = height;
       }
       // Optional full-refresh flash: one inverted frame every few seconds (video, opt-in).
       if (einkFlash > 0.001 && fps > 0) {

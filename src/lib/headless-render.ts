@@ -78,8 +78,12 @@ async function renderFrame(
   img: HTMLImageElement, name: string, params: Params, width: number, height: number,
   frameIndex: number, fps: number, formatPipeline: boolean, ctx: CanvasRenderingContext2D,
   sourceView: SourceView | null = null,
+  renderer: InstanceType<typeof CRTRendererFull> = new CRTRendererFull(),
 ): Promise<void> {
-  const renderer = new CRTRendererFull();
+  // Reuse the same renderer instance across a video's frames (caller passes one in) so
+  // inter-frame feedback buffers (datamosh accumulator, e-ink refresh-ghost real buffer)
+  // see a genuinely continuous frameIndex sequence instead of resetting every frame.
+  // setImage() doesn't call reset(), so re-drawing the same source each frame is harmless.
   renderer.setImage(img, 1);
   // Thread the per-look OSD profile (date/font/colours) alongside the format profile so the
   // burned-in OSD matches the app instead of renderOSD()'s 1998 fallback. See headless-render-options.ts.
@@ -131,8 +135,12 @@ async function renderVideo(opts: VideoOpts): Promise<{ outPath: string; frames: 
   const { sessionId } = await desktop.ffmpeg.begin({ width, height, fps });
   try {
     const sourceView = resolveSourceView(opts, img, width, height);
+    // One renderer instance for the whole video: frameIndex advances by exactly 1 each
+    // call, so inter-frame feedback (datamosh accumulator, e-ink refresh-ghost real
+    // buffer) sees a genuinely continuous sequence instead of resetting every frame.
+    const renderer = new CRTRendererFull();
     for (let i = 0; i < total; i++) {
-      await renderFrame(img, name, params, width, height, i, fps, formatPipeline, ctx, sourceView);
+      await renderFrame(img, name, params, width, height, i, fps, formatPipeline, ctx, sourceView, renderer);
       await desktop.ffmpeg.frame({ sessionId, index: i, bytes: await pngBytes() });
     }
     await desktop.ffmpeg.encode({ sessionId, codec, outPath });
