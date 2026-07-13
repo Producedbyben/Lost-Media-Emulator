@@ -281,9 +281,11 @@ export class CRTRendererHybrid {
     if (this.cpuRenderer?.reset) this.cpuRenderer.reset();
   }
 
-  renderOriginal(outCtx, width, height) {
-    // Always use CPU for original (no effects needed)
-    return this.cpuRenderer.renderOriginal(outCtx, width, height);
+  renderOriginal(outCtx, width, height, renderOptions) {
+    // Always use CPU for original (no effects needed). renderOptions is threaded so
+    // the clean original honors the same sourceView/zoom crop as render(), keeping an
+    // A/B split aligned pixel-for-pixel while zoomed.
+    return this.cpuRenderer.renderOriginal(outCtx, width, height, renderOptions);
   }
 
   // Render the OSD (timestamp/style text) onto a transparent scratch canvas via the CPU

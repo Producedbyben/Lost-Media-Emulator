@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { saveBlob, ensureFilename } from "@/lib/save-file.js";
 import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
 import { computeExportSize } from "@/lib/export-size";
+import { renderCompareSplit, type SplitOffscreen } from "@/lib/compare-split";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import { buildOSDRenderOptions } from "@/lib/osd-render-options";
@@ -475,6 +476,9 @@ export function useCRTRenderer() {
   const renderLaggingRef = useRef(false);
   const activeRenderModeRef = useRef<string>("cpu");
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  // Offscreen buffers for the A/B split compositor (one per side), created lazily
+  // and reused across frames. Null contexts (non-canvas env) → split path skipped.
+  const splitOffscreenRef = useRef<SplitOffscreen | null>(null);
   // Format authenticity pipeline (native resolution + composite colour).
   const formatProfileRef = useRef<any>(null);
   const formatPipelineRef = useRef<boolean>(true);
@@ -531,6 +535,23 @@ export function useCRTRenderer() {
 
   const markDirty = useCallback(() => {
     previewDirtyRef.current = true;
+  }, []);
+
+  // Lazily create (and cache) the two opaque offscreen canvases the A/B split
+  // compositor renders each side into. Returns null if a 2D context is unavailable.
+  const getSplitOffscreen = useCallback((): SplitOffscreen | null => {
+    if (!splitOffscreenRef.current) {
+      const make = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { alpha: false });
+        return ctx ? { canvas, ctx } : null;
+      };
+      const processed = make();
+      const original = make();
+      if (!processed || !original) return null;
+      splitOffscreenRef.current = { processed, original };
+    }
+    return splitOffscreenRef.current;
   }, []);
 
   // Preview OSD options: clock driven by the preview `elapsed`.
@@ -879,7 +900,7 @@ export function useCRTRenderer() {
           // active video frame instead of re-rendering — buttery, jank-free.
           const ram = ramCacheRef.current;
           const useRam = !!(ram && ram.ready && isVideoRef.current && videoElementRef.current
-            && (isVideoPlaying || shouldAnimate) && settings.compareMode === "off");
+            && (isVideoPlaying || shouldAnimate) && settings.compareMode === "off" && !settings.compareSplit);
 
           // For video playback: always render at FPS rate when video is playing
           // For animation: render at FPS interval
@@ -931,9 +952,27 @@ export function useCRTRenderer() {
 
             const renderStart = performance.now();
             try {
-              if (settings.compareMode !== "off" && !settings.compareSplit) {
+              const splitOff = settings.compareSplit && renderer.renderOriginal ? getSplitOffscreen() : null;
+              if (settings.compareSplit && renderer.renderOriginal && splitOff) {
+                // A/B split: clean original on the LEFT of compareSplitRatio, processed
+                // look on the RIGHT, with a draggable divider. Both sides render with the
+                // same renderOpts (sourceView/zoom) so they align pixel-for-pixel.
+                renderCompareSplit({
+                  outCtx: ctx,
+                  renderer,
+                  offscreen: splitOff,
+                  width: canvas.width,
+                  height: canvas.height,
+                  ratio: settings.compareSplitRatio,
+                  elapsed,
+                  params: paramsRef.current,
+                  frame,
+                  fps,
+                  renderOptions: renderOpts,
+                });
+              } else if (settings.compareMode !== "off") {
                 if (renderer.renderOriginal) {
-                  renderer.renderOriginal(ctx, canvas.width, canvas.height);
+                  renderer.renderOriginal(ctx, canvas.width, canvas.height, renderOpts);
                 } else {
                   ctx.clearRect(0, 0, canvas.width, canvas.height);
                 }

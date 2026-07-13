@@ -393,25 +393,41 @@ export class CRTRendererFull {
     }
   }
 
-  renderOriginal(outCtx, width, height) {
+  renderOriginal(outCtx, width, height, renderOptions = {}) {
     outCtx.clearRect(0, 0, width, height);
     outCtx.fillStyle = "black";
     outCtx.fillRect(0, 0, width, height);
     if (!this.hasImage) return false;
     const src = this.sourceCanvas;
-    const srcAspect = src.width / src.height;
-    const dstAspect = width / height;
-    let dw, dh, dx, dy;
-    if (srcAspect > dstAspect) {
-      dw = width; dh = width / srcAspect;
-      dx = 0; dy = (height - dh) / 2;
+    // Map the source into width×height with the SAME geometry render() uses (cover
+    // crop, or the zoomed source WINDOW when renderOptions.sourceView is set). This
+    // is what lets the A/B split composite the clean original and the processed look
+    // pixel-for-pixel — including while zoomed/panned. (When the preview canvas already
+    // matches the source aspect, this cover crop reduces to a full-frame draw, so the
+    // plain "Original" peek is unchanged.)
+    const sourceView = (renderOptions && renderOptions.sourceView) || null;
+    let sw = src.width, sh = src.height, sx = 0, sy = 0;
+    if (sourceView && Number.isFinite(sourceView.width) && Number.isFinite(sourceView.height)) {
+      const viewW = Math.max(0.05, Math.min(1, Number(sourceView.width) || 1));
+      const viewH = Math.max(0.05, Math.min(1, Number(sourceView.height) || 1));
+      sw = Math.max(1, Math.round(src.width * viewW));
+      sh = Math.max(1, Math.round(src.height * viewH));
+      sx = Math.max(0, Math.min(src.width - sw, Math.round(src.width * (Number(sourceView.x) || 0))));
+      sy = Math.max(0, Math.min(src.height - sh, Math.round(src.height * (Number(sourceView.y) || 0))));
     } else {
-      dh = height; dw = height * srcAspect;
-      dy = 0; dx = (width - dw) / 2;
+      const srcAspect = src.width / src.height;
+      const dstAspect = width / height;
+      if (srcAspect > dstAspect) {
+        sw = src.height * dstAspect;
+        sx = (src.width - sw) / 2;
+      } else {
+        sh = src.width / dstAspect;
+        sy = (src.height - sh) / 2;
+      }
     }
     outCtx.imageSmoothingEnabled = true;
     outCtx.imageSmoothingQuality = "high";
-    outCtx.drawImage(src, 0, 0, src.width, src.height, dx, dy, dw, dh);
+    outCtx.drawImage(src, sx, sy, sw, sh, 0, 0, width, height);
     return true;
   }
 
