@@ -2706,11 +2706,17 @@ export const DISPLAY_PRESETS = {
   "OLED PenTile Smartphone": pickDisplayKeys(PRESETS["OLED Smartphone PenTile (2018)"]),
   "Pioneer Plasma": pickDisplayKeys(PRESETS["Pioneer Plasma TV (2007)"]),
   "Cyberpunk OLED": pickDisplayKeys(PRESETS["Cyberpunk OLED"]),
+  // 1.1.7 display-axis dedup (PE pe-116-numbers.md low-priority note): this used to be
+  // a pre-1.1.6 CRT-mask approximation of e-paper, sitting right next to the purpose-built
+  // "E-Ink Reader (Refresh Ghost)" preset that models the real e-ink mechanism. Upgraded to
+  // use that same mechanism (coarse quantized greyscale) with einkGhost: 0 -- a freshly
+  // refreshed e-paper/signage readout, as opposed to the Reader's mid-refresh ghost artifact.
+  // Distinct discriminator (no ghost vs ghost), same underlying engine. No preset added or
+  // removed, so the 26-key display library count is unaffected.
   "E-Paper Display": {
-    scanlineStrength: 0, phosphorMask: 0.06, maskScale: 0.9, maskType: "dot",
-    barrelDistortion: 0, chromaticAberration: 0, bloom: 0, flicker: 0, pixelSize: 1,
-    phosphorPersistence: 0, beamSpotSizeX: 0, beamSpotSizeY: 0,
-    pixelResponseTime: 0.62, scanlineProfile: "off", subpixelLayoutOverride: "none",
+    ...NEUTRAL_DISPLAY,
+    einkGrey: 1.0, einkLevels: 4, einkGhost: 0, einkDither: 0.15, einkFlash: 0,
+    maskType: "none", bloom: 0,
   },
   "Handheld Pixel LCD (Game Boy)": {
     scanlineStrength: 0.08, phosphorMask: 0.42, maskScale: 0.78, maskType: "dot",
