@@ -2632,6 +2632,10 @@ export const DISPLAY_PARAM_KEYS = [
   // 1.1.7 display-type looks (PE alternates #6/#7)
   "vfdGlow", "vfdLevels", "vfdGrid", "vfdBloom", "vfdBlackCrush",
   "tnGammaShift", "tnAxis", "tnFrcDither", "tnCoolCast", "tnGhost",
+  // 1.2.0 projection/early-TV display looks: mono tubes desaturate + tint on the
+  // DISPLAY axis (a kinescope monitor is white-mono whatever the source), and
+  // mechanical-TV banding is a device trait, not a signal one.
+  "monochromeTint", "monochromeTintStrength", "bandingHorizontal",
 ];
 
 const DISPLAY_KEY_SET = new Set(DISPLAY_PARAM_KEYS);

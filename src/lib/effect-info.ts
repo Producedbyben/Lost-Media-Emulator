@@ -86,6 +86,8 @@ export const EFFECT_INFO: Record<string, string> = {
   printFadeYellow: "Yellow dye fade of an ageing print, shifting toward blue.",
   spliceFlash: "Bright flash frames where the film was cut and spliced.",
   cueMarks: "Reel-change cue dots that appear in the corner, as in old cinema prints.",
+  halationTint: "Colours the halation glow red-orange, like modern colour negative shot without its anti-halation layer removed in scanning.",
+  monoOrthoResponse: "Early-film colour blindness: red darkens, blue skies blow out — how pre-1926 orthochromatic stock saw the world.",
 
   // ---- Digital & Compression : Digital Noise --------------------------------
   noise: "General digital sensor/signal noise added across the image.",
@@ -224,6 +226,8 @@ export const EFFECT_PRO: Record<string, string> = {
   printFadeYellow: "Yellow fade pushes toward blue; small amounts across all three sell an ageing print.",
   spliceFlash: "Use rarely — a bright cut frame implies a physical splice at an edit point.",
   cueMarks: "Occasional corner dots are a knowing nod to projection; constant marks break the illusion.",
+  halationTint: "Pair with halation itself — this only tints the ring. Strong values read as Vision3 night footage.",
+  monoOrthoResponse: "Needs monochrome active. Push toward 1 only for pre-1926 looks; panchromatic stock (1926+) should stay at 0.",
 
   // ---- Digital & Compression : Digital Noise --------------------------------
   noise: "For specific looks prefer Luma/Chroma Noise or Film Grain, which model real noise sources more accurately.",

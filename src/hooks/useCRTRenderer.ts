@@ -152,6 +152,10 @@ export interface CRTParams {
   printFadeYellow: number;
   spliceFlash: number;
   cueMarks: number;
+  /** 1.2.0: red-orange halation ring weighting (0 = classic achromatic bleed). */
+  halationTint: number;
+  /** 1.2.0: orthochromatic mono response — red-blind, blue-hot (pre-1926 stocks). */
+  monoOrthoResponse: number;
   // V2: Digital Compression
   gopLength: number;
   deblockingStrength: number;
@@ -329,6 +333,8 @@ export const DEFAULT_PARAMS: CRTParams = {
   printFadeYellow: 0,
   spliceFlash: 0,
   cueMarks: 0,
+  halationTint: 0,
+  monoOrthoResponse: 0,
   // V2: Digital Compression
   gopLength: 0,
   deblockingStrength: 0,

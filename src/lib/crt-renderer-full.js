@@ -1,6 +1,7 @@
 // Full CRT Renderer extracted from app.js — includes all mask types, OSD, film effects, etc.
 
 import { corruptionSpawnFactor, dctEdgeFactor } from "./effects-core/codec-corruption.js";
+import { cueMarkState, spliceFlashState, spliceBarY, cueJitter } from "./film-print-events.js";
 
 // 4x4 Bayer matrix (ordered dither) + the canonical DMG 4-shade green-olive ramp (1.1.6 looks).
 const BAYER4 = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
@@ -501,6 +502,9 @@ export class CRTRendererFull {
     // only WHERE it runs moved (it used to run last on the output canvas).
     // ============================================================
     this.renderGrade(fitCtx, width, height, params, frameIndex);
+    // Worn-print projection events ride the SOURCE into whatever display chain
+    // follows (a kinescope's cue dots get scanned like the rest of the print).
+    this.renderPrintEvents(fitCtx, width, height, params, frameIndex, fps);
     this.renderOSD(fitCtx, width, height, seconds, params, frameIndex, fps, renderOptions);
 
     // ============================================================
@@ -630,6 +634,9 @@ export class CRTRendererFull {
     const gateJitterY = c01(params.gateJitterY);
     const gateRotation = c01(params.gateRotation);
     const shutterJudder = c01(params.shutterJudder);
+    // 1.2.0 film-program params: red-orange halation ring + orthochromatic response.
+    const halationTint = c01(params.halationTint);
+    const monoOrthoResponse = c01(params.monoOrthoResponse);
     // NOTE: the colour-grade params (printFade*, blackLevelCrush, highlightRollOff,
     // haze, infraredFalseColor, saturation, gamma, temperature, tint, brightness,
     // contrast, monochromeTint) moved into renderGrade() (Stage A), which reads them
@@ -869,9 +876,22 @@ export class CRTRendererFull {
 
         if (filmHalation > 0) {
           const haloMix = Math.min(0.45, filmHalation * (0.12 + luminance * 0.5));
-          redSoft = redSoft * (1 - haloMix) + redHoriz * haloMix;
-          greenSoft = greenSoft * (1 - haloMix) + greenHoriz * haloMix;
-          blueSoft = blueSoft * (1 - haloMix) + blueHoriz * haloMix;
+          if (halationTint > 0.001) {
+            // Remjet-less red-orange ring (the Vision3 signature): the halo bleeds
+            // red-first, green faintly, blue starved — plus a soft additive red
+            // lift where highlights spill (values are in the 0..255 domain here).
+            const mR = Math.min(0.6, haloMix * (1 + halationTint * 0.55));
+            const mG = haloMix * (1 - halationTint * 0.28);
+            const mB = haloMix * (1 - halationTint * 0.8);
+            const hot = Math.max(0, luminance - 0.52);
+            redSoft = redSoft * (1 - mR) + redHoriz * mR + halationTint * filmHalation * hot * 26;
+            greenSoft = greenSoft * (1 - mG) + greenHoriz * mG + halationTint * filmHalation * Math.max(0, luminance - 0.64) * 8;
+            blueSoft = blueSoft * (1 - mB) + blueHoriz * mB;
+          } else {
+            redSoft = redSoft * (1 - haloMix) + redHoriz * haloMix;
+            greenSoft = greenSoft * (1 - haloMix) + greenHoriz * haloMix;
+            blueSoft = blueSoft * (1 - haloMix) + blueHoriz * haloMix;
+          }
         }
 
         if (neonPhosphorBleed > 0.001) {
@@ -1145,7 +1165,29 @@ export class CRTRendererFull {
 
 
 
-    if (cctvMonochrome > 0) {
+    if (cctvMonochrome > 0 && monoOrthoResponse > 0.001) {
+      // Orthochromatic response (pre-1926 stocks): blind to red, over-sensitive to
+      // blue — skies blow out, lips and skin go dark. A channel-WEIGHTED mono
+      // conversion (the neutral grayscale filter below can't reweight channels);
+      // weights blend from Rec.709 luma to an exaggerated ortho curve.
+      const t = monoOrthoResponse;
+      const wR = 0.2126 * (1 - t) + 0.045 * t;
+      const wG = 0.7152 * (1 - t) + 0.38 * t;
+      const wB = 0.0722 * (1 - t) + 0.575 * t;
+      const mix = cctvMonochrome;
+      const contrast = 1 + cctvMonochrome * 0.22;
+      const image = outCtx.getImageData(0, 0, width, height);
+      const d = image.data;
+      for (let i = 0; i < d.length; i += 4) {
+        let L = wR * d[i] + wG * d[i + 1] + wB * d[i + 2];
+        L = (L - 128) * contrast + 128 + cctvMonochrome * 4;
+        if (L < 0) L = 0; else if (L > 255) L = 255;
+        d[i] = d[i] * (1 - mix) + L * mix;
+        d[i + 1] = d[i + 1] * (1 - mix) + L * mix;
+        d[i + 2] = d[i + 2] * (1 - mix) + L * mix;
+      }
+      outCtx.putImageData(image, 0, 0);
+    } else if (cctvMonochrome > 0) {
       const fullMono = cctvMonochrome >= 0.999;
       outCtx.save(); outCtx.globalAlpha = fullMono ? 1 : Math.min(0.9, 0.2 + cctvMonochrome * 0.7);
       outCtx.filter = `grayscale(1) saturate(0) contrast(${(1 + cctvMonochrome * 0.22).toFixed(3)}) brightness(${(0.95 + cctvMonochrome * 0.08).toFixed(3)})`;
@@ -2637,6 +2679,61 @@ export class CRTRendererFull {
       outCtx.fillStyle = hotGrad;
       outCtx.fillRect(0, 0, width, height);
       outCtx.restore();
+    }
+  }
+
+  // ---- Worn-print projection events (1.2.0): reel-change cue marks + splice
+  // flashes. Frame-indexed + deterministic (film-print-events.js), so exports
+  // reproduce exactly and stills stay clean (schedules are phase-offset). ----
+  renderPrintEvents(outCtx, width, height, params, frameIndex, fps) {
+    const cueAmt = Math.max(0, Math.min(1, Number(params.cueMarks) || 0));
+    const spliceAmt = Math.max(0, Math.min(1, Number(params.spliceFlash) || 0));
+    if (cueAmt <= 0.001 && spliceAmt <= 0.001) return;
+
+    if (cueAmt > 0.001) {
+      const cue = cueMarkState(frameIndex, fps, cueAmt);
+      if (cue.show) {
+        // Punched cue dot, upper-right picture corner: bright disc with a dark
+        // punch rim, a touch of per-event placement jitter (projection gate slop).
+        const r = Math.max(3.5, height * (0.013 + cueAmt * 0.009));
+        const cx = width * 0.935 + cueJitter(cue.eventIndex, 3) * r * 0.9;
+        const cy = height * 0.078 + cueJitter(cue.eventIndex, 17) * r * 0.9;
+        outCtx.save();
+        outCtx.globalAlpha = Math.min(0.92, 0.55 + cueAmt * 0.37);
+        outCtx.fillStyle = "rgb(246 242 230)";
+        outCtx.beginPath();
+        outCtx.arc(cx, cy, r, 0, Math.PI * 2);
+        outCtx.fill();
+        outCtx.globalAlpha *= 0.6;
+        outCtx.strokeStyle = "rgb(22 17 12)";
+        outCtx.lineWidth = Math.max(1, r * 0.18);
+        outCtx.stroke();
+        outCtx.restore();
+      }
+    }
+
+    if (spliceAmt > 0.001) {
+      const s = spliceFlashState(frameIndex, fps, spliceAmt);
+      if (s > 0) {
+        // One-frame event: light pipes past the splice (bright wash) and the
+        // splice itself crosses the gate as a dark bar with a bright cement edge.
+        const barY = Math.round(height * spliceBarY(frameIndex, fps, spliceAmt));
+        const barH = Math.max(2, Math.round(height * 0.012));
+        const edgeH = Math.max(1, Math.round(height * 0.004));
+        outCtx.save();
+        outCtx.globalCompositeOperation = "screen";
+        outCtx.globalAlpha = Math.min(0.85, 0.32 + s * 0.5);
+        outCtx.fillStyle = "rgb(235 228 210)";
+        outCtx.fillRect(0, 0, width, height);
+        outCtx.globalCompositeOperation = "source-over";
+        outCtx.globalAlpha = Math.min(0.9, 0.5 + s * 0.4);
+        outCtx.fillStyle = "rgb(12 10 8)";
+        outCtx.fillRect(0, barY, width, barH);
+        outCtx.globalAlpha *= 0.75;
+        outCtx.fillStyle = "rgb(255 250 235)";
+        outCtx.fillRect(0, barY - edgeH, width, edgeH);
+        outCtx.restore();
+      }
     }
   }
 
