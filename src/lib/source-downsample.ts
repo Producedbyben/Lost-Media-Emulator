@@ -46,3 +46,27 @@ export function computeDownsampleDims(
   const height = Math.max(1, Math.round(sh * scale));
   return { width, height, scaled: true };
 }
+
+/** Result of an ingest-scale computation for CONTINUOUS sources (video). */
+export interface IngestScale extends DownsampleDims {
+  /** Scale factor to feed the renderer's setImage draw (1 = native). */
+  scale: number;
+}
+
+/**
+ * Video counterpart of computeDownsampleDims. A video can't be pre-baked into a
+ * proxy raster the way a still can (frames arrive continuously), so the working
+ * resolution rides the renderer's scaled source draw instead: setImage(video, scale)
+ * redraws each frame into a working-size canvas. Same short-edge convention,
+ * same never-upscale rule.
+ */
+export function computeIngestScale(
+  sourceW: number,
+  sourceH: number,
+  targetShortEdge: number,
+): IngestScale {
+  const dims = computeDownsampleDims(sourceW, sourceH, targetShortEdge);
+  const sw = Math.max(1, Math.round(sourceW));
+  const scale = dims.scaled ? dims.width / sw : 1;
+  return { ...dims, scale };
+}

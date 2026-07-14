@@ -92,3 +92,52 @@ describe("working dims flow through to export sizing", () => {
     expect(out).toEqual({ width: 1280, height: 720 });
   });
 });
+
+// ── 1.2.0: video parity — computeIngestScale drives per-frame scaled ingest ──
+// A video can't be pre-baked into a proxy raster, so its working resolution is a
+// SCALE fed to setImage each frame. Same short-edge convention, same never-upscale.
+import { computeIngestScale } from "@/lib/source-downsample";
+
+describe("computeIngestScale — video working resolution", () => {
+  it("off (target 0) → scale 1, native dims", () => {
+    const s = computeIngestScale(3840, 2160, 0);
+    expect(s).toEqual({ width: 3840, height: 2160, scaled: false, scale: 1 });
+  });
+
+  it("4K 16:9 → 480p: scale shrinks the short edge to exactly 480", () => {
+    const s = computeIngestScale(3840, 2160, 480);
+    expect(s.scaled).toBe(true);
+    expect(s.height).toBe(480);
+    expect(s.width).toBe(853);
+    // the scale reproduces the working width from the native width
+    expect(Math.round(3840 * s.scale)).toBe(853);
+  });
+
+  it("portrait 9:16 phone video → 480p scales the WIDTH edge", () => {
+    const s = computeIngestScale(1080, 1920, 480);
+    expect(s.width).toBe(480);
+    expect(s.height).toBe(853);
+    expect(s.scale).toBeCloseTo(480 / 1080, 5);
+  });
+
+  it("never upscales: 640×360 at target 480 → scale 1", () => {
+    const s = computeIngestScale(640, 360, 480);
+    expect(s).toEqual({ width: 640, height: 360, scaled: false, scale: 1 });
+  });
+
+  it("1080p source at 1080 target is exactly at-target → untouched", () => {
+    const s = computeIngestScale(1920, 1080, 1080);
+    expect(s.scaled).toBe(false);
+    expect(s.scale).toBe(1);
+  });
+
+  it("WYSIWYG invariant: export sizing from ingest dims matches preview working dims", () => {
+    // preview holds sourceDims = ingest dims; export computes from the same dims —
+    // so a 4K video in a 480 workflow previews AND exports at 853×480.
+    const ingest = computeIngestScale(3840, 2160, 480);
+    const exp = computeExportSize({ sourceW: ingest.width, sourceH: ingest.height, resolution: 0 });
+    // encoder even-size rule may shift each edge by at most one pixel
+    expect(Math.abs(exp.width - ingest.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(exp.height - ingest.height)).toBeLessThanOrEqual(1);
+  });
+});

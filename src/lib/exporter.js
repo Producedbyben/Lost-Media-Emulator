@@ -253,15 +253,19 @@ async function encodeVideoFrames({
  * Common setup shared by the MP4 and WebM WebCodecs paths: resolves render
  * dimensions, builds the offscreen render canvas, and pauses the source video.
  */
-function prepareRender({ canvas, videoElement, duration, fps, resolution = 0, aspectRatio }) {
+function prepareRender({ canvas, videoElement, duration, fps, resolution = 0, aspectRatio, ingestScale = 1 }) {
   const isVideoSource = videoElement instanceof HTMLVideoElement;
   // Size from the SOURCE dims + chosen resolution/aspect (shared with the native
   // ffmpeg path via computeExportSize), so the Resolution dropdown and aspect
   // crop work here too and both engines emit identical dimensions. The renderer
   // cover-crops the source into a non-source aspect (crop-to-fill); letterbox/
   // pillarbox padding is currently only applied on the native ffmpeg path.
-  const sourceW = isVideoSource ? videoElement.videoWidth : canvas.width;
-  const sourceH = isVideoSource ? videoElement.videoHeight : canvas.height;
+  // ingestScale: the user's DELIBERATE working resolution (Import size, 1.2.0) —
+  // video exports honour it so what you edit at 480p exports at 480p. Stills
+  // arrive pre-downsampled (proxy), so canvas dims already carry it.
+  const iScale = isVideoSource ? Math.max(0.1, Math.min(1, ingestScale || 1)) : 1;
+  const sourceW = isVideoSource ? Math.max(1, Math.round(videoElement.videoWidth * iScale)) : canvas.width;
+  const sourceH = isVideoSource ? Math.max(1, Math.round(videoElement.videoHeight * iScale)) : canvas.height;
   const encodedSize = computeExportSize({ sourceW, sourceH, resolution, aspectRatio });
   const totalFrames = Math.max(1, Math.floor(duration * fps));
   const renderCanvas = document.createElement("canvas");
@@ -279,7 +283,7 @@ function prepareRender({ canvas, videoElement, duration, fps, resolution = 0, as
 
 export async function exportMp4({
   canvas, renderer, params, fps, duration, onProgress,
-  videoElement, sourceScale = 1, bitrate = 8_000_000, signal,
+  videoElement, sourceScale = 1, ingestScale = 1, bitrate = 8_000_000, signal,
   includeAudio = false, degradeAudio = false, audioProfile = null,
   renderOptions = {}, fileName, resolution = 0, aspectRatio,
 }) {
@@ -287,8 +291,9 @@ export async function exportMp4({
     throw new Error("WebCodecs VideoEncoder is unavailable in this context.");
   }
 
-  const prep = prepareRender({ canvas, videoElement, duration, fps, resolution, aspectRatio });
+  const prep = prepareRender({ canvas, videoElement, duration, fps, resolution, aspectRatio, ingestScale });
   const { isVideoSource, encodedSize, totalFrames, renderCanvas, renderCtx, wasPlaying } = prep;
+  const frameScale = Math.max(0.1, Math.min(1, (sourceScale || 1) * (ingestScale || 1)));
   const shouldMuxAudio = includeAudio && isVideoSource;
 
   // Extract (and optionally degrade) audio before we start seeking for frames.
@@ -343,7 +348,7 @@ export async function exportMp4({
   try {
     await encodeVideoFrames({
       encoder, renderer, params, fps, duration, totalFrames, encodedSize,
-      renderCanvas, renderCtx, isVideoSource, videoElement, sourceScale, renderOptions,
+      renderCanvas, renderCtx, isVideoSource, videoElement, sourceScale: frameScale, renderOptions,
       onProgress, signal, getEncoderError: () => encoderError,
     });
     encoder.close();
@@ -378,11 +383,12 @@ export async function exportWebm(args) {
 
 async function exportWebmWebCodecs({
   canvas, renderer, params, fps, duration, onProgress,
-  videoElement, sourceScale = 1, bitrate = 8_000_000, signal, renderOptions = {}, fileName,
+  videoElement, sourceScale = 1, ingestScale = 1, bitrate = 8_000_000, signal, renderOptions = {}, fileName,
   resolution = 0, aspectRatio,
 }) {
-  const prep = prepareRender({ canvas, videoElement, duration, fps, resolution, aspectRatio });
+  const prep = prepareRender({ canvas, videoElement, duration, fps, resolution, aspectRatio, ingestScale });
   const { isVideoSource, encodedSize, totalFrames, renderCanvas, renderCtx, wasPlaying } = prep;
+  const frameScale = Math.max(0.1, Math.min(1, (sourceScale || 1) * (ingestScale || 1)));
 
   const { config, hardware } = await pickSupportedConfig(
     ["vp09.00.10.08", "vp09.00.40.08", "vp8"],
@@ -414,7 +420,7 @@ async function exportWebmWebCodecs({
   try {
     await encodeVideoFrames({
       encoder, renderer, params, fps, duration, totalFrames, encodedSize,
-      renderCanvas, renderCtx, isVideoSource, videoElement, sourceScale, renderOptions,
+      renderCanvas, renderCtx, isVideoSource, videoElement, sourceScale: frameScale, renderOptions,
       onProgress, signal, getEncoderError: () => encoderError,
     });
     encoder.close();
@@ -433,9 +439,9 @@ async function exportWebmWebCodecs({
 /** Last-resort real-time WebM capture for runtimes without WebCodecs. */
 async function exportWebmMediaRecorder({
   canvas, renderer, params, fps, duration, onProgress,
-  videoElement, sourceScale = 1, bitrate = 8_000_000, signal, renderOptions = {}, fileName,
+  videoElement, sourceScale = 1, ingestScale = 1, bitrate = 8_000_000, signal, renderOptions = {}, fileName,
 }) {
-  const prep = prepareRender({ canvas, videoElement, duration, fps });
+  const prep = prepareRender({ canvas, videoElement, duration, fps, ingestScale });
   const { isVideoSource, encodedSize, totalFrames, renderCanvas, renderCtx, wasPlaying } = prep;
 
   const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]
@@ -459,7 +465,7 @@ async function exportWebmMediaRecorder({
       const t = frame / fps;
       if (isVideoSource) {
         await seekVideoToTime(videoElement, Math.min(t, videoElement.duration - 0.001));
-        renderer.setImage(videoElement, sourceScale);
+        renderer.setImage(videoElement, Math.max(0.1, Math.min(1, (sourceScale || 1) * (ingestScale || 1))));
       }
       renderCtx.fillStyle = "#000";
       renderCtx.fillRect(0, 0, encodedSize.width, encodedSize.height);

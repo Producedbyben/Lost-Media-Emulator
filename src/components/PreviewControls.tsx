@@ -259,7 +259,7 @@ const PreviewControls = ({
                 ))}
               </div>
               <p className="text-[10px] text-muted-foreground/70 leading-tight">
-                Downsamples large sources on import (applies to the next import). What you edit is what exports; smaller sources are never upscaled.
+                Downsamples large sources to the working size — video applies immediately, stills at their next import. What you edit is what exports; smaller sources are never upscaled.
               </p>
             </div>
 

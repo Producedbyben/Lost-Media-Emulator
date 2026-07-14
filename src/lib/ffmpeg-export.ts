@@ -60,6 +60,10 @@ export async function exportViaFfmpeg(opts: {
   outSec?: number;
   videoElement?: HTMLVideoElement | null;
   sourceScale?: number;
+  /** Deliberate ingest working-resolution scale (Import size, 1.2.0). Unlike a
+   *  preview-quality proxy this SHOULD shape the export — WYSIWYG at the chosen
+   *  working size. 1 / omitted = native. */
+  ingestScale?: number;
   // Target export dimensions (from computeExportSize). When omitted we fall back
   // to the preview canvas size for back-compat — but callers SHOULD pass these so
   // the export renders at the source/selected resolution, not the preview size.
@@ -76,9 +80,10 @@ export async function exportViaFfmpeg(opts: {
   if (!b) throw new Error("ffmpeg bridge unavailable");
 
   const { canvas, renderer, params, fps, duration, codec, outPath } = opts;
-  // Force full-resolution source during export — a preview proxy (sourceScale < 1)
-  // must never shrink the exported pixels.
-  const sourceScale = 1;
+  // A preview-quality proxy (opts.sourceScale < 1) must never shrink exported
+  // pixels — but the user's DELIBERATE ingest working resolution (Import size)
+  // must: that is what makes a 480p workflow WYSIWYG end-to-end.
+  const sourceScale = Math.max(0.1, Math.min(1, opts.ingestScale ?? 1));
   const isVideoSource = opts.videoElement instanceof HTMLVideoElement;
   // Render at the explicit export target when given; otherwise the legacy
   // preview-canvas size (kept only so older callers don't break).
@@ -90,8 +95,8 @@ export async function exportViaFfmpeg(opts: {
   const padded = opts.frameMode === "letterbox" || opts.frameMode === "pillarbox";
   const content = padded
     ? computeContentRect({
-        sourceW: isVideoSource ? opts.videoElement!.videoWidth : width,
-        sourceH: isVideoSource ? opts.videoElement!.videoHeight : height,
+        sourceW: isVideoSource ? Math.max(1, Math.round(opts.videoElement!.videoWidth * sourceScale)) : width,
+        sourceH: isVideoSource ? Math.max(1, Math.round(opts.videoElement!.videoHeight * sourceScale)) : height,
         targetW: width, targetH: height,
       })
     : null;

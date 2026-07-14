@@ -10,7 +10,7 @@ import { saveBlob, ensureFilename } from "@/lib/save-file.js";
 import { exportViaFfmpeg, isFfmpegExportAvailable } from "@/lib/ffmpeg-export";
 import { computeExportSize } from "@/lib/export-size";
 import { renderCompareSplit, type SplitOffscreen } from "@/lib/compare-split";
-import { computeDownsampleDims } from "@/lib/source-downsample";
+import { computeDownsampleDims, computeIngestScale } from "@/lib/source-downsample";
 // @ts-ignore
 import { validateExportAgainstPreview } from "@/lib/export-validator.js";
 import { buildOSDRenderOptions } from "@/lib/osd-render-options";
@@ -487,6 +487,15 @@ export function useCRTRenderer() {
   const exportControllerRef = useRef<AbortController | null>(null);
   const panCenterRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const sourceDimsRef = useRef<{ w: number; h: number } | null>(null);
+  // Ingest downsample for VIDEO (1.2.0): the deliberate working-resolution scale,
+  // recomputed from downsampleTarget at load (and live when the setting changes).
+  // Distinct from previewSettings.sourceScale (a preview-quality knob that must
+  // never leak into exports): ingest scale DOES flow to export — that is the
+  // whole point of a working resolution (WYSIWYG at the chosen size).
+  const ingestScaleRef = useRef(1);
+  /** Preview draw scale for video: preview-quality knob × deliberate ingest scale. */
+  const effectivePreviewScale = useCallback(() =>
+    Math.max(0.1, Math.min(1, (previewSettingsRef.current.sourceScale || 1) * (ingestScaleRef.current || 1))), []);
   // Adaptive quality: dynamic render-scale multiplier governed by frame timing.
   const frameTimeAvgRef = useRef<number>(16);
   const lastRenderMsRef = useRef<number>(0); // cost of the most recent frame
@@ -775,7 +784,7 @@ export function useCRTRenderer() {
       for (let i = 0; i < frameCount; i++) {
         const t = Math.min(duration - 0.001, i / fps);
         await seekVideoExact(video, t);
-        renderer.setImage(video, previewSettingsRef.current.sourceScale);
+        renderer.setImage(video, effectivePreviewScale());
         offCtx.fillStyle = "#000";
         offCtx.fillRect(0, 0, width, height);
         const renderOpts = buildRenderOptsRef.current(t, paramsRef.current);
@@ -952,10 +961,10 @@ export function useCRTRenderer() {
           if (shouldRender) {
             // Feed current video frame to renderer when video is playing
             if (isVideoPlaying && videoElementRef.current) {
-              renderer.setImage(videoElementRef.current, settings.sourceScale);
+              renderer.setImage(videoElementRef.current, effectivePreviewScale());
             } else if (shouldAnimate && isVideoRef.current && videoElementRef.current) {
               // Animation mode without video playback - still feed current frame
-              renderer.setImage(videoElementRef.current, settings.sourceScale);
+              renderer.setImage(videoElementRef.current, effectivePreviewScale());
             }
 
             // Drive time-based effects from the video's own clock so the preview
@@ -1104,10 +1113,31 @@ export function useCRTRenderer() {
 
     if (settings.sourceScale !== prev.sourceScale && rendererRef.current) {
       if (isVideoRef.current && videoElementRef.current) {
-        rendererRef.current.setImage(videoElementRef.current, settings.sourceScale);
+        rendererRef.current.setImage(videoElementRef.current, effectivePreviewScale());
       } else if (originalImageRef.current) {
         rendererRef.current.setImage(originalImageRef.current, settings.sourceScale);
       }
+    }
+
+    // Ingest downsample is LIVE for video (1.2.0): unlike a still (whose full-res
+    // raster is released once the proxy exists), a video re-scales per frame, so a
+    // changed Import size can apply to the loaded source immediately.
+    if (settings.downsampleTarget !== prev.downsampleTarget
+        && isVideoRef.current && videoElementRef.current && rendererRef.current) {
+      const v = videoElementRef.current;
+      const ingest = computeIngestScale(v.videoWidth, v.videoHeight, settings.downsampleTarget);
+      ingestScaleRef.current = ingest.scale;
+      sourceDimsRef.current = { w: ingest.width, h: ingest.height };
+      rendererRef.current.setImage(v, effectivePreviewScale());
+      setSourceInfo((si) => si && si.type === "video" ? {
+        ...si,
+        workingW: Math.round(ingest.width * (settings.sourceScale || 1)),
+        workingH: Math.round(ingest.height * (settings.sourceScale || 1)),
+        optimized: ingest.scaled || (settings.sourceScale || 1) < 0.999,
+      } : si);
+      previewDirtyRef.current = true;
+      pendingResizeRef.current = true; // canvas box follows working dims
+      invalidateRamCache();
     }
 
     // Pixel-true zoom (1.1.6): the view window is baked into every rendered frame,
@@ -1236,10 +1266,16 @@ export function useCRTRenderer() {
         videoSpeedRef.current = 1;
         videoLoopRef.current = true;
 
-        sourceDimsRef.current = { w: video.videoWidth, h: video.videoHeight };
+        // Opt-in ingest downsample (1.2.0: video parity with stills) — the working
+        // dims drive preview zoom AND export sizing via sourceDimsRef.
+        const ingest = computeIngestScale(
+          video.videoWidth, video.videoHeight, previewSettingsRef.current.downsampleTarget,
+        );
+        ingestScaleRef.current = ingest.scale;
+        sourceDimsRef.current = { w: ingest.width, h: ingest.height };
 
         rendererRef.current?.reset?.();
-        rendererRef.current?.setImage(video, sourceScale);
+        rendererRef.current?.setImage(video, Math.max(0.1, Math.min(1, sourceScale * ingest.scale)));
         pendingResizeRef.current = true;
         startTimeRef.current = performance.now();
 
@@ -1252,9 +1288,9 @@ export function useCRTRenderer() {
           type: "video",
           sourceW: video.videoWidth,
           sourceH: video.videoHeight,
-          workingW: Math.round(video.videoWidth * sourceScale),
-          workingH: Math.round(video.videoHeight * sourceScale),
-          optimized: sourceScale < 0.999,
+          workingW: Math.round(ingest.width * sourceScale),
+          workingH: Math.round(ingest.height * sourceScale),
+          optimized: ingest.scaled || sourceScale < 0.999,
         };
         setSourceInfo(info);
         return info;
@@ -1284,6 +1320,7 @@ export function useCRTRenderer() {
       // Opt-in ingest downsample (Task 2): downsize the source ONCE to the chosen
       // working resolution so preview AND export run at that size. Default (0) = native.
       const proxy = buildWorkingProxy(img, previewSettingsRef.current.downsampleTarget);
+      ingestScaleRef.current = 1; // stills bake the downsample into the proxy raster
 
       isVideoRef.current = false;
       videoPlayingRef.current = false;
@@ -1353,7 +1390,7 @@ export function useCRTRenderer() {
     setVideoPlaying(false);
     // Feed the paused frame to renderer
     if (rendererRef.current) {
-      rendererRef.current.setImage(video, previewSettingsRef.current.sourceScale);
+      rendererRef.current.setImage(video, effectivePreviewScale());
     }
     setVideoCurrentTime(video.currentTime);
     markDirty();
@@ -1366,7 +1403,7 @@ export function useCRTRenderer() {
     const wasPlaying = videoPlayingRef.current;
 
     const handler = () => {
-      rendererRef.current?.setImage(video, previewSettingsRef.current.sourceScale);
+      rendererRef.current?.setImage(video, effectivePreviewScale());
       setVideoCurrentTime(video.currentTime);
       markDirty();
       // Resume if was playing
@@ -1392,7 +1429,7 @@ export function useCRTRenderer() {
     const frameDuration = 1 / (videoFPS || 30);
     const newTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + direction * frameDuration));
     const handler = () => {
-      rendererRef.current?.setImage(video, previewSettingsRef.current.sourceScale);
+      rendererRef.current?.setImage(video, effectivePreviewScale());
       setVideoCurrentTime(video.currentTime);
       markDirty();
     };
@@ -1582,7 +1619,7 @@ export function useCRTRenderer() {
           onProgress: (value: number) => setExportProgress(value),
           maxWidth: 480,
           videoElement: isVideoRef.current ? videoElementRef.current : undefined,
-          sourceScale: previewSettingsRef.current.sourceScale,
+          sourceScale: ingestScaleRef.current,
           renderOptions: buildExportRenderOptsRef.current(),
           signal: controller.signal,
         });
@@ -1601,7 +1638,7 @@ export function useCRTRenderer() {
       exportControllerRef.current = null;
       // Restore video frame in preview after export
       if (isVideoRef.current && videoElementRef.current && rendererRef.current) {
-        rendererRef.current.setImage(videoElementRef.current, previewSettingsRef.current.sourceScale);
+        rendererRef.current.setImage(videoElementRef.current, effectivePreviewScale());
         markDirty();
       }
     }
@@ -1666,7 +1703,7 @@ export function useCRTRenderer() {
         maxWidth: 480,
         evaluateParams,
         videoElement: isVideoRef.current ? videoElementRef.current : undefined,
-        sourceScale: previewSettingsRef.current.sourceScale,
+        sourceScale: ingestScaleRef.current,
         renderOptions: buildExportRenderOptsRef.current(),
         signal: controller.signal,
         fileName,
@@ -1685,7 +1722,7 @@ export function useCRTRenderer() {
       setExportProgress(0);
       // Restore video frame in preview
       if (isVideoRef.current && videoElementRef.current && rendererRef.current) {
-        rendererRef.current.setImage(videoElementRef.current, previewSettingsRef.current.sourceScale);
+        rendererRef.current.setImage(videoElementRef.current, effectivePreviewScale());
         markDirty();
       }
     }
@@ -1740,7 +1777,7 @@ export function useCRTRenderer() {
           onProgress: progress,
           maxWidth: 480,
           videoElement: isVideoRef.current ? videoElementRef.current : undefined,
-          sourceScale: previewSettingsRef.current.sourceScale,
+          sourceScale: ingestScaleRef.current,
           renderOptions,
           signal,
           fileName: ensureFilename(job.fileName || job.name || "", "gif", "lme-export"),
@@ -1823,7 +1860,7 @@ export function useCRTRenderer() {
           onProgress: progress,
           signal,
           videoElement: isVideoRef.current ? videoElementRef.current : undefined,
-          sourceScale: previewSettingsRef.current.sourceScale,
+          sourceScale: ingestScaleRef.current,
           bitrate: (job.options?.quality || 1) * 8_000_000,
           renderOptions,
         };
@@ -1849,7 +1886,7 @@ export function useCRTRenderer() {
             onProgress: progress,
             maxWidth: 480,
             videoElement: isVideoRef.current ? videoElementRef.current : undefined,
-            sourceScale: previewSettingsRef.current.sourceScale,
+            sourceScale: ingestScaleRef.current,
             renderOptions,
             signal,
             fileName: ensureFilename(job.fileName || job.name || "", "gif", "lme-export"),
@@ -1861,7 +1898,7 @@ export function useCRTRenderer() {
       setIsExporting(false);
       setExportProgress(0);
       if (isVideoRef.current && videoElementRef.current && rendererRef.current) {
-        rendererRef.current.setImage(videoElementRef.current, previewSettingsRef.current.sourceScale);
+        rendererRef.current.setImage(videoElementRef.current, effectivePreviewScale());
         markDirty();
       }
     }
@@ -1893,7 +1930,7 @@ export function useCRTRenderer() {
     if (!video) return;
     const clampedTime = Math.max(0, Math.min(video.duration || 0, time));
     const handler = () => {
-      rendererRef.current?.setImage(video, previewSettingsRef.current.sourceScale);
+      rendererRef.current?.setImage(video, effectivePreviewScale());
       setVideoCurrentTime(video.currentTime);
       markDirty();
       onSeeked?.();
