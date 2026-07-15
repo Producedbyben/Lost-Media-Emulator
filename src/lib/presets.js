@@ -2883,6 +2883,7 @@ export const PRESETS = {
   },
   // 1946-1953 · REAL-REF · 10-12 inch round-tube B&W living-room console (RCA 630-TS lineage).
   "Roundie Console TV 1949": {
+    monochromeTint: "white", monochromeTintStrength: 0.95,  // B&W-era set: P4 white phosphor
     noise: 0,  // explicit legacy-neutral (default-passthrough guard)
     scanlineStrength: 0.42, scanlineProfile: "soft", phosphorMask: 0, maskType: "none",
     barrelDistortion: -0.12, bloom: 0.5, flicker: 0.14, pixelSize: 2, chromaticAberration: 0,
@@ -2896,6 +2897,7 @@ export const PRESETS = {
   },
   // 1936-1964 · REAL-REF · Marconi-EMI System A 405-line receiver (Bush TV22 class) at the June 1953 Coronation peak.
   "405-Line British TV 1953": {
+    monochromeTint: "white", monochromeTintStrength: 0.95,  // B&W-era set: P4 white phosphor
     noise: 0,  // explicit legacy-neutral (default-passthrough guard)
     scanlineStrength: 0.58, scanlineProfile: "hard", phosphorMask: 0, maskType: "none",
     barrelDistortion: -0.09, bloom: 0.42, flicker: 0.22, pixelSize: 2, chromaticAberration: 0,
@@ -3191,6 +3193,7 @@ export const DISPLAY_PRESETS = {
   },
   "Roundie Console TV 1949": {
     ...NEUTRAL_DISPLAY,
+    monochromeTint: "white", monochromeTintStrength: 0.95,
     scanlineStrength: 0.42, scanlineProfile: "soft", phosphorMask: 0, maskType: "none",
     barrelDistortion: -0.12, bloom: 0.5, flicker: 0.14, pixelSize: 2, chromaticAberration: 0,
   },
@@ -3201,6 +3204,7 @@ export const DISPLAY_PRESETS = {
   },
   "405-Line British TV 1953": {
     ...NEUTRAL_DISPLAY,
+    monochromeTint: "white", monochromeTintStrength: 0.95,
     scanlineStrength: 0.58, scanlineProfile: "hard", phosphorMask: 0, maskType: "none",
     barrelDistortion: -0.09, bloom: 0.42, flicker: 0.22, pixelSize: 2, chromaticAberration: 0,
   },

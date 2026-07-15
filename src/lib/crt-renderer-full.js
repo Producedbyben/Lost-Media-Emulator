@@ -1165,7 +1165,8 @@ export class CRTRendererFull {
 
 
 
-    if (cctvMonochrome > 0 && monoOrthoResponse > 0.001) {
+    const tintActive = String(params.monochromeTint || "none") !== "none";
+    if (cctvMonochrome > 0 && !tintActive && monoOrthoResponse > 0.001) {
       // Orthochromatic response (pre-1926 stocks): blind to red, over-sensitive to
       // blue — skies blow out, lips and skin go dark. A channel-WEIGHTED mono
       // conversion (the neutral grayscale filter below can't reweight channels);
@@ -1187,7 +1188,7 @@ export class CRTRendererFull {
         d[i + 2] = d[i + 2] * (1 - mix) + L * mix;
       }
       outCtx.putImageData(image, 0, 0);
-    } else if (cctvMonochrome > 0) {
+    } else if (cctvMonochrome > 0 && !tintActive) {
       const fullMono = cctvMonochrome >= 0.999;
       outCtx.save(); outCtx.globalAlpha = fullMono ? 1 : Math.min(0.9, 0.2 + cctvMonochrome * 0.7);
       outCtx.filter = `grayscale(1) saturate(0) contrast(${(1 + cctvMonochrome * 0.22).toFixed(3)}) brightness(${(0.95 + cctvMonochrome * 0.08).toFixed(3)})`;
@@ -2591,10 +2592,16 @@ export class CRTRendererFull {
       const col = TINTS[monoTint];
       if (col) {
         const strength = Math.max(0, Math.min(1, Number.isFinite(Number(params.monochromeTintStrength)) ? Number(params.monochromeTintStrength) : 1));
+        // Orthochromatic response applies to the tint's mono conversion too —
+        // a tinted 1913 nitrate print was STILL shot on red-blind stock.
+        const orthoT = Math.max(0, Math.min(1, Number(params.monoOrthoResponse) || 0));
+        const twR = 0.2126 * (1 - orthoT) + 0.045 * orthoT;
+        const twG = 0.7152 * (1 - orthoT) + 0.38 * orthoT;
+        const twB = 0.0722 * (1 - orthoT) + 0.575 * orthoT;
         const image = outCtx.getImageData(0, 0, width, height);
         const d = image.data;
         for (let i = 0; i < d.length; i += 4) {
-          const luma = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+          const luma = twR * d[i] + twG * d[i + 1] + twB * d[i + 2];
           d[i] = d[i] * (1 - strength) + luma * col[0] * strength;
           d[i + 1] = d[i + 1] * (1 - strength) + luma * col[1] * strength;
           d[i + 2] = d[i + 2] * (1 - strength) + luma * col[2] * strength;
