@@ -1,7 +1,7 @@
 {
   "name": "lost-media-emulator",
   "private": true,
-  "version": "1.1.7",
+  "version": "1.2.0",
   "type": "module",
   "main": "electron/main.cjs",
   "description": "Lost Media Emulator — retro signal/CRT video effects studio for macOS (Apple Silicon).",
