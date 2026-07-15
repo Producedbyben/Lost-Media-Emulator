@@ -3,12 +3,12 @@ import { describe, it, expect } from "vitest";
 import { listPresets, isActive, activeEffects, effectCategory, ALL_PRESET_NAMES } from "@/lib/audit/inventory";
 
 describe("audit inventory", () => {
-  it("lists every preset (91) with name + params", () => {
+  it("lists every preset (128) with name + params", () => {
     const all = listPresets();
-    expect(all.length).toBe(91);
+    expect(all.length).toBe(128);
     expect(all[0]).toHaveProperty("name");
     expect(all[0]).toHaveProperty("params");
-    expect(ALL_PRESET_NAMES.length).toBe(91);
+    expect(ALL_PRESET_NAMES.length).toBe(128);
   });
 
   it("isActive flags non-neutral values only", () => {

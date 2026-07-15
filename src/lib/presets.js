@@ -642,18 +642,19 @@ export const PRESETS = {
     advancedFilmScratches: 0.62,
     advancedFilmGateWeave: 0.56,
     advancedFilmHalation: 0.22,
+    shutterJudder: 0.4, gateJitterX: 0.2, grainSize: 0.55, monoOrthoResponse: 0.55,
     maskType: "none",
   },
   "Technicolor Print 1950s": {
-    scanlineStrength: 0.04,
-    phosphorMask: 0.08,
-    barrelDistortion: -0.01,
+    scanlineStrength: 0,
+    phosphorMask: 0,
+    barrelDistortion: 0,
     bloom: 0.36,
     flicker: 0.05,
-    chromaticAberration: 0.12,
+    chromaticAberration: 0,
     noise: 0.14,
     pixelSize: 1,
-    advancedGhosting: 0.02,
+    advancedGhosting: 0,
     advancedExposurePump: 0.1,
     advancedWhiteBalanceDrift: 0.08,
     advancedFocusBreathing: 0.04,
@@ -672,15 +673,16 @@ export const PRESETS = {
     imageContrast: 1.14,
     imageBrightness: 0.96,
     technicolorFringe: 0.54,
+    blackLevelCrush: 0.3, highlightRollOff: 0.24,
     maskType: "none",
   },
   "Super 8 Home Reel 1970s": {
-    scanlineStrength: 0.06,
-    phosphorMask: 0.04,
-    barrelDistortion: -0.02,
+    scanlineStrength: 0,
+    phosphorMask: 0,
+    barrelDistortion: 0,
     bloom: 0.42,
     flicker: 0.18,
-    chromaticAberration: 0.18,
+    chromaticAberration: 0,
     noise: 0.29,
     pixelSize: 2,
     advancedFrameStutter: 0.14,
@@ -696,6 +698,7 @@ export const PRESETS = {
     advancedFilmScratches: 0.28,
     advancedFilmGateWeave: 0.46,
     advancedFilmHalation: 0.34,
+    grainChromaticity: 0.55, gateJitterX: 0.18, gateJitterY: 0.22,
     // Super-8 home reels read warm & golden (Kodachrome/Ektachrome) — add a warm
     // cast + gentle saturation/contrast so it isn't a neutral grainy image.
     imageTemperature: 0.12,
@@ -705,9 +708,10 @@ export const PRESETS = {
     maskType: "filmSuper8",
   },
   "16mm Broadcast Kinescope": {
-    scanlineStrength: 0.22,
-    phosphorMask: 0.18,
+    scanlineStrength: 0.1,
+    phosphorMask: 0.16,
     barrelDistortion: -0.046,
+    bandingHorizontal: 0.2,
     bloom: 0.31,
     flicker: 0.08,
     chromaticAberration: 0.11,
@@ -739,8 +743,8 @@ export const PRESETS = {
     bloom: 0.18,
     flicker: 0.28,
     chromaticAberration: 0,
-    noise: 0.42,
-    pixelSize: 3,
+    noise: 0.36,
+    pixelSize: 2,
     advancedFrameStutter: 0.24,
     advancedExposurePump: 0.34,
     advancedWhiteBalanceDrift: 0,
@@ -757,6 +761,7 @@ export const PRESETS = {
     advancedFilmHalation: 0.29,
     // Nitrate decomposition: chemical blotches, edge fogging, mottled damage.
     nitrateDecay: 0.64,
+    shutterJudder: 0.35, copyGenerationCount: 2,
     maskType: "none",
   },
   "Live NTSC Kinescope 1950s": {
@@ -1312,6 +1317,7 @@ export const PRESETS = {
     // Kodak Aerochrome: IR-reflective foliage renders vivid magenta/red. The
     // false-colour remap does the hue work, so saturation stays moderate.
     infraredFalseColor: 0.82,
+    grainSize: 0.45, grainChromaticity: 0.55, highlightRollOff: 0.2,
     advancedSaturation: 1.22,
     advancedQuantization: 0,
     advancedGenerationLoss: 0,
@@ -2417,7 +2423,7 @@ export const PRESETS = {
     grainSize: 0.58, grainChromaticity: 0.64,
     gateJitterX: 0.32, gateJitterY: 0.38, gateRotation: 0.14,
     shutterJudder: 0.46,
-    printFadeCyan: 0.32, printFadeMagenta: 0.14, printFadeYellow: 0.34,
+      
     vignette: 0.38, cornerSharpnessFalloff: 0.32,
     mediaAgeYears: 45, storageCondition: "ideal",
     // Kodachrome = rich, dense saturation + deep blacks + golden warmth.
@@ -2603,6 +2609,340 @@ export const PRESETS = {
     advancedSaturation: 1.28, imageContrast: 1.12,
     maskType: "none",
   },
+
+  /* ==== 1.2.0 FILM PROGRAM — the eras (research-verified, render-gated) ==== */
+
+  // 1893-1896 · REAL-REF · Edison Kinetograph 35mm shot in the Black Maria, exhibited as ~40-50 ft continuous loops in peephole parlors.
+  "Kinetoscope Loop 1894": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, imageContrast: 1.32, blackLevelCrush: 0.55,
+    advancedFilmGrain: 0.7, grainSize: 0.6, advancedFilmDust: 0.5, advancedFilmScratches: 0.85,
+    advancedFilmGateWeave: 0.18, shutterJudder: 0.2, flicker: 0.4, advancedFilmHalation: 0.18,
+    nitrateDecay: 0.2, mediaAgeYears: 100, noise: 0.28, pixelSize: 2, maskType: "none",
+    monoOrthoResponse: 0.85, schemaVersion: 2,
+  },
+  // 1895-1905 · REAL-REF · Lumiere Cinematographe 35mm, hand-cranked ~16 fps, outdoor daylight actualites (Workers Leaving the Factory).
+  "Lumiere Actualite 1896": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, imageContrast: 1.18, imageBrightness: 1.05,
+    shutterJudder: 0.55, advancedExposurePump: 0.3, advancedFrameStutter: 0.15,
+    advancedFilmGateWeave: 0.5, gateJitterX: 0.25, advancedFilmGrain: 0.72, grainSize: 0.62,
+    advancedFilmDust: 0.5, advancedFilmScratches: 0.6, advancedFilmHalation: 0.3, vignette: 0.22,
+    flicker: 0.32, nitrateDecay: 0.25, noise: 0.3, pixelSize: 2, maskType: "none",
+    monoOrthoResponse: 0.8, schemaVersion: 2,
+  },
+  // 1907-1919 · REAL-REF · Tinted release print — the era's dominant exhibition convention: base dyed amber for day/interior scenes, highlights carry the dye while silver blacks.
+  "Amber Tinted Nitrate 1913": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, monochromeTint: "amber",
+    monochromeTintStrength: 0.85, imageContrast: 1.12, advancedFilmGrain: 0.66, grainSize: 0.55,
+    advancedFilmDust: 0.4, advancedFilmScratches: 0.5, advancedFilmGateWeave: 0.48,
+    shutterJudder: 0.42, advancedExposurePump: 0.18, advancedFilmHalation: 0.28, flicker: 0.26,
+    nitrateDecay: 0.2, noise: 0.3, pixelSize: 2, maskType: "none", monoOrthoResponse: 0.75,
+    schemaVersion: 2,
+  },
+  // 1907-1919 · REAL-REF · Blue-tinted night-scene print — day-shot footage printed dense on blue-dyed stock, the silent era's day-for-night.
+  "Blue Tinted Night 1915": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, monochromeTint: "blue",
+    monochromeTintStrength: 0.9, imageBrightness: 0.88, imageContrast: 1.2,
+    blackLevelCrush: 0.35, advancedFilmGrain: 0.68, grainSize: 0.55, advancedFilmDust: 0.42,
+    advancedFilmScratches: 0.52, advancedFilmGateWeave: 0.5, shutterJudder: 0.42,
+    advancedFilmHalation: 0.2, flicker: 0.24, nitrateDecay: 0.18, noise: 0.3, pixelSize: 2,
+    maskType: "none", monoOrthoResponse: 0.75, schemaVersion: 2,
+  },
+  // 1914-1918 · REAL-REF · Official war footage in the Battle of the Somme mould: hand-cranked in the field, then over-duped for mass distribution — survivors are dupes-of-dupes.
+  "WWI Combat Newsreel 1916": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, copyGenerationCount: 5,
+    imageContrast: 1.42, blackLevelCrush: 0.62, advancedFilmGrain: 0.88, grainSize: 0.68,
+    advancedFilmScratches: 0.8, advancedFilmDust: 0.65, advancedFilmGateWeave: 0.6,
+    gateJitterX: 0.3, shutterJudder: 0.5, advancedFrameStutter: 0.35, spliceFlash: 0.4,
+    advancedExposurePump: 0.3, flicker: 0.3, nitrateDecay: 0.35, noise: 0.34, pixelSize: 3,
+    maskType: "none", monoOrthoResponse: 0.7, schemaVersion: 2,
+  },
+  // 1926-1929 · REAL-REF · Late-silent Hollywood on Eastman Panchromatic with gauze diffusion under tungsten (Sunrise, Street Angel).
+  "Panchromatic Glamour 1928": {
+    scanlineStrength: 0, phosphorMask: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, monochromeTint: "amber",
+    monochromeTintStrength: 0.25, bloom: 0.34, advancedFilmHalation: 0.44,
+    advancedFilmGrain: 0.5, grainSize: 0.42, advancedFilmDust: 0.2, advancedFilmScratches: 0.16,
+    advancedFilmGateWeave: 0.34, shutterJudder: 0.18, flicker: 0.14, advancedExposurePump: 0.1,
+    imageContrast: 1.06, imageBrightness: 1.02, noise: 0.22, pixelSize: 2, maskType: "none",
+    schemaVersion: 2,
+  },
+  // 1922-1935 · PROXY · Technicolor two-color subtractive: Process 2 cemented prints (The Toll of the Sea) and Process 3 dye-transfer (The Viking, Gold Diggers of Broadway).
+  "Two-Strip Technicolor 1929": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    technicolorFringe: 0.42, advancedSaturation: 0.92, imageTemperature: 0.16,
+    imageContrast: 1.08, advancedFilmGrain: 0.55, grainSize: 0.5, grainChromaticity: 0.4,
+    advancedFilmDust: 0.24, advancedFilmScratches: 0.2, advancedFilmGateWeave: 0.36,
+    advancedFilmHalation: 0.26, shutterJudder: 0.2, flicker: 0.12, noise: 0.2, pixelSize: 2,
+    maskType: "none", schemaVersion: 2,
+  },
+  // 1938-1942 · REAL-REF · Three-strip Process IV dye-imbibition roadshow prints of the 1939 peak (Oz, GWTW).
+  "Technicolor Dye-Transfer 1939": {
+    scanlineStrength: 0, phosphorMask: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    bloom: 0.3, flicker: 0.06, noise: 0.1, pixelSize: 1, advancedFilmGrain: 0.3, grainSize: 0.3,
+    grainChromaticity: 0.12, advancedFilmDust: 0.12, advancedFilmScratches: 0.1,
+    advancedFilmGateWeave: 0.18, gateJitterX: 0.08, gateJitterY: 0.1, shutterJudder: 0.1,
+    advancedFilmHalation: 0.34, technicolorFringe: 0.38, advancedSaturation: 1.38,
+    imageContrast: 1.2, blackLevelCrush: 0.46, highlightRollOff: 0.32, imageTemperature: 0.06,
+    maskType: "none", schemaVersion: 2,
+  },
+  // 1942-1945 · REAL-REF · AAF/USN 16mm B&W gun-sight cameras (Fairchild AN-N6 class) auto-triggered with the guns.
+  "Gun Camera 16mm 1943": {
+    scanlineStrength: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, gateJitterX: 0.45, gateJitterY: 0.55,
+    gateRotation: 0.12, advancedFilmGateWeave: 0.5, shutterJudder: 0.4,
+    advancedFrameStutter: 0.3, advancedExposurePump: 0.44, advancedGenerationLoss: 0.25,
+    imageContrast: 1.18, advancedFilmGrain: 0.8, grainSize: 0.6, advancedFilmDust: 0.4,
+    advancedFilmScratches: 0.5, noise: 0.36, flicker: 0.18, vignette: 0.3, pixelSize: 3,
+    maskType: "film16mm", phosphorMask: 0.16, schemaVersion: 2,
+  },
+  // 1943-1945 · REAL-REF · Bell & Howell Eyemo spring-wound 35mm hand cameras (D-Day, Signal Corps), push-processed in field labs.
+  "Eyemo Combat 35mm 1944": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, imageContrast: 1.24, blackLevelCrush: 0.5,
+    advancedFilmGrain: 0.74, grainSize: 0.46, noise: 0.3, advancedFilmDust: 0.38,
+    advancedFilmScratches: 0.52, advancedFilmGateWeave: 0.4, gateJitterX: 0.2, gateJitterY: 0.24,
+    shutterJudder: 0.36, advancedFrameStutter: 0.26, advancedExposurePump: 0.18,
+    spliceFlash: 0.28, cueMarks: 0.24, advancedFilmHalation: 0.16, flicker: 0.12, pixelSize: 1,
+    maskType: "none", schemaVersion: 2,
+  },
+  // 1943-1945 · REAL-REF · 16mm Kodachrome reversal by USMC/USN combat photographers (With the Marines at Tarawa, 1944).
+  "Combat Kodachrome 16mm 1944": {
+    scanlineStrength: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedSaturation: 1.24, imageContrast: 1.14, blackLevelCrush: 0.4, imageTemperature: 0.06,
+    advancedFilmGrain: 0.62, grainSize: 0.5, grainChromaticity: 0.55, advancedFilmDust: 0.3,
+    advancedFilmScratches: 0.26, advancedFilmGateWeave: 0.42, gateJitterX: 0.24,
+    gateJitterY: 0.3, shutterJudder: 0.34, advancedFrameStutter: 0.18,
+    advancedExposurePump: 0.22, advancedFilmHalation: 0.2, flicker: 0.1, noise: 0.24,
+    pixelSize: 2, maskType: "film16mm", phosphorMask: 0.16, schemaVersion: 2,
+  },
+  // 1950-1958 · REAL-REF · Fresh un-faded Eastman Color (neg 5247/5248 to print 5382) as seen opening week (Shane).
+  "Eastmancolor Premiere Print 1953": {
+    scanlineStrength: 0, phosphorMask: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    bloom: 0.28, flicker: 0.08, noise: 0.14, pixelSize: 1, advancedFilmGrain: 0.56,
+    grainSize: 0.5, grainChromaticity: 0.66, advancedFilmDust: 0.18, advancedFilmScratches: 0.16,
+    advancedFilmGateWeave: 0.22, gateJitterX: 0.12, gateJitterY: 0.14, shutterJudder: 0.14,
+    advancedFilmHalation: 0.38, cueMarks: 0.32, spliceFlash: 0.14, advancedSaturation: 1.08,
+    imageContrast: 1.06, imageTemperature: 0.05, highlightRollOff: 0.2, maskType: "none",
+    schemaVersion: 2,
+  },
+  // 1946-1965 · REAL-REF · Agfacolor Neu-derived Sovcolor/DEFA color (Wolfen stock and patents seized 1945; The Stone Flower 1946).
+  "Sovcolor Agfa Print 1950s": {
+    scanlineStrength: 0, phosphorMask: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    bloom: 0.22, flicker: 0.1, noise: 0.16, pixelSize: 1, advancedFilmGrain: 0.58,
+    grainSize: 0.55, grainChromaticity: 0.42, advancedFilmDust: 0.28,
+    advancedFilmScratches: 0.26, advancedFilmGateWeave: 0.26, gateJitterX: 0.14,
+    gateJitterY: 0.16, shutterJudder: 0.12, advancedFilmHalation: 0.2, advancedSaturation: 0.78,
+    imageContrast: 0.94, imageTemperature: -0.08, imageTint: -0.06, highlightRollOff: 0.42,
+    mediaAgeYears: 70, storageCondition: "ideal", maskType: "none", schemaVersion: 2,
+  },
+  // 1966-1975 · REAL-REF · Direct-cinema handheld Tri-X 7278 B&W reversal through an Eclair NPR under available light (Dont Look Back, Salesman).
+  "16mm Verite Documentary 1968": {
+    scanlineStrength: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedCctvMonochrome: 1, advancedSaturation: 0, advancedFilmGrain: 0.66, grainSize: 0.52,
+    grainChromaticity: 0.06, advancedExposurePump: 0.3, advancedFocusBreathing: 0.34,
+    advancedFilmGateWeave: 0.34, gateJitterX: 0.22, gateJitterY: 0.26, shutterJudder: 0.18,
+    advancedFilmDust: 0.18, advancedFilmScratches: 0.14, imageContrast: 1.08,
+    blackLevelCrush: 0.18, flicker: 0.06, noise: 0.12, pixelSize: 2, maskType: "film16mm",
+    phosphorMask: 0.16, schemaVersion: 2,
+  },
+  // 1965-1977 · REAL-REF · Ektachrome EF 7242/7241 16mm reversal — the Vietnam-era network news pipeline and pre-ENG local news.
+  "16mm Combat Newsfilm 1968": {
+    scanlineStrength: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedFilmGrain: 0.58, grainSize: 0.46, grainChromaticity: 0.5, advancedFilmDust: 0.36,
+    advancedFilmScratches: 0.42, advancedFilmGateWeave: 0.3, gateJitterX: 0.2, gateJitterY: 0.24,
+    shutterJudder: 0.24, advancedExposurePump: 0.18, advancedSaturation: 1.1,
+    imageContrast: 1.12, imageTint: -0.08, imageTemperature: 0.05, blackLevelCrush: 0.22,
+    haze: 0.2, vignette: 0.12, mediaAgeYears: 55, storageCondition: "ideal", flicker: 0.06,
+    noise: 0.14, pixelSize: 2, maskType: "film16mm", phosphorMask: 0.16, schemaVersion: 2,
+  },
+  // 1965-1975 · REAL-REF · 'Nuit americaine': shot in daylight 2-2.5 stops under, timed dark and blue in the print — spaghetti westerns, AIP horror, 60s-70s TV.
+  "Day-for-Night 1969": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    imageBrightness: 0.72, imageTemperature: -0.35, advancedSaturation: 0.55, imageContrast: 1.1,
+    blackLevelCrush: 0.35, monochromeTint: "blue", monochromeTintStrength: 0.25,
+    advancedFilmGrain: 0.36, grainSize: 0.3, grainChromaticity: 0.35, vignette: 0.26,
+    advancedFilmGateWeave: 0.16, advancedFilmDust: 0.1, noise: 0.1, flicker: 0.04, pixelSize: 1,
+    maskType: "none", schemaVersion: 2,
+  },
+  // 1968-1976 · REAL-REF · Eastman Color Negative 5254 printed to Eastman release stock — the Willis/Hall/Zsigmond available-light look.
+  "New Hollywood 35mm 1970s": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedFilmGrain: 0.34, grainSize: 0.3, grainChromaticity: 0.42, advancedFilmHalation: 0.32,
+    advancedFilmGateWeave: 0.16, gateJitterX: 0.08, gateJitterY: 0.1, advancedFilmDust: 0.1,
+    advancedFilmScratches: 0.06, advancedSaturation: 0.82, imageContrast: 1.05,
+    imageTemperature: 0.08, imageTint: 0.04, highlightRollOff: 0.26, blackLevelCrush: 0.1,
+    vignette: 0.16, flicker: 0.04, noise: 0.06, pixelSize: 1, maskType: "none",
+    halationTint: 0.18, schemaVersion: 2,
+  },
+  // 1968-1979 · REAL-REF · Eastman 5254 force-developed +1/+2 stops for available-light night exteriors (The French Connection).
+  "Push-Processed Night 1972": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedFilmGrain: 0.72, grainSize: 0.56, grainChromaticity: 0.55, imageContrast: 1.15,
+    blackLevelCrush: 0.24, imageBrightness: 0.92, advancedSaturation: 0.78,
+    polaroidCrossover: 0.28, imageTemperature: 0.05, advancedFilmHalation: 0.4, vignette: 0.22,
+    advancedFilmGateWeave: 0.18, gateJitterX: 0.1, gateJitterY: 0.12, advancedFilmDust: 0.12,
+    noise: 0.14, flicker: 0.05, pixelSize: 1, maskType: "none", schemaVersion: 2,
+  },
+  // 1971-1979 · REAL-REF · Battered 35mm Eastman exhibition print after hundreds of passes: reel-change cue marks flashing upper-right, splice flashes at reel heads, heavy scrat.
+  "Grindhouse Worn Print 1973": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedFilmGrain: 0.5, grainSize: 0.4, grainChromaticity: 0.44, advancedFilmDust: 0.56,
+    advancedFilmScratches: 0.7, advancedFilmGateWeave: 0.52, gateJitterX: 0.3, gateJitterY: 0.34,
+    gateRotation: 0.12, shutterJudder: 0.4, advancedFrameStutter: 0.22, printFadeCyan: 0.58,
+    printFadeMagenta: 0.28, printFadeYellow: 0.5, cueMarks: 0.55, spliceFlash: 0.45,
+    advancedFilmHalation: 0.22, advancedSaturation: 0.88, imageContrast: 1.08,
+    imageTemperature: 0.1, imageTint: 0.12, vignette: 0.2, flicker: 0.12, noise: 0.16,
+    pixelSize: 1, mediaAgeYears: 50, storageCondition: "hot", maskType: "none", schemaVersion: 2,
+  },
+  // 1981-1989 · REAL-REF · MTV-era performance clips on Ektachrome VNF reversal, telecined to 1-inch.
+  "Music Video 16mm Reversal 1984": {
+    scanlineStrength: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    advancedFilmGrain: 0.6, grainSize: 0.48, grainChromaticity: 0.46, advancedFilmHalation: 0.46,
+    bloom: 0.28, imageContrast: 1.22, blackLevelCrush: 0.34, advancedSaturation: 1.18,
+    advancedFilmGateWeave: 0.2, gateJitterX: 0.12, gateJitterY: 0.14, advancedFilmDust: 0.12,
+    advancedFilmScratches: 0.1, vignette: 0.18, flicker: 0.05, noise: 0.1, pixelSize: 2,
+    maskType: "film16mm", phosphorMask: 0.16, schemaVersion: 2,
+  },
+  // 1977-1992 · REAL-REF · Eastman 5294/5384 negative-to-print chain of the multiplex blockbuster era.
+  "Multiplex Summer Print 1985": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, chromaticAberration: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", advancedFilmGrain: 0.3, grainSize: 0.28, grainChromaticity: 0.36,
+    advancedFilmHalation: 0.26, halationTint: 0.12, advancedFilmGateWeave: 0.12,
+    gateJitterX: 0.06, gateJitterY: 0.08, shutterJudder: 0.07, advancedFilmDust: 0.1,
+    advancedFilmScratches: 0.06, advancedSaturation: 1.14, imageContrast: 1.08,
+    imageTemperature: 0.07, highlightRollOff: 0.2, blackLevelCrush: 0.12, vignette: 0.1,
+    cueMarks: 0.14, spliceFlash: 0.05, flicker: 0.04, noise: 0.05, pixelSize: 1,
+    schemaVersion: 2,
+  },
+  // 1993-2001 (process from 1960s) · REAL-REF · Silver-retention release prints — Deluxe CCE (Se7en 1995), Technicolor ENR (Saving Private Ryan 1998).
+  "Bleach Bypass Print 1995": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, flicker: 0, chromaticAberration: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", advancedSaturation: 0.55, imageContrast: 1.3, blackLevelCrush: 0.38,
+    advancedFilmGrain: 0.5, grainSize: 0.36, grainChromaticity: 0.12, advancedFilmHalation: 0.1,
+    advancedFilmGateWeave: 0.14, gateJitterX: 0.06, gateJitterY: 0.08, shutterJudder: 0.1,
+    vignette: 0.1, advancedFilmDust: 0.1, schemaVersion: 2,
+  },
+  // 1990-1999 · REAL-REF · Super 16mm color negative optically blown up ~1.7x to 35mm release (Leaving Las Vegas).
+  "Super 16 Indie Blow-Up 1995": {
+    scanlineStrength: 0, bloom: 0, flicker: 0, chromaticAberration: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "film16mm", pixelSize: 2, advancedFilmGrain: 0.6, grainSize: 0.52,
+    grainChromaticity: 0.55, advancedFilmHalation: 0.18, advancedFilmGateWeave: 0.3,
+    gateJitterX: 0.12, gateJitterY: 0.16, shutterJudder: 0.12, imageContrast: 1.1,
+    advancedSaturation: 0.96, highlightRollOff: 0.22, vignette: 0.18, advancedFilmDust: 0.14,
+    advancedFilmScratches: 0.1, phosphorMask: 0.16, schemaVersion: 2,
+  },
+  // 1994-2002 · PROXY · E6 reversal deliberately processed in C-41 for promos, skate films, fashion.
+  "Cross-Process Music Video 1997": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, flicker: 0, chromaticAberration: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", polaroidCrossover: 0.55, advancedSaturation: 1.32, imageContrast: 1.28,
+    blackLevelCrush: 0.34, advancedFilmGrain: 0.46, grainSize: 0.34, grainChromaticity: 0.6,
+    advancedFilmHalation: 0.16, advancedFilmGateWeave: 0.16, shutterJudder: 0.1, vignette: 0.14,
+    schemaVersion: 2,
+  },
+  // 1999-2005 · REAL-REF · MiniDV/early-HD features printed to 35mm for theatrical release (28 Days Later, Dogme era).
+  "DV Film-Out 35mm 2002": {
+    scanlineStrength: 0, phosphorMask: 0, bloom: 0, flicker: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", pixelSize: 2, advancedQuantization: 0.18, advancedInterlacing: 0.08,
+    chromaticAberration: 0.06, advancedFilmGrain: 0.3, grainSize: 0.3, grainChromaticity: 0.35,
+    advancedFilmGateWeave: 0.2, gateJitterX: 0.08, gateJitterY: 0.1, shutterJudder: 0.14,
+    advancedFilmDust: 0.16, advancedFilmScratches: 0.12, advancedFilmHalation: 0.14,
+    imageContrast: 1.12, highlightRollOff: 0.12, chromaSubsamplingMode: "411", schemaVersion: 2,
+  },
+  // 2008-2018 · PROXY · Decade-expired consumer C-41 (Gold/Superia) through plastic-lens toy cameras (LC-A, Holga).
+  "Lomo Expired Stock 2012": {
+    scanlineStrength: 0, phosphorMask: 0, flicker: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", haze: 0.28, printFadeCyan: 0.22, printFadeYellow: 0.3, vignette: 0.58,
+    chromaticAberration: 0.26, barrelDistortion: -0.04, bloom: 0.2, advancedFilmGrain: 0.64,
+    grainSize: 0.56, grainChromaticity: 0.72, advancedSaturation: 1.15, imageContrast: 1.08,
+    advancedFilmDust: 0.18, schemaVersion: 2,
+  },
+  // 2007-now · REAL-REF · Kodak Vision3 500T 5219 tungsten 35mm negative — the halation-forward night look of late-2010s film-originated features (Uncut Gems 2019, shot 35mm Ko.
+  "Vision3 500T Halation Night 2019": {
+    scanlineStrength: 0, phosphorMask: 0, flicker: 0, chromaticAberration: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", advancedFilmGrain: 0.34, grainSize: 0.26, grainChromaticity: 0.4,
+    advancedFilmHalation: 0.58, bloom: 0.26, highlightRollOff: 0.34, blackLevelCrush: 0.14,
+    advancedSaturation: 1.12, imageTemperature: 0.05, advancedFilmGateWeave: 0.1,
+    gateJitterX: 0.05, gateJitterY: 0.07, shutterJudder: 0.08, vignette: 0.12,
+    halationTint: 0.65, schemaVersion: 2,
+  },
+
+  /* ==== 1.2.0 SYMPATHETIC DISPLAYS — projection + early TV (standalone looks) ==== */
+
+  // 1896-1918 · REAL-REF · Nickelodeon-era hand-cranked 35mm projector with carbon-arc lamphouse onto a matte screen in a half-lit hall.
+  "Hand-Crank Projector 1909": {
+    noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    flicker: 0.42, bloom: 0.18, crtProjEdgeSoftness: 0.38, crtProjBloom: 0.32,
+    crtProjBlackLift: 0.2, barrelDistortion: 0.01, chromaticAberration: 0.06,
+    scanlineStrength: 0, phosphorMask: 0, pixelSize: 1, maskType: "none", scanlineProfile: "off",
+    schemaVersion: 2,
+  },
+  // 1946-1953 · REAL-REF · 10-12 inch round-tube B&W living-room console (RCA 630-TS lineage).
+  "Roundie Console TV 1949": {
+    noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    scanlineStrength: 0.42, scanlineProfile: "soft", phosphorMask: 0, maskType: "none",
+    barrelDistortion: -0.12, bloom: 0.5, flicker: 0.14, pixelSize: 2, chromaticAberration: 0,
+    schemaVersion: 2,
+  },
+  // 2009-now · REAL-REF · 2K xenon 3-chip DLP digital cinema (Series-II Barco/Christie, gained screen) — the deliberately transparent modern house.
+  "Multiplex DCP 2K Xenon 2012": {
+    scanlineStrength: 0, phosphorMask: 0, flicker: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", bloom: 0.1, dlpScreenDoor: 0.12, dlpDither: 0.06,
+    chromaticAberration: 0.012, barrelDistortion: 0.004, pixelSize: 1, schemaVersion: 2,
+  },
+  // 1936-1964 · REAL-REF · Marconi-EMI System A 405-line receiver (Bush TV22 class) at the June 1953 Coronation peak.
+  "405-Line British TV 1953": {
+    noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    scanlineStrength: 0.58, scanlineProfile: "hard", phosphorMask: 0, maskType: "none",
+    barrelDistortion: -0.09, bloom: 0.42, flicker: 0.22, pixelSize: 2, chromaticAberration: 0,
+    schemaVersion: 2,
+  },
+  // 1954-1956 · REAL-REF · RCA CT-100 'Merrill' (April 1954, 15 inch round 15GP22) — the first mass-produced shadow-mask color set.
+  "RCA Shadow-Mask Color 1954": {
+    noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    scanlineStrength: 0.3, scanlineProfile: "triadAware", phosphorMask: 0.72,
+    maskType: "shadowMask", maskScale: 1.55, barrelDistortion: -0.1, chromaticAberration: 0.24,
+    bloom: 0.32, flicker: 0.12, pixelSize: 2, schemaVersion: 2,
+  },
+  // 1927-1949 · REAL-REF · Premiere-house 35mm projection: high-intensity carbon arc (Suprex) through period lenses onto a gain screen.
+  "Carbon-Arc Picture Palace 1930s": {
+    noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", scanlineStrength: 0, phosphorMask: 0, flicker: 0.07, bloom: 0.14,
+    barrelDistortion: 0.005, chromaticAberration: 0.03, crtProjEdgeSoftness: 0.15,
+    crtProjBlackLift: 0.06, pixelSize: 1, schemaVersion: 2,
+  },
+  // 1939-1945 · REAL-REF · Continuous-show newsreel houses (Trans-Lux, Embassy): low-intensity arc, hard-worn optics, house half-lit for walk-in traffic.
+  "Wartime Newsreel Theatre 1943": {
+    noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    maskType: "none", scanlineStrength: 0, phosphorMask: 0, flicker: 0.13, bloom: 0.22,
+    barrelDistortion: 0.008, chromaticAberration: 0.06, crtProjEdgeSoftness: 0.32,
+    crtProjBlackLift: 0.2, pixelSize: 1, schemaVersion: 2,
+  },
+  // 1951 · REAL-REF · CBS field-sequential color receiver: B&W CRT behind a synchronized rotating RGB disc (1440 rpm), 405 lines/144 fields/24 color fps; commercial colorca.
+  "CBS Color Wheel 1951": {
+    chromaticAberration: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    scanlineStrength: 0.45, scanlineProfile: "hard", phosphorMask: 0, maskType: "none",
+    dlpRainbow: 0.55, dlpRainbowThreshold: 0.35, barrelDistortion: -0.08, bloom: 0.24,
+    flicker: 0.18, pixelSize: 2, schemaVersion: 2,
+  },
+  // 1947-1958 · PROXY · The kine chain's display half: flat-faced high-brightness mono CRT filmed by a 16mm/35mm kine camera — surviving artifacts carry raster lines UNDER fi.
+  "Kinescope Recording Monitor 1951": {
+    chromaticAberration: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    scanlineStrength: 0.55, scanlineProfile: "hard", maskType: "none", phosphorMask: 0,
+    bloom: 0.34, bandingHorizontal: 0.25, flicker: 0.1, barrelDistortion: -0.02,
+    monochromeTint: "white", monochromeTintStrength: 1, pixelSize: 2, schemaVersion: 2,
+  },
+  // 1929-1935 · PROXY · Baird Televisor on the BBC 30-line service: spinning Nipkow disc scanning a flat-plate neon lamp — 30 lines, 12.5 pictures/sec, postcard-sized orange .
+  "Nipkow Mechanical TV 1930": {
+    chromaticAberration: 0, noise: 0,  // explicit legacy-neutral (default-passthrough guard)
+    pixelSize: 6, scanlineStrength: 0.85, scanlineProfile: "hard", maskType: "none",
+    maskScale: 2, flicker: 0.5, monochromeTint: "amber", monochromeTintStrength: 1, bloom: 0.3,
+    phosphorMask: 0, schemaVersion: 2,
+  },
 };
 
 
@@ -2686,6 +3026,8 @@ export const NEUTRAL_DISPLAY = {
   dlpRainbow: 0, dlpRainbowThreshold: 0, dlpScreenDoor: 0, dlpDither: 0,
   einkGrey: 0, einkLevels: 0, einkGhost: 0, einkDither: 0, einkFlash: 0,
   dmgGreen: 0, dmgPixelate: 0, dmgReflectiveShadow: 0, dmgShadowAngle: 0, dmgGhost: 0,
+  // 1.2.0 projection/early-TV device traits
+  monochromeTint: "none", monochromeTintStrength: 0, bandingHorizontal: 0,
 };
 
 /** An untouched digital source — used when no capture format is chosen. */
@@ -2839,6 +3181,65 @@ export const DISPLAY_PRESETS = {
     tnGammaShift: 0.6, tnAxis: 0, tnFrcDither: 0.5, tnCoolCast: 0.3, tnGhost: 0.15,
     maskType: "none", bloom: 0,
   },
+
+  // 1.2.0 projection + early-TV devices (sympathetic pairings for the film program).
+  "Hand-Crank Projector 1909": {
+    ...NEUTRAL_DISPLAY,
+    flicker: 0.42, bloom: 0.18, crtProjEdgeSoftness: 0.38, crtProjBloom: 0.32,
+    crtProjBlackLift: 0.2, barrelDistortion: 0.01, chromaticAberration: 0.06,
+    scanlineStrength: 0, phosphorMask: 0, pixelSize: 1, maskType: "none", scanlineProfile: "off",
+  },
+  "Roundie Console TV 1949": {
+    ...NEUTRAL_DISPLAY,
+    scanlineStrength: 0.42, scanlineProfile: "soft", phosphorMask: 0, maskType: "none",
+    barrelDistortion: -0.12, bloom: 0.5, flicker: 0.14, pixelSize: 2, chromaticAberration: 0,
+  },
+  "Multiplex DCP 2K Xenon 2012": {
+    ...NEUTRAL_DISPLAY,
+    maskType: "none", bloom: 0.1, dlpScreenDoor: 0.12, dlpDither: 0.06,
+    chromaticAberration: 0.012, barrelDistortion: 0.004, pixelSize: 1,
+  },
+  "405-Line British TV 1953": {
+    ...NEUTRAL_DISPLAY,
+    scanlineStrength: 0.58, scanlineProfile: "hard", phosphorMask: 0, maskType: "none",
+    barrelDistortion: -0.09, bloom: 0.42, flicker: 0.22, pixelSize: 2, chromaticAberration: 0,
+  },
+  "RCA Shadow-Mask Color 1954": {
+    ...NEUTRAL_DISPLAY,
+    scanlineStrength: 0.3, scanlineProfile: "triadAware", phosphorMask: 0.72,
+    maskType: "shadowMask", maskScale: 1.55, barrelDistortion: -0.1, chromaticAberration: 0.24,
+    bloom: 0.32, flicker: 0.12, pixelSize: 2,
+  },
+  "Carbon-Arc Picture Palace 1930s": {
+    ...NEUTRAL_DISPLAY,
+    maskType: "none", scanlineStrength: 0, phosphorMask: 0, flicker: 0.07, bloom: 0.14,
+    barrelDistortion: 0.005, chromaticAberration: 0.03, crtProjEdgeSoftness: 0.15,
+    crtProjBlackLift: 0.06, pixelSize: 1,
+  },
+  "Wartime Newsreel Theatre 1943": {
+    ...NEUTRAL_DISPLAY,
+    maskType: "none", scanlineStrength: 0, phosphorMask: 0, flicker: 0.13, bloom: 0.22,
+    barrelDistortion: 0.008, chromaticAberration: 0.06, crtProjEdgeSoftness: 0.32,
+    crtProjBlackLift: 0.2, pixelSize: 1,
+  },
+  "CBS Color Wheel 1951": {
+    ...NEUTRAL_DISPLAY,
+    scanlineStrength: 0.45, scanlineProfile: "hard", phosphorMask: 0, maskType: "none",
+    dlpRainbow: 0.55, dlpRainbowThreshold: 0.35, barrelDistortion: -0.08, bloom: 0.24,
+    flicker: 0.18, pixelSize: 2,
+  },
+  "Kinescope Recording Monitor 1951": {
+    ...NEUTRAL_DISPLAY,
+    scanlineStrength: 0.55, scanlineProfile: "hard", maskType: "none", phosphorMask: 0,
+    bloom: 0.34, bandingHorizontal: 0.25, flicker: 0.1, barrelDistortion: -0.02,
+    monochromeTint: "white", monochromeTintStrength: 1, pixelSize: 2,
+  },
+  "Nipkow Mechanical TV 1930": {
+    ...NEUTRAL_DISPLAY,
+    pixelSize: 6, scanlineStrength: 0.85, scanlineProfile: "hard", maskType: "none",
+    maskScale: 2, flicker: 0.5, monochromeTint: "amber", monochromeTintStrength: 1, bloom: 0.3,
+    phosphorMask: 0,
+  },
 };
 
 export const DISPLAY_PRESET_CATEGORIES = {
@@ -2860,6 +3261,12 @@ export const DISPLAY_PRESET_CATEGORIES = {
   "Portable / Retro": [
     "Portable Pocket TV", "CRT Viewfinder", "Handheld LCD Screen",
     "Reflective Handheld (DMG Green)", "VFD Readout (Car Stereo)",
+  ],
+  "Projection": [
+    "Hand-Crank Projector 1909", "Carbon-Arc Picture Palace 1930s", "Wartime Newsreel Theatre 1943", "Multiplex DCP 2K Xenon 2012",
+  ],
+  "Early TV": [
+    "Nipkow Mechanical TV 1930", "Roundie Console TV 1949", "CBS Color Wheel 1951", "Kinescope Recording Monitor 1951", "405-Line British TV 1953", "RCA Shadow-Mask Color 1954",
   ],
 };
 
@@ -2936,6 +3343,35 @@ export const CAPTURE_PRESETS = {
   "Datamosh Bloom": pickCaptureKeys(PRESETS["Datamosh Bloom (I-Frame Removal)"]),
   "Bit-Rot Corruption": pickCaptureKeys(PRESETS["Corrupted Codec (Bit-Rot)"]),
   "Pixel Sort": pickCaptureKeys(PRESETS["Pixel Sort Glitch Art"]),
+
+  // 1.2.0 film program (eras).
+  "Kinetoscope Loop 1894": pickCaptureKeys(PRESETS["Kinetoscope Loop 1894"]),
+  "Lumiere Actualite 1896": pickCaptureKeys(PRESETS["Lumiere Actualite 1896"]),
+  "Amber Tinted Nitrate 1913": pickCaptureKeys(PRESETS["Amber Tinted Nitrate 1913"]),
+  "Blue Tinted Night 1915": pickCaptureKeys(PRESETS["Blue Tinted Night 1915"]),
+  "WWI Combat Newsreel 1916": pickCaptureKeys(PRESETS["WWI Combat Newsreel 1916"]),
+  "Panchromatic Glamour 1928": pickCaptureKeys(PRESETS["Panchromatic Glamour 1928"]),
+  "Two-Strip Technicolor 1929": pickCaptureKeys(PRESETS["Two-Strip Technicolor 1929"]),
+  "Technicolor Dye-Transfer 1939": pickCaptureKeys(PRESETS["Technicolor Dye-Transfer 1939"]),
+  "Gun Camera 16mm 1943": pickCaptureKeys(PRESETS["Gun Camera 16mm 1943"]),
+  "Eyemo Combat 35mm 1944": pickCaptureKeys(PRESETS["Eyemo Combat 35mm 1944"]),
+  "Combat Kodachrome 16mm 1944": pickCaptureKeys(PRESETS["Combat Kodachrome 16mm 1944"]),
+  "Eastmancolor Premiere Print 1953": pickCaptureKeys(PRESETS["Eastmancolor Premiere Print 1953"]),
+  "Sovcolor Agfa Print 1950s": pickCaptureKeys(PRESETS["Sovcolor Agfa Print 1950s"]),
+  "16mm Verite Documentary 1968": pickCaptureKeys(PRESETS["16mm Verite Documentary 1968"]),
+  "16mm Combat Newsfilm 1968": pickCaptureKeys(PRESETS["16mm Combat Newsfilm 1968"]),
+  "Day-for-Night 1969": pickCaptureKeys(PRESETS["Day-for-Night 1969"]),
+  "New Hollywood 35mm 1970s": pickCaptureKeys(PRESETS["New Hollywood 35mm 1970s"]),
+  "Push-Processed Night 1972": pickCaptureKeys(PRESETS["Push-Processed Night 1972"]),
+  "Grindhouse Worn Print 1973": pickCaptureKeys(PRESETS["Grindhouse Worn Print 1973"]),
+  "Music Video 16mm Reversal 1984": pickCaptureKeys(PRESETS["Music Video 16mm Reversal 1984"]),
+  "Multiplex Summer Print 1985": pickCaptureKeys(PRESETS["Multiplex Summer Print 1985"]),
+  "Bleach Bypass Print 1995": pickCaptureKeys(PRESETS["Bleach Bypass Print 1995"]),
+  "Super 16 Indie Blow-Up 1995": pickCaptureKeys(PRESETS["Super 16 Indie Blow-Up 1995"]),
+  "Cross-Process Music Video 1997": pickCaptureKeys(PRESETS["Cross-Process Music Video 1997"]),
+  "DV Film-Out 35mm 2002": pickCaptureKeys(PRESETS["DV Film-Out 35mm 2002"]),
+  "Lomo Expired Stock 2012": pickCaptureKeys(PRESETS["Lomo Expired Stock 2012"]),
+  "Vision3 500T Halation Night 2019": pickCaptureKeys(PRESETS["Vision3 500T Halation Night 2019"]),
 };
 
 export const CAPTURE_PRESET_CATEGORIES = {
@@ -2944,6 +3380,34 @@ export const CAPTURE_PRESET_CATEGORIES = {
     "Silent B&W Film 1920s", "Nitrate Newsreel 1930s", "Technicolor Print 1950s",
     "Super 8 Home Reel", "16mm Kinescope", "35mm Faded Print", "8mm Kodachrome",
     "Aerochrome IR Film", "IMAX 70mm Large-Format",
+  
+    "Kinetoscope Loop 1894",
+    "Lumiere Actualite 1896",
+    "Amber Tinted Nitrate 1913",
+    "Blue Tinted Night 1915",
+    "WWI Combat Newsreel 1916",
+    "Panchromatic Glamour 1928",
+    "Two-Strip Technicolor 1929",
+    "Technicolor Dye-Transfer 1939",
+    "Gun Camera 16mm 1943",
+    "Eyemo Combat 35mm 1944",
+    "Combat Kodachrome 16mm 1944",
+    "Eastmancolor Premiere Print 1953",
+    "Sovcolor Agfa Print 1950s",
+    "16mm Verite Documentary 1968",
+    "16mm Combat Newsfilm 1968",
+    "Day-for-Night 1969",
+    "New Hollywood 35mm 1970s",
+    "Push-Processed Night 1972",
+    "Grindhouse Worn Print 1973",
+    "Music Video 16mm Reversal 1984",
+    "Multiplex Summer Print 1985",
+    "Bleach Bypass Print 1995",
+    "Super 16 Indie Blow-Up 1995",
+    "Cross-Process Music Video 1997",
+    "DV Film-Out 35mm 2002",
+    "Lomo Expired Stock 2012",
+    "Vision3 500T Halation Night 2019",
   ],
   "Tape": [
     "Late-80s VHS", "3rd-Gen VHS Dub", "Betamax", "Hi8 Camcorder", "MiniDV",
@@ -2992,6 +3456,8 @@ export const DISPLAY_FAMILY_OF = buildReverseLookup(DISPLAY_PRESET_CATEGORIES);
 // Display family -> capture categories that historically/aesthetically belong on it.
 const DISPLAY_FAMILY_TO_CAPTURE_CATS = {
   "Reference": ["Digital Codec", "Film", "Camera / Sensor"],
+  "Projection": ["Film"],
+  "Early TV": ["Film", "Broadcast / Transmission"],
   "CRT": ["Tape", "Broadcast / Transmission", "Camera / Sensor", "Film"],
   "Flat Panel": ["Digital Codec", "Social", "Camera / Sensor", "Glitch / Decay"],
   "Large / Public": ["Social", "Digital Codec", "Broadcast / Transmission", "Film"],
@@ -3001,9 +3467,9 @@ const DISPLAY_FAMILY_TO_CAPTURE_CATS = {
 // Capture category -> display families it was typically watched on.
 const CAPTURE_CAT_TO_DISPLAY_FAMILIES = {
   "Reference": ["Flat Panel", "Reference"],
-  "Film": ["Large / Public", "CRT"],
+  "Film": ["Projection", "Early TV", "Large / Public", "CRT"],
   "Tape": ["CRT", "Portable / Retro"],
-  "Broadcast / Transmission": ["CRT", "Portable / Retro", "Large / Public"],
+  "Broadcast / Transmission": ["CRT", "Early TV", "Portable / Retro", "Large / Public"],
   "Digital Codec": ["Flat Panel", "Large / Public"],
   "Camera / Sensor": ["Flat Panel", "CRT", "Portable / Retro"],
   "Surveillance": ["CRT", "Portable / Retro", "Flat Panel"],
