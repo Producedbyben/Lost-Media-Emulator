@@ -104,10 +104,17 @@ module.exports = {
   dmg: {
     title: "Lost Media Emulator",
     backgroundColor: "#0a0a0b",
-    window: { width: 540, height: 380 },
+    // Second row carries the un-notarized-install helper + readme as LOOSE files in
+    // the DMG window (via contents `path`) — NOT inside the .app bundle. This keeps the
+    // app's code signature untouched (ad-hoc now, Developer-ID+notarized later) and does
+    // not affect notarization (shell scripts / txt aren't subject to the notary's Mach-O
+    // checks). Once the build is notarized these become unnecessary and can be dropped.
+    window: { width: 560, height: 460 },
     contents: [
-      { x: 150, y: 200, type: "file" },
-      { x: 390, y: 200, type: "link", path: "/Applications" },
+      { x: 150, y: 170, type: "file" }, // the app (path auto-filled by electron-builder)
+      { x: 410, y: 170, type: "link", path: "/Applications" },
+      { x: 150, y: 330, type: "file", path: "build/dmg-readme.txt", name: "READ ME FIRST.txt" },
+      { x: 410, y: 330, type: "file", path: "tools/fix-gatekeeper.command", name: "Fix damaged-app warning.command" },
     ],
   },
 };
